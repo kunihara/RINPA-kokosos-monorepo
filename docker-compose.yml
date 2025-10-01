@@ -1,0 +1,34 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: ./apps/api-worker
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      - JWT_SECRET=dev-secret-change-me
+      - CORS_ALLOW_ORIGIN=http://localhost:3000
+    volumes:
+      - ./apps/api-worker:/app
+    command: ["npm","run","dev:docker"]
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE=http://localhost:8787
+    volumes:
+      - ./apps/web:/app
+    command: ["npm","run","dev:docker"]
+
+  # 任意: ローカルメール受信（SESの代替テスト用）
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    restart: unless-stopped

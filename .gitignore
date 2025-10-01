@@ -1,0 +1,71 @@
+# macOS
+.DS_Store
+
+# Node/JavaScript/TypeScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.pnp.*
+.cache/
+coverage/
+dist/
+build/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Next.js / Vercel
+.next/
+out/
+.vercel/
+apps/web/.env.local
+apps/web/.env.development.local
+apps/web/.env.test.local
+apps/web/.env.production.local
+
+# Cloudflare Wrangler/Workers
+.wrangler/
+apps/api-worker/.wrangler/
+apps/api-worker/dist/
+
+# Supabase (CLI local state)
+supabase/.branches/
+supabase/.temp/
+supabase/volumes/
+
+# iOS / Xcode / SwiftPM
+DerivedData/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+apps/ios/KokoSOS.xcodeproj/
+.swiftpm/
+.build/
+
+# CocoaPods / Carthage (not used by default)
+Pods/
+Carthage/Build/
+
+# fastlane outputs
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# Editors/IDEs
+.vscode/
+.idea/
+*.swp
+
+# Docker/local overrides
+docker-compose.override.yml
+.env.docker
+Dockerfile.local

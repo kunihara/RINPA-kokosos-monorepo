@@ -1,0 +1,7 @@
+// 共通設定
+PRODUCT_NAME = KokoSOS
+BUNDLE_DISPLAY_NAME = KokoSOS
+SWIFT_VERSION = 5.0
+
+// Info.plist で展開される API ベースURL（各環境で上書き）
+API_BASE_URL = http://localhost:8787

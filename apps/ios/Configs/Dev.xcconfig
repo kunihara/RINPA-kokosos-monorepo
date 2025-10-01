@@ -1,0 +1,2 @@
+#include "Base.xcconfig"
+API_BASE_URL = http://localhost:8787

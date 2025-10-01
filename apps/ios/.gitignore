@@ -1,0 +1,23 @@
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/
+xcuserdata/
+KokoSOS.xcodeproj/
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# CocoaPods (未使用でも念のため)
+Pods/
+Podfile.lock
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Misc
+.DS_Store

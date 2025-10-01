@@ -1,0 +1,2 @@
+#include "Base.xcconfig"
+API_BASE_URL = https://kokosos-api.YOUR_PROD_DOMAIN

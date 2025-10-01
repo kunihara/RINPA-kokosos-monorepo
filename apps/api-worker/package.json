@@ -1,0 +1,14 @@
+{
+  "name": "kokosos-api-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:docker": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "publish": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0",
+    "typescript": "^5.4.0"
+  }
+}

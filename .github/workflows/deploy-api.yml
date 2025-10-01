@@ -1,0 +1,33 @@
+name: Deploy API (Cloudflare Workers)
+
+on:
+  push:
+    branches: [dev, stage, main]
+
+jobs:
+  deploy:
+    name: Deploy Workers
+    runs-on: ubuntu-latest
+    env:
+      ENV_NAME: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
+    environment: ${{ env.ENV_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via Wrangler
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api-worker
+          command: deploy --env ${{ env.ENV_NAME }}
+          secrets: |
+            JWT_SECRET
+            SUPABASE_URL
+            SUPABASE_SERVICE_ROLE_KEY
+            SES_REGION
+            SES_ACCESS_KEY_ID
+            SES_SECRET_ACCESS_KEY
+            SES_SENDER_EMAIL
+            CORS_ALLOW_ORIGIN
