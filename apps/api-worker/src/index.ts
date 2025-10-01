@@ -7,6 +7,8 @@ export interface Env {
   SES_SECRET_ACCESS_KEY?: string
   SES_SENDER_EMAIL?: string
   CORS_ALLOW_ORIGIN?: string
+  WEB_PUBLIC_BASE?: string
+  EMAIL_PROVIDER?: string
 }
 
 type Method = 'GET' | 'POST'
@@ -102,7 +104,7 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'POST', pattern: /^\/public\/alert\/([^/]+)\/react$/, handler: handlePublicAlertReact },
 ]
 
-async function handleAlertStart({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
   const initial = {
@@ -112,18 +114,42 @@ async function handleAlertStart({ req, env }: Parameters<RouteHandler>[0]): Prom
     battery_pct: body.battery_pct as number | undefined,
     type: (body.type as string | undefined) || 'emergency',
     max_duration_sec: (body.max_duration_sec as number | undefined) ?? 3600,
+    recipients: (Array.isArray(body.recipients) ? (body.recipients as string[]) : [])
   }
   if (typeof initial.lat !== 'number' || typeof initial.lng !== 'number') return json({ error: 'invalid_location' }, { status: 400 })
-  const alertId = crypto.randomUUID()
-  const shareToken = await signJwtHs256(
-    {
-      alert_id: alertId,
-      scope: 'viewer',
-      exp: nowSec() + 24 * 3600,
-    },
-    env.JWT_SECRET,
-  )
-  const startedAt = new Date().toISOString()
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // Create alert row
+  const alertRes = await sb.insert('alerts', {
+    user_id: null,
+    type: initial.type,
+    status: 'active',
+    max_duration_sec: initial.max_duration_sec,
+  })
+  if (!alertRes.ok) return json({ error: 'db_error', detail: alertRes.error }, { status: 500 })
+  const alert = alertRes.data[0]
+  const alertId: string = alert.id
+  const startedAt: string = alert.started_at
+  // Insert initial location
+  await sb.insert('locations', {
+    alert_id: alertId,
+    lat: initial.lat,
+    lng: initial.lng,
+    accuracy_m: initial.accuracy_m ?? null,
+    battery_pct: initial.battery_pct ?? null,
+    captured_at: startedAt,
+  })
+  const shareToken = await signJwtHs256({ alert_id: alertId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
+  // Send emails if recipients provided
+  if (initial.recipients.length > 0 && env.WEB_PUBLIC_BASE) {
+    const emailer = makeEmailProvider(env)
+    for (const to of initial.recipients) {
+      const contactId = crypto.randomUUID()
+      const token = await signJwtHs256({ alert_id: alertId, contact_id: contactId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
+      const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/s/${encodeURIComponent(token)}`
+      ctx.waitUntil(emailer.send({ to, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) }))
+    }
+  }
   const state = {
     id: alertId,
     status: 'active',
@@ -141,17 +167,46 @@ async function handleAlertStart({ req, env }: Parameters<RouteHandler>[0]): Prom
   return json(state)
 }
 
-async function handleAlertUpdate({ req }: Parameters<RouteHandler>[0]): Promise<Response> {
+async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
+  const m = req.url.match(/\/alert\/(\w+)\/update/)
+  if (!m) return notFound()
+  const alertId = m[1]
+  const { lat, lng, accuracy_m, battery_pct } = body as { lat: number; lng: number; accuracy_m?: number; battery_pct?: number }
+  if (typeof lat !== 'number' || typeof lng !== 'number') return json({ error: 'invalid_location' }, { status: 400 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const captured_at = new Date().toISOString()
+  await sb.insert('locations', { alert_id: alertId, lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at })
+  sseHub.publish(alertId, { type: 'location', latest: { lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at } })
   return json({ ok: true })
 }
 
-async function handleAlertStop(): Promise<Response> {
+async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/alert\/(\w+)\/stop/)
+  if (!m) return notFound()
+  const alertId = m[1]
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const ended_at = new Date().toISOString()
+  await sb.update('alerts', { status: 'ended', ended_at }, `id=eq.${alertId}`)
+  sseHub.publish(alertId, { type: 'status', status: 'ended' })
   return json({ status: 'ended' })
 }
 
-async function handleAlertRevoke(): Promise<Response> {
+async function handleAlertRevoke({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/alert\/(\w+)\/revoke/)
+  if (!m) return notFound()
+  const alertId = m[1]
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const revoked_at = new Date().toISOString()
+  await sb.insert('revocations', { alert_id: alertId, revoked_at }).catch(async () => {
+    // if exists, ignore
+  })
+  await sb.update('alerts', { revoked_at, status: 'ended' }, `id=eq.${alertId}`)
+  sseHub.publish(alertId, { type: 'status', status: 'ended' })
   return json({ revoked: true })
 }
 
@@ -159,43 +214,35 @@ async function handlePublicAlert({ req, env }: Parameters<RouteHandler>[0]): Pro
   const token = decodeURIComponent(req.url.split('/public/alert/')[1] || '')
   const payload = await withJwtFromPathToken(req, env, token)
   if (!payload) return json({ error: 'invalid_token' }, { status: 401 })
-  const data = {
-    status: 'active',
-    remaining_sec: 3600,
-    latest: null as
-      | null
-      | { lat: number; lng: number; accuracy_m: number | null; battery_pct: number | null; captured_at: string },
+  const alertId = String((payload as any).alert_id)
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // Revocation check
+  const revoked = await sb.select('revocations', '*', `alert_id=eq.${alertId}`, 1)
+  if (revoked.ok && revoked.data.length > 0) return json({ error: 'revoked' }, { status: 401 })
+  const alertRes = await sb.select('alerts', '*', `id=eq.${alertId}`, 1)
+  if (!alertRes.ok || alertRes.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
+  const alert = alertRes.data[0]
+  const latestRes = await sb.select('locations', '*', `alert_id=eq.${alertId}&order=captured_at.desc&limit=1`, 1)
+  const latest = latestRes.ok && latestRes.data.length > 0 ? latestRes.data[0] : null
+  const remaining = computeRemaining(alert.started_at, alert.max_duration_sec, alert.ended_at)
+  const resp = {
+    status: (alert.status as 'active' | 'ended' | 'timeout') ?? 'active',
+    remaining_sec: remaining,
+    latest: latest
+      ? { lat: latest.lat, lng: latest.lng, accuracy_m: latest.accuracy_m ?? null, battery_pct: latest.battery_pct ?? null, captured_at: latest.captured_at }
+      : null,
     permissions: { can_call: true, can_reply: true, can_call_police: true },
   }
-  return json(data)
+  return json(resp)
 }
 
 async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
   const token = decodeURIComponent(req.url.split('/public/alert/')[1]?.replace(/\/stream$/, '') || '')
   const payload = await withJwtFromPathToken(req, env, token)
   if (!payload) return json({ error: 'invalid_token' }, { status: 401 })
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const enc = new TextEncoder()
-      function send(evt: unknown) {
-        controller.enqueue(enc.encode(`data: ${JSON.stringify(evt)}\n\n`))
-      }
-      send({ type: 'hello', ts: Date.now() })
-      const id = setInterval(() => send({ type: 'keepalive', ts: Date.now() }), 25000)
-      const timeout = setTimeout(() => {
-        send({ type: 'end' })
-        controller.close()
-        clearInterval(id)
-      }, 5 * 60 * 1000)
-      ;(controller as unknown as { _cleanup?: () => void })._cleanup = () => {
-        clearInterval(id)
-        clearTimeout(timeout)
-      }
-    },
-    cancel() {
-      /* no-op */
-    },
-  })
+  const alertId = String((payload as any).alert_id)
+  const stream = sseHub.subscribe(alertId)
   const headers: HeadersInit = {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache, no-transform',
@@ -263,4 +310,196 @@ export default {
     if (routes.some((r) => r.pattern.test(path))) return methodNotAllowed()
     return notFound()
   },
+}
+
+// -------- Helpers: time/remaining
+function computeRemaining(started_at: string, max_duration_sec: number, ended_at?: string | null): number {
+  const start = new Date(started_at).getTime()
+  const now = Date.now()
+  const end = ended_at ? new Date(ended_at).getTime() : null
+  const elapsed = Math.floor(((end ?? now) - start) / 1000)
+  return Math.max(0, max_duration_sec - elapsed)
+}
+
+// -------- Supabase REST minimal client
+function supabase(env: Env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null
+  const base = env.SUPABASE_URL.replace(/\/$/, '') + '/rest/v1'
+  const headersBase = {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+  }
+  return {
+    async insert(table: string, data: Record<string, unknown>) {
+      const res = await fetch(`${base}/${table}`, { method: 'POST', headers: { ...headersBase, 'content-type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(data) })
+      const ok = res.ok
+      const dataJson = ok ? await res.json() : null
+      return { ok, data: dataJson as any[], error: ok ? null : await res.text() }
+    },
+    async update(table: string, data: Record<string, unknown>, query: string) {
+      const res = await fetch(`${base}/${table}?${query}`, { method: 'PATCH', headers: { ...headersBase, 'content-type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(data) })
+      const ok = res.ok
+      const dataJson = ok ? await res.json() : null
+      return { ok, data: dataJson as any[], error: ok ? null : await res.text() }
+    },
+    async select(table: string, columns: string, query: string, limit?: number) {
+      const url = `${base}/${table}?select=${encodeURIComponent(columns)}${query ? `&${query}` : ''}${limit ? `&limit=${limit}` : ''}`
+      const res = await fetch(url, { headers: headersBase })
+      const ok = res.ok
+      const dataJson = ok ? await res.json() : null
+      return { ok, data: (dataJson as any[]) || [], error: ok ? null : await res.text() }
+    },
+  }
+}
+
+// -------- SSE Hub (in-memory; non-durable)
+const sseHub = (() => {
+  const map = new Map<string, Set<(evt: unknown) => void>>()
+  const enc = new TextEncoder()
+  function subscribe(alertId: string) {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const send = (evt: unknown) => controller.enqueue(enc.encode(`data: ${JSON.stringify(evt)}\n\n`))
+        add(alertId, send)
+        send({ type: 'hello', ts: Date.now() })
+        const ka = setInterval(() => send({ type: 'keepalive', ts: Date.now() }), 25000)
+        ;(controller as any)._cleanup = () => {
+          remove(alertId, send)
+          clearInterval(ka)
+        }
+      },
+      cancel() {
+        /* noop */
+      },
+    })
+    return stream
+  }
+  function add(id: string, fn: (evt: unknown) => void) {
+    const set = map.get(id) || new Set()
+    set.add(fn)
+    map.set(id, set)
+  }
+  function remove(id: string, fn: (evt: unknown) => void) {
+    const set = map.get(id)
+    if (!set) return
+    set.delete(fn)
+    if (set.size === 0) map.delete(id)
+  }
+  function publish(id: string, evt: unknown) {
+    const set = map.get(id)
+    if (!set) return
+    for (const fn of set) fn(evt)
+  }
+  return { subscribe, publish }
+})()
+
+// -------- Email provider (SES or log)
+interface EmailProvider {
+  send(input: { to: string; subject: string; html: string }): Promise<void>
+}
+
+function makeEmailProvider(env: Env): EmailProvider {
+  if (env.EMAIL_PROVIDER === 'ses') return new SESEmailProvider(env)
+  return new LogEmailProvider()
+}
+
+class LogEmailProvider implements EmailProvider {
+  async send(input: { to: string; subject: string; html: string }): Promise<void> {
+    console.log('EMAIL (dev log):', input.to, input.subject)
+  }
+}
+
+class SESEmailProvider implements EmailProvider {
+  private env: Env
+  constructor(env: Env) { this.env = env }
+  async send(input: { to: string; subject: string; html: string }): Promise<void> {
+    const region = this.env.SES_REGION!
+    const endpoint = `https://email.${region}.amazonaws.com/v2/email/outbound-emails` // SESv2
+    const body = JSON.stringify({
+      FromEmailAddress: this.env.SES_SENDER_EMAIL,
+      Destination: { ToAddresses: [input.to] },
+      Content: { Simple: { Subject: { Data: input.subject, Charset: 'UTF-8' }, Body: { Html: { Data: input.html, Charset: 'UTF-8' } } } },
+    })
+    const now = new Date()
+    const amzDate = toAmzDate(now)
+    const dateStamp = amzDate.slice(0, 8)
+    const service = 'ses'
+    const method = 'POST'
+    const url = new URL(endpoint)
+    const canonicalUri = url.pathname
+    const canonicalQuerystring = ''
+    const host = url.host
+    const canonicalHeaders = `host:${host}\n` + `x-amz-date:${amzDate}\n`
+    const signedHeaders = 'host;x-amz-date'
+    const payloadHash = await sha256Hex(body)
+    const canonicalRequest = `${method}\n${canonicalUri}\n${canonicalQuerystring}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`
+    const algorithm = 'AWS4-HMAC-SHA256'
+    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`
+    const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${await sha256Hex(canonicalRequest)}`
+    const signingKey = await getSignatureKey(this.env.SES_SECRET_ACCESS_KEY!, dateStamp, region, service)
+    const signature = await hmacHex(signingKey, stringToSign)
+    const authorizationHeader = `${algorithm} Credential=${this.env.SES_ACCESS_KEY_ID!}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+    const res = await fetch(endpoint, { method, headers: { 'content-type': 'application/json', host, 'x-amz-date': amzDate, Authorization: authorizationHeader }, body })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`SES send failed: ${res.status} ${text}`)
+    }
+  }
+}
+
+function toAmzDate(d: Date) {
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0')
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
+}
+
+async function sha256Hex(s: string): Promise<string> {
+  const enc = new TextEncoder()
+  const digest = await crypto.subtle.digest('SHA-256', enc.encode(s))
+  return buf2hex(new Uint8Array(digest))
+}
+
+async function hmac(key: CryptoKey, data: string | Uint8Array): Promise<ArrayBuffer> {
+  const enc = new TextEncoder()
+  const bytes = typeof data === 'string' ? enc.encode(data) : data
+  return crypto.subtle.sign('HMAC', key, bytes)
+}
+
+function buf2hex(buf: Uint8Array): string {
+  return Array.from(buf).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function importKey(raw: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+}
+
+async function hmacHex(key: CryptoKey, data: string): Promise<string> {
+  const sig = await hmac(key, data)
+  return buf2hex(new Uint8Array(sig))
+}
+
+async function getSignatureKey(key: string, dateStamp: string, regionName: string, serviceName: string): Promise<CryptoKey> {
+  const kDate = await importKey(await hmacRaw(`AWS4${key}`, dateStamp))
+  const kRegion = await importKey(await hmacRaw(kDate, regionName))
+  const kService = await importKey(await hmacRaw(kRegion, serviceName))
+  const kSigning = await importKey(await hmacRaw(kService, 'aws4_request'))
+  return kSigning
+}
+
+async function hmacRaw(key: string | CryptoKey, data: string): Promise<Uint8Array> {
+  let k: CryptoKey
+  if (typeof key === 'string') {
+    k = await importKey(new TextEncoder().encode(key))
+  } else {
+    k = key
+  }
+  const sig = await hmac(k, data)
+  return new Uint8Array(sig)
+}
+
+function emailInviteHtml(link: string): string {
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
+  <p>KokoSOS からの緊急共有リンクです。</p>
+  <p><a href="${link}">${link}</a></p>
+  <p>このリンクは24時間で失効します。</p>
+</div>`
 }
