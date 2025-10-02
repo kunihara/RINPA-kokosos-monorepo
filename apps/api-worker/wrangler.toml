@@ -21,26 +21,14 @@ name = "kokosos-api-prod"
 [env.prod.durable_objects]
 bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
 
-[vars]
-# Populated from environment or Wrangler secrets
+#[vars]
+# Placeholders for local dev; production uses Secrets
 # JWT_SECRET = "..."
 # SUPABASE_URL = "..."
 # SUPABASE_SERVICE_ROLE_KEY = "..."
-# SES_REGION = "..."
-# SES_ACCESS_KEY_ID = "..."
-# SES_SECRET_ACCESS_KEY = "..."
-# SES_SENDER_EMAIL = "..."
+# CORS_ALLOW_ORIGIN = "..."
 
-[miniflare]
-kv_persist = true
-durable_objects_persist = true
-cache_persist = true
-
-[env.dev]
-name = "kokosos-api-dev"
-
-[env.stage]
-name = "kokosos-api-stage"
-
-[env.prod]
-name = "kokosos-api-prod"
+# [miniflare]  # used only for local `wrangler dev`
+# kv_persist = true
+# durable_objects_persist = true
+# cache_persist = true
