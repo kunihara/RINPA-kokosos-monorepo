@@ -426,9 +426,13 @@ export default {
 export class AlertHub {
   state: DurableObjectState
   sockets: Set<WebSocket>
+  accepts: number
+  broadcasts: number
   constructor(state: DurableObjectState, _env: Env) {
     this.state = state
     this.sockets = new Set()
+    this.accepts = 0
+    this.broadcasts = 0
   }
   async fetch(req: Request) {
     const url = new URL(req.url)
@@ -438,6 +442,7 @@ export class AlertHub {
       if (!ws) return new Response('Expected WebSocket', { status: 426 })
       ws.accept()
       this.sockets.add(ws)
+      this.accepts += 1
       console.log('do_ws_accept', { sockets: this.sockets.size })
       ws.addEventListener('close', () => this.sockets.delete(ws))
       ws.addEventListener('error', () => this.sockets.delete(ws))
@@ -446,11 +451,12 @@ export class AlertHub {
     if (url.pathname === '/publish' && req.method === 'POST') {
       const text = await req.text()
       console.log('do_publish_broadcast', { sockets: this.sockets.size })
+      this.broadcasts += 1
       this.broadcast(text)
       return new Response('ok')
     }
     if (url.pathname === '/diag') {
-      const body = JSON.stringify({ sockets: this.sockets.size })
+      const body = JSON.stringify({ sockets: this.sockets.size, accepts: this.accepts, broadcasts: this.broadcasts })
       return new Response(body, { headers: { 'content-type': 'application/json' } })
     }
     return new Response('Not Found', { status: 404 })
