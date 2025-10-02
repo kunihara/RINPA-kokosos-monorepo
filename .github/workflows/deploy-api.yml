@@ -15,6 +15,13 @@ jobs:
 
       - name: Deploy via Wrangler
         uses: cloudflare/wrangler-action@v3
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CORS_ALLOW_ORIGIN: ${{ secrets.CORS_ALLOW_ORIGIN }}
+          WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -24,8 +31,4 @@ jobs:
             JWT_SECRET
             SUPABASE_URL
             SUPABASE_SERVICE_ROLE_KEY
-            SES_REGION
-            SES_ACCESS_KEY_ID
-            SES_SECRET_ACCESS_KEY
-            SES_SENDER_EMAIL
             CORS_ALLOW_ORIGIN
