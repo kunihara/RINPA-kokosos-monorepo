@@ -96,6 +96,7 @@ async function withJwtFromPathToken(req: Request, env: Env, token: string) {
 }
 
 const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> = [
+  { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
   { method: 'POST', pattern: /^\/alert\/start$/, handler: handleAlertStart },
   { method: 'POST', pattern: /^\/alert\/(\w+)\/update$/, handler: handleAlertUpdate },
   { method: 'POST', pattern: /^\/alert\/(\w+)\/stop$/, handler: handleAlertStop },
@@ -104,6 +105,27 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/stream$/, handler: handlePublicAlertStream },
   { method: 'POST', pattern: /^\/public\/alert\/([^/]+)\/react$/, handler: handlePublicAlertReact },
 ]
+
+async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const mask = (v?: string) => (v ? `${v.slice(0, 4)}…(${v.length})` : null)
+  const body = {
+    ok: true,
+    has: {
+      JWT_SECRET: !!env.JWT_SECRET,
+      SUPABASE_URL: !!env.SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY: !!env.SUPABASE_SERVICE_ROLE_KEY,
+    },
+    env: {
+      CORS_ALLOW_ORIGIN: env.CORS_ALLOW_ORIGIN || null,
+      WEB_PUBLIC_BASE: env.WEB_PUBLIC_BASE || null,
+      EMAIL_PROVIDER: env.EMAIL_PROVIDER || null,
+      DEFAULT_USER_EMAIL: env.DEFAULT_USER_EMAIL || null,
+      SUPABASE_URL_preview: env.SUPABASE_URL || null,
+      SUPABASE_SERVICE_ROLE_KEY_preview: env.SUPABASE_SERVICE_ROLE_KEY ? `${(env.SUPABASE_SERVICE_ROLE_KEY as string).slice(0,4)}…` : null,
+    },
+  }
+  return json(body)
+}
 
 async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
   const body = await req.json().catch(() => null)
