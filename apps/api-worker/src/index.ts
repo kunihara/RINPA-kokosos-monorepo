@@ -304,14 +304,17 @@ async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandle
       const pair = new WebSocketPair()
       const client = pair[0]
       const server = pair[1]
+      console.log('stream_ws_connect_start', { alertId })
       try {
         await stub.fetch('https://do/ws', { headers: { Upgrade: 'websocket' }, webSocket: server })
       } catch (e) {
+        console.log('stream_ws_connect_failed', { alertId, error: (e as Error)?.message })
         controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'error', message: 'do_connect_failed' })}\n\n`))
         controller.close()
         return
       }
       client.accept()
+      console.log('stream_ws_connect_ok', { alertId })
       // Send hello immediately so intermediaries keep the stream open
       controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'hello', ts: Date.now() })}\n\n`))
       // Periodic keepalive independent of DO messages
@@ -435,12 +438,14 @@ export class AlertHub {
       if (!ws) return new Response('Expected WebSocket', { status: 426 })
       ws.accept()
       this.sockets.add(ws)
+      console.log('do_ws_accept', { sockets: this.sockets.size })
       ws.addEventListener('close', () => this.sockets.delete(ws))
       ws.addEventListener('error', () => this.sockets.delete(ws))
       return new Response(null, { status: 101 })
     }
     if (url.pathname === '/publish' && req.method === 'POST') {
       const text = await req.text()
+      console.log('do_publish_broadcast', { sockets: this.sockets.size })
       this.broadcast(text)
       return new Response('ok')
     }

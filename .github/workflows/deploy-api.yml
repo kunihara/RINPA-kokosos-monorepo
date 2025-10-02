@@ -23,6 +23,7 @@ jobs:
           WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
         with:
+          wranglerVersion: '4.40.3'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api-worker
