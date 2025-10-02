@@ -77,6 +77,8 @@ export default function ReceiverPage({ params }: any) {
     })
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right')
     map.on('load', () => {
+      // Localize labels to Japanese where available
+      try { localizeLabelsToJapanese(map) } catch {}
       // Prepare accuracy circle source/layer
       if (!map.getSource(circleSourceId)) {
         map.addSource(circleSourceId, { type: 'geojson', data: emptyCircle() })
@@ -209,6 +211,29 @@ export default function ReceiverPage({ params }: any) {
       ],
     }
     src.setData(data)
+  }
+
+  // Replace text labels with Japanese names where available
+  function localizeLabelsToJapanese(map: mapboxgl.Map) {
+    const style = map.getStyle()
+    if (!style?.layers) return
+    for (const layer of style.layers) {
+      if (layer.type !== 'symbol') continue
+      const id = layer.id
+      // text-field があるレイヤのみ対象
+      // 既存の複雑なformat式のレイヤには適用しない（盾アイコン等を避ける）
+      const tf = (layer as any).layout?.['text-field']
+      if (!tf) continue
+      // シールド系やハイウェイ番号などはスキップ
+      if (id.includes('shield') || id.includes('motorway') && String(tf).includes('{reflen}')) continue
+      try {
+        map.setLayoutProperty(id, 'text-field', [
+          'coalesce',
+          ['get', 'name_ja'],
+          ['get', 'name']
+        ])
+      } catch {}
+    }
   }
 
   return (
