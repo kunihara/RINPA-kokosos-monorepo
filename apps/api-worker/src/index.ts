@@ -430,13 +430,14 @@ export class AlertHub {
   async fetch(req: Request) {
     const url = new URL(req.url)
     if (url.pathname === '/ws' && req.headers.get('Upgrade') === 'websocket') {
-      const pair = new WebSocketPair()
-      const server = pair[1]
-      server.accept()
-      this.sockets.add(server)
-      server.addEventListener('close', () => this.sockets.delete(server))
-      server.addEventListener('error', () => this.sockets.delete(server))
-      return new Response(null, { status: 101, webSocket: pair[0] })
+      // Accept the WebSocket passed from the Worker via fetch({ webSocket })
+      const ws = (req as unknown as { webSocket?: WebSocket }).webSocket
+      if (!ws) return new Response('Expected WebSocket', { status: 426 })
+      ws.accept()
+      this.sockets.add(ws)
+      ws.addEventListener('close', () => this.sockets.delete(ws))
+      ws.addEventListener('error', () => this.sockets.delete(ws))
+      return new Response(null, { status: 101 })
     }
     if (url.pathname === '/publish' && req.method === 'POST') {
       const text = await req.text()
