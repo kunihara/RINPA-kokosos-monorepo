@@ -69,3 +69,7 @@ fastlane/test_output/
 docker-compose.override.yml
 .env.docker
 Dockerfile.local
+
+# Docs screenshots (local-only; avoid binary bloat)
+docs/screenshots/*
+!docs/screenshots/.gitkeep
