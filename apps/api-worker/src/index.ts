@@ -98,9 +98,10 @@ async function withJwtFromPathToken(req: Request, env: Env, token: string) {
 const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> = [
   { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
   { method: 'POST', pattern: /^\/alert\/start$/, handler: handleAlertStart },
-  { method: 'POST', pattern: /^\/alert\/(\w+)\/update$/, handler: handleAlertUpdate },
-  { method: 'POST', pattern: /^\/alert\/(\w+)\/stop$/, handler: handleAlertStop },
-  { method: 'POST', pattern: /^\/alert\/(\w+)\/revoke$/, handler: handleAlertRevoke },
+  // accept UUIDs with hyphens or any non-slash segment
+  { method: 'POST', pattern: /^\/alert\/([^/]+)\/update$/, handler: handleAlertUpdate },
+  { method: 'POST', pattern: /^\/alert\/([^/]+)\/stop$/, handler: handleAlertStop },
+  { method: 'POST', pattern: /^\/alert\/([^/]+)\/revoke$/, handler: handleAlertRevoke },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)$/, handler: handlePublicAlert },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/stream$/, handler: handlePublicAlertStream },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/locations$/, handler: handlePublicAlertLocations },
@@ -195,7 +196,7 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
-  const m = req.url.match(/\/alert\/(\w+)\/update/)
+  const m = req.url.match(/\/alert\/([^/]+)\/update/)
   if (!m) return notFound()
   const alertId = m[1]
   const { lat, lng, accuracy_m, battery_pct } = body as { lat: number; lng: number; accuracy_m?: number; battery_pct?: number }
@@ -209,7 +210,7 @@ async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Pro
 }
 
 async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
-  const m = req.url.match(/\/alert\/(\w+)\/stop/)
+  const m = req.url.match(/\/alert\/([^/]+)\/stop/)
   if (!m) return notFound()
   const alertId = m[1]
   const sb = supabase(env)
@@ -221,7 +222,7 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
 }
 
 async function handleAlertRevoke({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
-  const m = req.url.match(/\/alert\/(\w+)\/revoke/)
+  const m = req.url.match(/\/alert\/([^/]+)\/revoke/)
   if (!m) return notFound()
   const alertId = m[1]
   const sb = supabase(env)
