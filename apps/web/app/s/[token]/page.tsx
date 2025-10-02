@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
 export const runtime = 'edge'
 
@@ -17,6 +19,13 @@ export default function ReceiverPage({ params }: any) {
   const [error, setError] = useState<string | null>(null)
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || ''
   const esRef = useRef<EventSource | null>(null)
+  const mapRef = useRef<HTMLDivElement | null>(null)
+  const mapInstance = useRef<mapboxgl.Map | null>(null)
+  const markerRef = useRef<mapboxgl.Marker | null>(null)
+  const circleSourceId = 'accuracy-circle'
+  const routeSourceId = 'route-line'
+  const routeCoordsRef = useRef<[number, number][]>([])
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 
   useEffect(() => {
     let closed = false
@@ -54,6 +63,154 @@ export default function ReceiverPage({ params }: any) {
 
   const remaining = useMemo(() => (state ? Math.max(0, state.remaining_sec) : 0), [state])
 
+  // Initialize Mapbox map when token and container are ready
+  useEffect(() => {
+    if (!mapRef.current) return
+    if (!mapboxToken) return
+    if (mapInstance.current) return
+    mapboxgl.accessToken = mapboxToken
+    const map = new mapboxgl.Map({
+      container: mapRef.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [139.767, 35.681],
+      zoom: 14,
+    })
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right')
+    map.on('load', () => {
+      // Prepare accuracy circle source/layer
+      if (!map.getSource(circleSourceId)) {
+        map.addSource(circleSourceId, { type: 'geojson', data: emptyCircle() })
+        map.addLayer({
+          id: 'accuracy-fill',
+          type: 'fill',
+          source: circleSourceId,
+          paint: { 'fill-color': '#3b82f6', 'fill-opacity': 0.15 },
+        })
+        map.addLayer({
+          id: 'accuracy-outline',
+          type: 'line',
+          source: circleSourceId,
+          paint: { 'line-color': '#3b82f6', 'line-width': 1 },
+        })
+      }
+      // Prepare route line source/layer
+      if (!map.getSource(routeSourceId)) {
+        map.addSource(routeSourceId, { type: 'geojson', data: emptyRoute() })
+        map.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: routeSourceId,
+          paint: { 'line-color': '#2563eb', 'line-width': 3 },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        })
+      }
+      // Place marker if we have initial location
+      const latest = state?.latest
+      if (latest) {
+        upsertMarker(latest.lng, latest.lat)
+        updateCircle(map, latest.lat, latest.lng, latest.accuracy_m ?? 0)
+        appendRoute(latest.lng, latest.lat)
+        updateRoute(map)
+        map.jumpTo({ center: [latest.lng, latest.lat], zoom: 15 })
+      }
+    })
+    mapInstance.current = map
+    return () => {
+      map.remove()
+      mapInstance.current = null
+      markerRef.current = null
+    }
+  }, [mapboxToken, state?.latest])
+
+  // Update map when latest location changes
+  useEffect(() => {
+    const latest = state?.latest
+    const map = mapInstance.current
+    if (!latest || !map) return
+    upsertMarker(latest.lng, latest.lat)
+    updateCircle(map, latest.lat, latest.lng, latest.accuracy_m ?? 0)
+    appendRoute(latest.lng, latest.lat)
+    updateRoute(map)
+    // Smoothly move for subsequent updates
+    map.easeTo({ center: [latest.lng, latest.lat], duration: 800 })
+  }, [state?.latest])
+
+  function upsertMarker(lng: number, lat: number) {
+    if (!markerRef.current) {
+      markerRef.current = new mapboxgl.Marker({ color: '#ef4444' }).setLngLat([lng, lat]).addTo(mapInstance.current!)
+    } else {
+      markerRef.current.setLngLat([lng, lat])
+    }
+  }
+
+  function updateCircle(map: mapboxgl.Map, lat: number, lng: number, accuracy_m: number) {
+    const source = map.getSource(circleSourceId) as mapboxgl.GeoJSONSource | undefined
+    if (!source) return
+    const radius = Math.max(accuracy_m || 0, 0)
+    const data = radius > 0 ? circleGeoJSON(lat, lng, radius) : emptyCircle()
+    source.setData(data)
+  }
+
+  function emptyCircle(): GeoJSON.FeatureCollection<GeoJSON.Polygon> {
+    return { type: 'FeatureCollection', features: [] }
+  }
+
+  function circleGeoJSON(lat: number, lng: number, radiusMeters: number): GeoJSON.FeatureCollection<GeoJSON.Polygon> {
+    const points = 64
+    const coords: [number, number][] = []
+    const R = 6378137
+    for (let i = 0; i <= points; i++) {
+      const theta = (i / points) * 2 * Math.PI
+      const dx = (radiusMeters * Math.cos(theta)) / (R * Math.cos((lat * Math.PI) / 180))
+      const dy = radiusMeters * Math.sin(theta) / R
+      const lngOffset = (dx * 180) / Math.PI
+      const latOffset = (dy * 180) / Math.PI
+      coords.push([lng + lngOffset, lat + latOffset])
+    }
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [coords] },
+          properties: {},
+        },
+      ],
+    }
+  }
+
+  function emptyRoute(): GeoJSON.FeatureCollection<GeoJSON.LineString> {
+    return { type: 'FeatureCollection', features: [] }
+  }
+
+  function appendRoute(lng: number, lat: number) {
+    const coords = routeCoordsRef.current
+    const last = coords[coords.length - 1]
+    // Avoid pushing duplicate points
+    if (!last || last[0] !== lng || last[1] !== lat) {
+      coords.push([lng, lat])
+      // Keep last 200 points to bound memory
+      if (coords.length > 200) coords.shift()
+    }
+  }
+
+  function updateRoute(map: mapboxgl.Map) {
+    const coords = routeCoordsRef.current
+    const src = map.getSource(routeSourceId) as mapboxgl.GeoJSONSource | undefined
+    if (!src) return
+    if (coords.length < 2) {
+      src.setData(emptyRoute())
+      return
+    }
+    const data: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} },
+      ],
+    }
+    src.setData(data)
+  }
+
   return (
     <main style={{ padding: 16, display: 'grid', gap: 12 }}>
       <h1 style={{ margin: 0, fontSize: 22 }}>KokoSOS</h1>
@@ -67,16 +224,13 @@ export default function ReceiverPage({ params }: any) {
             最終更新: {state.latest ? new Date(state.latest.captured_at).toLocaleString() : '—'} / バッテリー:{' '}
             {state.latest?.battery_pct ?? '—'}%
           </div>
-          <div style={{ height: 280, background: '#f3f4f6', borderRadius: 8, display: 'grid', placeItems: 'center' }}>
-            <div>
-              地図プレースホルダ
-              {state.latest && (
-                <div style={{ fontSize: 12, opacity: 0.7 }}>
-                  lat {state.latest.lat.toFixed(5)} / lng {state.latest.lng.toFixed(5)} ±
-                  {state.latest.accuracy_m ?? '—'}m
-                </div>
-              )}
-            </div>
+          <div style={{ height: 320, borderRadius: 8, overflow: 'hidden', position: 'relative', background: '#e5e7eb' }}>
+            {!mapboxToken && (
+              <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, background: 'rgba(255,255,255,0.8)' }}>
+                <div style={{ color: '#111827' }}>地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）</div>
+              </div>
+            )}
+            <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <a href="tel:0000000000" style={btn()}>電話</a>
