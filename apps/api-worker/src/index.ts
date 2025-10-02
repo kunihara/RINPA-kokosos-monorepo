@@ -9,6 +9,7 @@ export interface Env {
   CORS_ALLOW_ORIGIN?: string
   WEB_PUBLIC_BASE?: string
   EMAIL_PROVIDER?: string
+  DEFAULT_USER_EMAIL?: string
 }
 
 type Method = 'GET' | 'POST'
@@ -120,8 +121,9 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   // Create alert row
+  const userId = await ensureDefaultUserId(sb, env)
   const alertRes = await sb.insert('alerts', {
-    user_id: null,
+    user_id: userId,
     type: initial.type,
     status: 'active',
     max_duration_sec: initial.max_duration_sec,
@@ -502,4 +504,17 @@ function emailInviteHtml(link: string): string {
   <p><a href="${link}">${link}</a></p>
   <p>このリンクは24時間で失効します。</p>
 </div>`
+}
+
+// -------- Ensure a default dev user exists and return its id
+async function ensureDefaultUserId(sb: ReturnType<typeof supabase>, env: Env): Promise<string> {
+  const email = env.DEFAULT_USER_EMAIL || 'dev@kokosos.local'
+  const found = await sb.select('users', 'id', `email=eq.${encodeURIComponent(email)}`, 1)
+  if (found.ok && found.data.length > 0) return found.data[0].id as string
+  const ins = await sb.insert('users', { email })
+  if (ins.ok && ins.data.length > 0) return ins.data[0].id as string
+  // Fallback: try again select, else throw
+  const re = await sb.select('users', 'id', `email=eq.${encodeURIComponent(email)}`, 1)
+  if (re.ok && re.data.length > 0) return re.data[0].id as string
+  throw new Error('failed_to_ensure_default_user')
 }
