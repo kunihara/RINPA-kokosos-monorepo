@@ -10,6 +10,7 @@ export interface Env {
   WEB_PUBLIC_BASE?: string
   EMAIL_PROVIDER?: string
   DEFAULT_USER_EMAIL?: string
+  ALERT_HUB: DurableObjectNamespace
 }
 
 type Method = 'GET' | 'POST'
@@ -205,7 +206,8 @@ async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Pro
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   const captured_at = new Date().toISOString()
   await sb.insert('locations', { alert_id: alertId, lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at })
-  sseHub.publish(alertId, { type: 'location', latest: { lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at } })
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+  await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'location', latest: { lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at } }) })
   return json({ ok: true })
 }
 
@@ -217,7 +219,8 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   const ended_at = new Date().toISOString()
   await sb.update('alerts', { status: 'ended', ended_at }, `id=eq.${alertId}`)
-  sseHub.publish(alertId, { type: 'status', status: 'ended' })
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+  await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
   return json({ status: 'ended' })
 }
 
@@ -232,7 +235,8 @@ async function handleAlertRevoke({ req, env }: Parameters<RouteHandler>[0]): Pro
     // if exists, ignore
   })
   await sb.update('alerts', { revoked_at, status: 'ended' }, `id=eq.${alertId}`)
-  sseHub.publish(alertId, { type: 'status', status: 'ended' })
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+  await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
   return json({ revoked: true })
 }
 
@@ -268,7 +272,26 @@ async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandle
   const payload = await withJwtFromPathToken(req, env, token)
   if (!payload) return json({ error: 'invalid_token' }, { status: 401 })
   const alertId = String((payload as any).alert_id)
-  const stream = sseHub.subscribe(alertId)
+  // Bridge Durable Object (WebSocket) -> SSE
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const enc = new TextEncoder()
+      controller.enqueue(enc.encode(`retry: 10000\n\n`))
+      const pair = new WebSocketPair()
+      const client = pair[0]
+      const server = pair[1]
+      await stub.fetch('https://do/ws', { headers: { Upgrade: 'websocket' }, webSocket: server })
+      client.accept()
+      client.addEventListener('message', (ev: MessageEvent) => {
+        controller.enqueue(enc.encode(`data: ${String(ev.data)}\n\n`))
+      })
+      client.addEventListener('close', () => controller.close())
+      ;(controller as any)._cleanup = () => {
+        try { client.close() } catch {}
+      }
+    },
+  })
   const headers: HeadersInit = {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache, no-transform',
@@ -357,6 +380,39 @@ export default {
   },
 }
 
+// -------- Durable Object: AlertHub (WebSocket broadcast)
+export class AlertHub {
+  state: DurableObjectState
+  sockets: Set<WebSocket>
+  constructor(state: DurableObjectState, _env: Env) {
+    this.state = state
+    this.sockets = new Set()
+  }
+  async fetch(req: Request) {
+    const url = new URL(req.url)
+    if (url.pathname === '/ws' && req.headers.get('Upgrade') === 'websocket') {
+      const pair = new WebSocketPair()
+      const server = pair[1]
+      server.accept()
+      this.sockets.add(server)
+      server.addEventListener('close', () => this.sockets.delete(server))
+      server.addEventListener('error', () => this.sockets.delete(server))
+      return new Response(null, { status: 101, webSocket: pair[0] })
+    }
+    if (url.pathname === '/publish' && req.method === 'POST') {
+      const text = await req.text()
+      this.broadcast(text)
+      return new Response('ok')
+    }
+    return new Response('Not Found', { status: 404 })
+  }
+  broadcast(payload: string) {
+    for (const ws of Array.from(this.sockets)) {
+      try { ws.send(payload) } catch { this.sockets.delete(ws) }
+    }
+  }
+}
+
 // -------- Helpers: time/remaining
 function computeRemaining(started_at: string, max_duration_sec: number, ended_at?: string | null): number {
   const start = new Date(started_at).getTime()
@@ -403,48 +459,7 @@ function supabase(env: Env) {
   }
 }
 
-// -------- SSE Hub (in-memory; non-durable)
-const sseHub = (() => {
-  const map = new Map<string, Set<(evt: unknown) => void>>()
-  const enc = new TextEncoder()
-  function subscribe(alertId: string) {
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        // Advise client to retry quickly on disconnect
-        controller.enqueue(enc.encode(`retry: 10000\n\n`))
-        const send = (evt: unknown) => controller.enqueue(enc.encode(`data: ${JSON.stringify(evt)}\n\n`))
-        add(alertId, send)
-        send({ type: 'hello', ts: Date.now() })
-        const ka = setInterval(() => send({ type: 'keepalive', ts: Date.now() }), 25000)
-        ;(controller as any)._cleanup = () => {
-          remove(alertId, send)
-          clearInterval(ka)
-        }
-      },
-      cancel() {
-        /* noop */
-      },
-    })
-    return stream
-  }
-  function add(id: string, fn: (evt: unknown) => void) {
-    const set = map.get(id) || new Set()
-    set.add(fn)
-    map.set(id, set)
-  }
-  function remove(id: string, fn: (evt: unknown) => void) {
-    const set = map.get(id)
-    if (!set) return
-    set.delete(fn)
-    if (set.size === 0) map.delete(id)
-  }
-  function publish(id: string, evt: unknown) {
-    const set = map.get(id)
-    if (!set) return
-    for (const fn of set) fn(evt)
-  }
-  return { subscribe, publish }
-})()
+// (replaced by Durable Object: AlertHub)
 
 // -------- Email provider (SES or log)
 interface EmailProvider {

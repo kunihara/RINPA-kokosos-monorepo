@@ -2,6 +2,15 @@ name = "kokosos-api"
 main = "src/index.ts"
 compatibility_date = "2024-09-10"
 
+[durable_objects]
+bindings = [
+  { name = "ALERT_HUB", class_name = "AlertHub" }
+]
+
+[[migrations]]
+tag = "v1-alert-hub"
+new_classes = ["AlertHub"]
+
 [vars]
 # Populated from environment or Wrangler secrets
 # JWT_SECRET = "..."
