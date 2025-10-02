@@ -8,10 +8,7 @@ jobs:
   deploy:
     name: Build & Deploy Pages
     runs-on: ubuntu-latest
-    env:
-      ENV_NAME: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
-      PROJECT_NAME: kokosos-web-${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
-    environment: ${{ env.ENV_NAME }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +33,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ env.PROJECT_NAME }}
+          projectName: ${{ format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
           directory: apps/web/.vercel/output/static
           wranglerVersion: '3'
