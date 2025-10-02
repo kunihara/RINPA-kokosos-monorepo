@@ -9,8 +9,8 @@ type AlertState = {
   permissions: { can_call: boolean; can_reply: boolean; can_call_police: boolean }
 }
 
-export default function ReceiverPage({ params }: { params: { token: string } }) {
-  const { token } = params
+export default function ReceiverPage({ params }: any) {
+  const { token } = (params || {}) as { token: string }
   const [state, setState] = useState<AlertState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || ''
