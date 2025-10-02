@@ -35,6 +35,16 @@ export default function ReceiverPage({ params }: any) {
         if (!res.ok) throw new Error('failed to load')
         const data = (await res.json()) as AlertState
         if (!closed) setState(data)
+        // Load initial history (route)
+        try {
+          const r = await fetch(`${apiBase}/public/alert/${encodeURIComponent(token)}/locations?limit=200&order=asc`)
+          if (r.ok) {
+            const j = (await r.json()) as { items: { lat: number; lng: number }[] }
+            routeCoordsRef.current = j.items.map((x) => [x.lng, x.lat])
+            // If map is ready, reflect immediately
+            if (mapInstance.current) updateRoute(mapInstance.current)
+          }
+        } catch {}
       } catch (e) {
         if (!closed) setError('読み込みに失敗しました')
       }

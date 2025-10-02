@@ -103,6 +103,7 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'POST', pattern: /^\/alert\/(\w+)\/revoke$/, handler: handleAlertRevoke },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)$/, handler: handlePublicAlert },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/stream$/, handler: handlePublicAlertStream },
+  { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/locations$/, handler: handlePublicAlertLocations },
   { method: 'POST', pattern: /^\/public\/alert\/([^/]+)\/react$/, handler: handlePublicAlertReact },
 ]
 
@@ -276,6 +277,25 @@ async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandle
   return new Response(stream, { headers })
 }
 
+async function handlePublicAlertLocations({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const url = new URL(req.url)
+  const token = decodeURIComponent(url.pathname.split('/public/alert/')[1]?.replace(/\/locations$/, '') || '')
+  const payload = await withJwtFromPathToken(req, env, token)
+  if (!payload) return json({ error: 'invalid_token' }, { status: 401 })
+  const alertId = String((payload as any).alert_id)
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // Revocation check
+  const revoked = await sb.select('revocations', '*', `alert_id=eq.${alertId}`, 1)
+  if (revoked.ok && revoked.data.length > 0) return json({ error: 'revoked' }, { status: 401 })
+  const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100)
+  const order = (url.searchParams.get('order') || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc'
+  const q = `alert_id=eq.${alertId}&order=captured_at.${order}&limit=${limit}`
+  const res = await sb.select('locations', 'lat,lng,accuracy_m,battery_pct,captured_at', q)
+  if (!res.ok) return json({ error: 'db_error', detail: res.error }, { status: 500 })
+  return json({ items: res.data })
+}
+
 async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
   const token = decodeURIComponent(req.url.split('/public/alert/')[1]?.replace(/\/react$/, '') || '')
   const payload = await withJwtFromPathToken(req, env, token)
@@ -343,6 +363,12 @@ function computeRemaining(started_at: string, max_duration_sec: number, ended_at
   const end = ended_at ? new Date(ended_at).getTime() : null
   const elapsed = Math.floor(((end ?? now) - start) / 1000)
   return Math.max(0, max_duration_sec - elapsed)
+}
+
+function clampInt(v: string | null, min: number, max: number, fallback: number) {
+  const n = v ? parseInt(v, 10) : NaN
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
 }
 
 // -------- Supabase REST minimal client
