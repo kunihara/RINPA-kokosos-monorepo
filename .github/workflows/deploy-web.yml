@@ -37,10 +37,18 @@ jobs:
           workingDirectory: apps/web
           command: ${{ format('pages project create {0} --production-branch={1}', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
 
+      - name: Ensure Node.js compatibility flag
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: ${{ format('pages project update {0} --compatibility-flags=nodejs_compat', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev'))) }}
+
       - name: Deploy via Wrangler Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: ${{ format('pages deploy .vercel/output/static --project-name={0} --branch={1} --commit-dirty=true --commit-message={2}', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev'), 'GitHub_Actions_Deploy') }}
+          command: ${{ format('pages deploy .vercel/output/static --project-name={0} --branch={1} --commit-dirty=true --commit-message={2} --compatibility-flags=nodejs_compat', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev'), 'GitHub_Actions_Deploy') }}
