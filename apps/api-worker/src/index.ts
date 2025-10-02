@@ -98,6 +98,7 @@ async function withJwtFromPathToken(req: Request, env: Env, token: string) {
 
 const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> = [
   { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
+  { method: 'GET', pattern: /^\/_diag\/alert\/([^/]+)$/, handler: handleDiag },
   { method: 'POST', pattern: /^\/alert\/start$/, handler: handleAlertStart },
   // accept UUIDs with hyphens or any non-slash segment
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/update$/, handler: handleAlertUpdate },
@@ -128,6 +129,15 @@ async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Respo
     },
   }
   return json(body)
+}
+
+async function handleDiag({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/_diag\/alert\/([^/]+)/)
+  if (!m) return notFound()
+  const id = m[1]
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(id))
+  const res = await stub.fetch('https://do/diag')
+  return new Response(await res.text(), { status: res.status, headers: { 'content-type': 'application/json' } })
 }
 
 async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -403,6 +413,10 @@ export class AlertHub {
       const text = await req.text()
       this.broadcast(text)
       return new Response('ok')
+    }
+    if (url.pathname === '/diag') {
+      const body = JSON.stringify({ sockets: this.sockets.size })
+      return new Response(body, { headers: { 'content-type': 'application/json' } })
     }
     return new Response('Not Found', { status: 404 })
   }
