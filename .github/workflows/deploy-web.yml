@@ -27,6 +27,7 @@ jobs:
         run: npx @cloudflare/next-on-pages@latest
         env:
           NEXT_PUBLIC_API_BASE: ${{ secrets.NEXT_PUBLIC_API_BASE }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
 
       - name: Ensure Pages project exists
         uses: cloudflare/wrangler-action@v3
