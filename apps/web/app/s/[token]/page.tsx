@@ -26,6 +26,7 @@ export default function ReceiverPage({ params }: any) {
   const routeSourceId = 'route-line'
   const routeCoordsRef = useRef<[number, number][]>([])
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const lastEventAtRef = useRef<number>(0)
 
   useEffect(() => {
     let closed = false
@@ -65,6 +66,7 @@ export default function ReceiverPage({ params }: any) {
       es.onmessage = (ev) => {
         try {
           const evt = JSON.parse(ev.data)
+          lastEventAtRef.current = Date.now()
           if (evt.type === 'location') setState((s) => (s ? { ...s, latest: evt.latest } : s))
           if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
           // reset backoff on successful message
@@ -83,6 +85,35 @@ export default function ReceiverPage({ params }: any) {
     return () => {
       stopped = true
       esRef.current?.close()
+    }
+  }, [apiBase, token])
+
+  // Polling fallback: SSEが8秒以上沈黙している時だけ5秒間隔で最新を取得
+  useEffect(() => {
+    let active = true
+    const id = setInterval(async () => {
+      if (!active) return
+      const silentFor = Date.now() - (lastEventAtRef.current || 0)
+      if (lastEventAtRef.current !== 0 && silentFor < 8000) return
+      try {
+        const res = await fetch(`${apiBase}/public/alert/${encodeURIComponent(token)}`)
+        if (!res.ok) return
+        const data = (await res.json()) as AlertState
+        setState((prev) => {
+          const prevTs = prev?.latest ? new Date(prev.latest.captured_at).getTime() : 0
+          const nextTs = data.latest ? new Date(data.latest.captured_at).getTime() : 0
+          if (nextTs > prevTs && data.latest) {
+            appendRoute(data.latest.lng, data.latest.lat)
+            if (mapInstance.current) updateRoute(mapInstance.current)
+            return prev ? { ...prev, latest: data.latest } : data
+          }
+          return prev ?? data
+        })
+      } catch {}
+    }, 5000)
+    return () => {
+      active = false
+      clearInterval(id)
     }
   }, [apiBase, token])
 
