@@ -2,14 +2,24 @@ name = "kokosos-api"
 main = "src/index.ts"
 compatibility_date = "2024-09-10"
 
-[durable_objects]
-bindings = [
-  { name = "ALERT_HUB", class_name = "AlertHub" }
-]
-
 [[migrations]]
-tag = "v1-alert-hub"
-new_classes = ["AlertHub"]
+tag = "v1-alert-hub-sqlite"
+new_sqlite_classes = ["AlertHub"]
+
+[env.dev]
+name = "kokosos-api-dev"
+[env.dev.durable_objects]
+bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
+
+[env.stage]
+name = "kokosos-api-stage"
+[env.stage.durable_objects]
+bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
+
+[env.prod]
+name = "kokosos-api-prod"
+[env.prod.durable_objects]
+bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
 
 [vars]
 # Populated from environment or Wrangler secrets
