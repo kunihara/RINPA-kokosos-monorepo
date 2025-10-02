@@ -20,7 +20,7 @@ jobs:
 
       - name: Install deps
         working-directory: apps/web
-        run: npm ci
+        run: npm install --no-fund --no-audit
 
       - name: Build (next-on-pages)
         working-directory: apps/web
