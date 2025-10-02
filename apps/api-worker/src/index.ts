@@ -410,6 +410,8 @@ const sseHub = (() => {
   function subscribe(alertId: string) {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
+        // Advise client to retry quickly on disconnect
+        controller.enqueue(enc.encode(`retry: 10000\n\n`))
         const send = (evt: unknown) => controller.enqueue(enc.encode(`data: ${JSON.stringify(evt)}\n\n`))
         add(alertId, send)
         send({ type: 'hello', ts: Date.now() })

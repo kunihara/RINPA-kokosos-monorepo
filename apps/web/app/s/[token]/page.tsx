@@ -56,19 +56,34 @@ export default function ReceiverPage({ params }: any) {
   }, [apiBase, token])
 
   useEffect(() => {
-    const es = new EventSource(`${apiBase}/public/alert/${encodeURIComponent(token)}/stream`)
-    esRef.current = es
-    es.onmessage = (ev) => {
-      try {
-        const evt = JSON.parse(ev.data)
-        if (evt.type === 'location') setState((s) => (s ? { ...s, latest: evt.latest } : s))
-        if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
-      } catch {}
+    let stopped = false
+    let retryMs = 1000
+    function connect() {
+      if (stopped) return
+      const es = new EventSource(`${apiBase}/public/alert/${encodeURIComponent(token)}/stream`)
+      esRef.current = es
+      es.onmessage = (ev) => {
+        try {
+          const evt = JSON.parse(ev.data)
+          if (evt.type === 'location') setState((s) => (s ? { ...s, latest: evt.latest } : s))
+          if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
+          // reset backoff on successful message
+          retryMs = 1000
+        } catch {}
+      }
+      es.onerror = () => {
+        es.close()
+        if (stopped) return
+        const wait = retryMs
+        retryMs = Math.min(retryMs * 2, 30000)
+        setTimeout(connect, wait)
+      }
     }
-    es.onerror = () => {
-      es.close()
+    connect()
+    return () => {
+      stopped = true
+      esRef.current?.close()
     }
-    return () => es.close()
   }, [apiBase, token])
 
   const remaining = useMemo(() => (state ? Math.max(0, state.remaining_sec) : 0), [state])
