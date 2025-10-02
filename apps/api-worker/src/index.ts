@@ -288,16 +288,33 @@ async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandle
     async start(controller) {
       const enc = new TextEncoder()
       controller.enqueue(enc.encode(`retry: 10000\n\n`))
+      // Establish DO websocket
       const pair = new WebSocketPair()
       const client = pair[0]
       const server = pair[1]
-      await stub.fetch('https://do/ws', { headers: { Upgrade: 'websocket' }, webSocket: server })
+      try {
+        await stub.fetch('https://do/ws', { headers: { Upgrade: 'websocket' }, webSocket: server })
+      } catch (e) {
+        controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'error', message: 'do_connect_failed' })}\n\n`))
+        controller.close()
+        return
+      }
       client.accept()
+      // Send hello immediately so intermediaries keep the stream open
+      controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'hello', ts: Date.now() })}\n\n`))
+      // Periodic keepalive independent of DO messages
+      const ka = setInterval(() => {
+        try { controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'keepalive', ts: Date.now() })}\n\n`)) } catch {}
+      }, 25000)
       client.addEventListener('message', (ev: MessageEvent) => {
         controller.enqueue(enc.encode(`data: ${String(ev.data)}\n\n`))
       })
-      client.addEventListener('close', () => controller.close())
+      client.addEventListener('close', () => {
+        clearInterval(ka)
+        controller.close()
+      })
       ;(controller as any)._cleanup = () => {
+        clearInterval(ka)
         try { client.close() } catch {}
       }
     },
