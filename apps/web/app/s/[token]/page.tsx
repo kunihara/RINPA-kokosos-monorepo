@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+export const runtime = 'edge'
+
 type AlertState = {
   status: 'active' | 'ended' | 'timeout'
   remaining_sec: number
