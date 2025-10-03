@@ -13,7 +13,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy via Wrangler
+      - name: Deploy via Wrangler (dev)
+        if: ${{ github.ref_name == 'dev' }}
+        uses: cloudflare/wrangler-action@v3
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CORS_ALLOW_ORIGIN: ${{ secrets.CORS_ALLOW_ORIGIN }}
+          WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+        with:
+          wranglerVersion: '4.40.3'
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api-worker
+          command: deploy --env dev
+          secrets: |
+            JWT_SECRET
+            SUPABASE_URL
+            SUPABASE_SERVICE_ROLE_KEY
+            CORS_ALLOW_ORIGIN
+            WEB_PUBLIC_BASE
+            EMAIL_PROVIDER
+
+      - name: Deploy via Wrangler (stage/prod)
+        if: ${{ github.ref_name == 'stage' || github.ref_name == 'main' }}
         uses: cloudflare/wrangler-action@v3
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -32,7 +57,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api-worker
-          command: deploy --env ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
+          command: deploy --env ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
           secrets: |
             JWT_SECRET
             SUPABASE_URL
