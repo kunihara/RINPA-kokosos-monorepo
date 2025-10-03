@@ -31,12 +31,12 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
-            for KEY in JWT_SECRET SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY CORS_ALLOW_ORIGIN WEB_PUBLIC_BASE EMAIL_PROVIDER; do
-              VAL="${!KEY}"
-              if [ -n "$VAL" ]; then
-                printf "%s" "$VAL" | npx wrangler secret put "$KEY" --env "$ENV_NAME"
-              fi
-            done
+            [ -n "${JWT_SECRET:-}" ] && printf "%s" "$JWT_SECRET" | npx wrangler secret put JWT_SECRET --env "$ENV_NAME"
+            [ -n "${SUPABASE_URL:-}" ] && printf "%s" "$SUPABASE_URL" | npx wrangler secret put SUPABASE_URL --env "$ENV_NAME"
+            [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && printf "%s" "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env "$ENV_NAME"
+            [ -n "${CORS_ALLOW_ORIGIN:-}" ] && printf "%s" "$CORS_ALLOW_ORIGIN" | npx wrangler secret put CORS_ALLOW_ORIGIN --env "$ENV_NAME"
+            [ -n "${WEB_PUBLIC_BASE:-}" ] && printf "%s" "$WEB_PUBLIC_BASE" | npx wrangler secret put WEB_PUBLIC_BASE --env "$ENV_NAME"
+            [ -n "${EMAIL_PROVIDER:-}" ] && printf "%s" "$EMAIL_PROVIDER" | npx wrangler secret put EMAIL_PROVIDER --env "$ENV_NAME"
           command: deploy --env dev
 
       - name: Deploy via Wrangler (stage/prod)
@@ -61,10 +61,14 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
-            for KEY in JWT_SECRET SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY CORS_ALLOW_ORIGIN WEB_PUBLIC_BASE EMAIL_PROVIDER SES_REGION SES_ACCESS_KEY_ID SES_SECRET_ACCESS_KEY SES_SENDER_EMAIL; do
-              VAL="${!KEY}"
-              if [ -n "$VAL" ]; then
-                printf "%s" "$VAL" | npx wrangler secret put "$KEY" --env "$ENV_NAME"
-              fi
-            done
+            [ -n "${JWT_SECRET:-}" ] && printf "%s" "$JWT_SECRET" | npx wrangler secret put JWT_SECRET --env "$ENV_NAME"
+            [ -n "${SUPABASE_URL:-}" ] && printf "%s" "$SUPABASE_URL" | npx wrangler secret put SUPABASE_URL --env "$ENV_NAME"
+            [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && printf "%s" "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env "$ENV_NAME"
+            [ -n "${CORS_ALLOW_ORIGIN:-}" ] && printf "%s" "$CORS_ALLOW_ORIGIN" | npx wrangler secret put CORS_ALLOW_ORIGIN --env "$ENV_NAME"
+            [ -n "${WEB_PUBLIC_BASE:-}" ] && printf "%s" "$WEB_PUBLIC_BASE" | npx wrangler secret put WEB_PUBLIC_BASE --env "$ENV_NAME"
+            [ -n "${EMAIL_PROVIDER:-}" ] && printf "%s" "$EMAIL_PROVIDER" | npx wrangler secret put EMAIL_PROVIDER --env "$ENV_NAME"
+            [ -n "${SES_REGION:-}" ] && printf "%s" "$SES_REGION" | npx wrangler secret put SES_REGION --env "$ENV_NAME"
+            [ -n "${SES_ACCESS_KEY_ID:-}" ] && printf "%s" "$SES_ACCESS_KEY_ID" | npx wrangler secret put SES_ACCESS_KEY_ID --env "$ENV_NAME"
+            [ -n "${SES_SECRET_ACCESS_KEY:-}" ] && printf "%s" "$SES_SECRET_ACCESS_KEY" | npx wrangler secret put SES_SECRET_ACCESS_KEY --env "$ENV_NAME"
+            [ -n "${SES_SENDER_EMAIL:-}" ] && printf "%s" "$SES_SENDER_EMAIL" | npx wrangler secret put SES_SENDER_EMAIL --env "$ENV_NAME"
           command: deploy --env ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
