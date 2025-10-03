@@ -36,11 +36,6 @@ jobs:
             set -e
             # Sanity: print the account picked up by this runner
             echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}" || true
-            python - <<'PY'
-              import os
-              t=os.environ.get('CLOUDFLARE_API_TOKEN','')
-              print('CF_TOKEN_DEBUG','ENDS_WITH_NL',t.endswith('\n'),'HAS_SPACE',(' ' in t))
-            PY
             npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
             npx wrangler deploy --env "$ENV_NAME"
@@ -80,11 +75,6 @@ jobs:
             set -e
             # Sanity: print the account picked up by this runner
             echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}" || true
-            python - <<'PY'
-              import os
-              t=os.environ.get('CLOUDFLARE_API_TOKEN','')
-              print('CF_TOKEN_DEBUG','ENDS_WITH_NL',t.endswith('\n'),'HAS_SPACE',(' ' in t))
-            PY
             npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
             npx wrangler deploy --env "$ENV_NAME"
