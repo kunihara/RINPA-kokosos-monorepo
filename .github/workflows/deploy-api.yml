@@ -31,6 +31,9 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
+            # First deploy to create the service (script) so that secret put works
+            npx wrangler deploy --env "$ENV_NAME"
+            # Upload secrets to the created service
             [ -n "${JWT_SECRET:-}" ] && printf "%s" "$JWT_SECRET" | npx wrangler secret put JWT_SECRET --env "$ENV_NAME"
             [ -n "${SUPABASE_URL:-}" ] && printf "%s" "$SUPABASE_URL" | npx wrangler secret put SUPABASE_URL --env "$ENV_NAME"
             [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && printf "%s" "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env "$ENV_NAME"
@@ -61,6 +64,9 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
+            # First deploy to create the service (script) so that secret put works
+            npx wrangler deploy --env "$ENV_NAME"
+            # Upload secrets to the created service
             [ -n "${JWT_SECRET:-}" ] && printf "%s" "$JWT_SECRET" | npx wrangler secret put JWT_SECRET --env "$ENV_NAME"
             [ -n "${SUPABASE_URL:-}" ] && printf "%s" "$SUPABASE_URL" | npx wrangler secret put SUPABASE_URL --env "$ENV_NAME"
             [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ] && printf "%s" "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --env "$ENV_NAME"
