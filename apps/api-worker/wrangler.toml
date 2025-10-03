@@ -1,6 +1,7 @@
 name = "kokosos-api"
 main = "src/index.ts"
 compatibility_date = "2024-09-10"
+legacy_env = true
 
 [[migrations]]
 tag = "v1-alert-hub-sqlite"
