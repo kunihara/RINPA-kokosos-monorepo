@@ -32,6 +32,7 @@ apps/web/.env.production.local
 .wrangler/
 apps/api-worker/.wrangler/
 apps/api-worker/dist/
+**/.dev.vars
 
 # Supabase (CLI local state)
 supabase/.branches/
@@ -69,3 +70,7 @@ fastlane/test_output/
 docker-compose.override.yml
 .env.docker
 Dockerfile.local
+
+# Docs screenshots (local-only; avoid binary bloat)
+docs/screenshots/*
+!docs/screenshots/.gitkeep

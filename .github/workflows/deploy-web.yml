@@ -8,10 +8,7 @@ jobs:
   deploy:
     name: Build & Deploy Pages
     runs-on: ubuntu-latest
-    env:
-      ENV_NAME: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
-      PROJECT_NAME: kokosos-web-${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
-    environment: ${{ env.ENV_NAME }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,19 +20,29 @@ jobs:
 
       - name: Install deps
         working-directory: apps/web
-        run: npm ci
+        run: npm install --no-fund --no-audit --legacy-peer-deps
 
       - name: Build (next-on-pages)
         working-directory: apps/web
         run: npx @cloudflare/next-on-pages@latest
         env:
           NEXT_PUBLIC_API_BASE: ${{ secrets.NEXT_PUBLIC_API_BASE }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+      - name: Ensure Pages project exists
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ env.PROJECT_NAME }}
-          directory: apps/web/.vercel/output/static
-          wranglerVersion: '3'
+          workingDirectory: apps/web
+          command: ${{ format('pages project create {0} --production-branch={1}', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
+
+
+      - name: Deploy via Wrangler Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          command: ${{ format('pages deploy .vercel/output/static --project-name={0} --branch={1} --commit-dirty=true --commit-message={2}', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev'), 'GitHub_Actions_Deploy') }}
