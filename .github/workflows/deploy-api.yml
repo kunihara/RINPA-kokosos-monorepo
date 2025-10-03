@@ -31,6 +31,8 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
+            # Sanity: print the account picked up by this runner
+            npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
             npx wrangler deploy --env "$ENV_NAME"
             # Upload secrets to the created service
@@ -64,6 +66,8 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
+            # Sanity: print the account picked up by this runner
+            npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
             npx wrangler deploy --env "$ENV_NAME"
             # Upload secrets to the created service
