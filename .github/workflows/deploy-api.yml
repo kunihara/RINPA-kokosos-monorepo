@@ -35,6 +35,11 @@ jobs:
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
         run: |
           set -euo pipefail
+          echo "CF_TOKEN_LEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)"
+          CF_TOKEN_VERIFY_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)
+          echo "CF_TOKEN_VERIFY_CODE=$CF_TOKEN_VERIFY_CODE"
           wrangler whoami
           wrangler deploy --env dev
           [ -n "${JWT_SECRET:-}" ] && printf "%s" "$JWT_SECRET" | wrangler secret put JWT_SECRET --env dev
@@ -62,6 +67,11 @@ jobs:
           SES_SENDER_EMAIL: ${{ secrets.SES_SENDER_EMAIL }}
         run: |
           set -euo pipefail
+          echo "CF_TOKEN_LEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)"
+          CF_TOKEN_VERIFY_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)
+          echo "CF_TOKEN_VERIFY_CODE=$CF_TOKEN_VERIFY_CODE"
           ENV_NAME=${{ github.ref_name == 'main' && 'prod' || 'stage' }}
           wrangler whoami
           wrangler deploy --env "$ENV_NAME"
