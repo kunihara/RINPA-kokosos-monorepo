@@ -34,7 +34,9 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
-            # Sanity: print the account picked up by this runner
+            # Inject secrets explicitly for preCommands
+            export CLOUDFLARE_API_TOKEN='${{ secrets.CLOUDFLARE_API_TOKEN }}'
+            export CLOUDFLARE_ACCOUNT_ID='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
             echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}" || true
             npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
@@ -73,7 +75,9 @@ jobs:
           workingDirectory: apps/api-worker
           preCommands: |
             set -e
-            # Sanity: print the account picked up by this runner
+            # Inject secrets explicitly for preCommands
+            export CLOUDFLARE_API_TOKEN='${{ secrets.CLOUDFLARE_API_TOKEN }}'
+            export CLOUDFLARE_ACCOUNT_ID='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
             echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}" || true
             npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
