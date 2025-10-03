@@ -32,6 +32,7 @@ apps/web/.env.production.local
 .wrangler/
 apps/api-worker/.wrangler/
 apps/api-worker/dist/
+**/.dev.vars
 
 # Supabase (CLI local state)
 supabase/.branches/

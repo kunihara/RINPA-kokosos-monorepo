@@ -300,13 +300,15 @@ async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandle
     async start(controller) {
       const enc = new TextEncoder()
       controller.enqueue(enc.encode(`retry: 10000\n\n`))
-      // Establish DO websocket
-      const pair = new WebSocketPair()
-      const client = pair[0]
-      const server = pair[1]
+      // Establish DO websocket (per latest Durable Objects API)
       console.log('stream_ws_connect_start', { alertId })
+      let client: WebSocket
       try {
-        await stub.fetch('https://do/ws', { headers: { Upgrade: 'websocket' }, webSocket: server })
+        const res = await stub.fetch('https://do/ws', { headers: { Upgrade: 'websocket' } })
+        // Response to an Upgrade request contains a webSocket in Workers runtime
+        const ws = (res as unknown as { webSocket?: WebSocket }).webSocket
+        if (!ws) throw new Error('no_websocket_returned')
+        client = ws
       } catch (e) {
         console.log('stream_ws_connect_failed', { alertId, error: (e as Error)?.message })
         controller.enqueue(enc.encode(`data: ${JSON.stringify({ type: 'error', message: 'do_connect_failed' })}\n\n`))
@@ -324,14 +326,15 @@ async function handlePublicAlertStream({ req, env, ctx }: Parameters<RouteHandle
       client.addEventListener('message', (ev: MessageEvent) => {
         controller.enqueue(enc.encode(`data: ${String(ev.data)}\n\n`))
       })
-      client.addEventListener('close', () => {
+      const onClose = () => {
         clearInterval(ka)
         controller.close()
-      })
-      ;(controller as any)._cleanup = () => {
-        clearInterval(ka)
-        try { client.close() } catch {}
       }
+      client.addEventListener('close', onClose)
+      client.addEventListener('error', onClose)
+    },
+    cancel() {
+      try { client.close() } catch {}
     },
   })
   const headers: HeadersInit = {
@@ -425,46 +428,47 @@ export default {
 // -------- Durable Object: AlertHub (WebSocket broadcast)
 export class AlertHub {
   state: DurableObjectState
-  sockets: Set<WebSocket>
   accepts: number
   broadcasts: number
   constructor(state: DurableObjectState, _env: Env) {
     this.state = state
-    this.sockets = new Set()
     this.accepts = 0
     this.broadcasts = 0
+    // Auto-respond to ping frames/messages to keep connections alive without waking the DO
+    try {
+      // @ts-ignore: WebSocketRequestResponsePair is provided by the Workers runtime
+      this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
+    } catch {}
   }
   async fetch(req: Request) {
     const url = new URL(req.url)
-    if (url.pathname === '/ws' && req.headers.get('Upgrade') === 'websocket') {
-      // Accept the WebSocket passed from the Worker via fetch({ webSocket })
-      const ws = (req as unknown as { webSocket?: WebSocket }).webSocket
-      if (!ws) return new Response('Expected WebSocket', { status: 426 })
-      ws.accept()
-      this.sockets.add(ws)
+    if (url.pathname === '/ws' && (req.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
+      // Create a server/client pair and accept the server side into this Durable Object.
+      const pair = new WebSocketPair()
+      const client = pair[0]
+      const server = pair[1]
+      this.state.acceptWebSocket(server)
       this.accepts += 1
-      console.log('do_ws_accept', { sockets: this.sockets.size })
-      ws.addEventListener('close', () => this.sockets.delete(ws))
-      ws.addEventListener('error', () => this.sockets.delete(ws))
-      return new Response(null, { status: 101 })
+      const sockets = this.state.getWebSockets()
+      console.log('do_ws_accept', { sockets: sockets.length })
+      return new Response(null, { status: 101, webSocket: client })
     }
     if (url.pathname === '/publish' && req.method === 'POST') {
       const text = await req.text()
-      console.log('do_publish_broadcast', { sockets: this.sockets.size })
+      const sockets = this.state.getWebSockets()
+      console.log('do_publish_broadcast', { sockets: sockets.length })
       this.broadcasts += 1
-      this.broadcast(text)
+      for (const ws of sockets) {
+        try { ws.send(text) } catch {}
+      }
       return new Response('ok')
     }
     if (url.pathname === '/diag') {
-      const body = JSON.stringify({ sockets: this.sockets.size, accepts: this.accepts, broadcasts: this.broadcasts })
+      const sockets = this.state.getWebSockets()
+      const body = JSON.stringify({ sockets: sockets.length, accepts: this.accepts, broadcasts: this.broadcasts })
       return new Response(body, { headers: { 'content-type': 'application/json' } })
     }
     return new Response('Not Found', { status: 404 })
-  }
-  broadcast(payload: string) {
-    for (const ws of Array.from(this.sockets)) {
-      try { ws.send(payload) } catch { this.sockets.delete(ws) }
-    }
   }
 }
 

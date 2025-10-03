@@ -1,0 +1,14 @@
+# Local-only variables for `wrangler dev`
+# Do NOT commit your real secrets. Copy this file to `.dev.vars`
+# and replace the placeholders as needed.
+
+# Used for verifying/issuing viewer tokens in local dev
+JWT_SECRET=change-me
+
+# Optional: enable email/Supabase features locally if needed
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_SERVICE_ROLE_KEY=service-role-key
+# SES_REGION=ap-northeast-1
+# SES_ACCESS_KEY_ID=AKIA...
+# SES_SECRET_ACCESS_KEY=...
+# SES_SENDER_EMAIL=notify@example.com
