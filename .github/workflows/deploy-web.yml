@@ -31,12 +31,12 @@ jobs:
 
       - name: Ensure Pages project exists
         uses: cloudflare/wrangler-action@v3
-        continue-on-error: true
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: ${{ format('pages project create {0} --production-branch={1}', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
+          preCommands: ${{ format('npx wrangler pages project list || true; npx wrangler pages project create {0} --production-branch={1} || true', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
+          command: pages project list
 
 
       - name: Deploy via Wrangler Pages
