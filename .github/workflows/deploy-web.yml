@@ -47,8 +47,8 @@ jobs:
           workingDirectory: apps/web
           preCommands: |
             # Inject secrets explicitly for preCommands
-            export CLOUDFLARE_API_TOKEN='${{ secrets.CLOUDFLARE_API_TOKEN }}'
-            export CLOUDFLARE_ACCOUNT_ID='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+            export CLOUDFLARE_API_TOKEN="$CF_API_TOKEN"
+            export CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"
             npx wrangler whoami || true
             npx wrangler pages project list || true
             npx wrangler pages project create ${{ format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')) }} --production-branch=${{ github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev' }} || true

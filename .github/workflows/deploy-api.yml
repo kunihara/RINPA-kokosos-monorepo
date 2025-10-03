@@ -35,8 +35,9 @@ jobs:
           preCommands: |
             set -e
             # Inject secrets explicitly for preCommands
-            export CLOUDFLARE_API_TOKEN='${{ secrets.CLOUDFLARE_API_TOKEN }}'
-            export CLOUDFLARE_ACCOUNT_ID='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+            # Use action-level env to avoid masking interpolation
+            export CLOUDFLARE_API_TOKEN="$CF_API_TOKEN"
+            export CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"
             echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}" || true
             npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
@@ -76,8 +77,8 @@ jobs:
           preCommands: |
             set -e
             # Inject secrets explicitly for preCommands
-            export CLOUDFLARE_API_TOKEN='${{ secrets.CLOUDFLARE_API_TOKEN }}'
-            export CLOUDFLARE_ACCOUNT_ID='${{ secrets.CLOUDFLARE_ACCOUNT_ID }}'
+            export CLOUDFLARE_API_TOKEN="$CF_API_TOKEN"
+            export CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"
             echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}" || true
             npx wrangler whoami || true
             # First deploy to create the service (script) so that secret put works
