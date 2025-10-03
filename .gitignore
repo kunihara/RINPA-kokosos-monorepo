@@ -34,6 +34,9 @@ apps/api-worker/.wrangler/
 apps/api-worker/dist/
 **/.dev.vars
 
+# GitHub Environment secret files (do not commit real values)
+.github/env/*.secrets
+
 # Supabase (CLI local state)
 supabase/.branches/
 supabase/.temp/
