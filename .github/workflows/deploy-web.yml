@@ -35,7 +35,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          preCommands: ${{ format('npx wrangler pages project list || true; npx wrangler pages project create {0} --production-branch={1} || true', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
+          preCommands: ${{ format('npx wrangler whoami || true; npx wrangler pages project list || true; npx wrangler pages project create {0} --production-branch={1} || true', format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')), (github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
           command: pages project list
 
 
