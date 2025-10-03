@@ -33,10 +33,10 @@ jobs:
         run: |
           echo "CF_TOKEN_LEN=${#CLOUDFLARE_API_TOKEN}"
           python - <<'PY'
-import os
-t=os.environ.get('CLOUDFLARE_API_TOKEN','')
-print('CF_TOKEN_DEBUG','ENDS_WITH_NL',t.endswith('\n'),'HAS_SPACE',(' ' in t))
-PY
+            import os
+            t=os.environ.get('CLOUDFLARE_API_TOKEN','')
+            print('CF_TOKEN_DEBUG','ENDS_WITH_NL',t.endswith('\n'),'HAS_SPACE',(' ' in t))
+          PY
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
