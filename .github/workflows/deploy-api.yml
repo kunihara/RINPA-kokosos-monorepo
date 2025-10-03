@@ -23,19 +23,21 @@ jobs:
           CORS_ALLOW_ORIGIN: ${{ secrets.CORS_ALLOW_ORIGIN }}
           WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          ENV_NAME: dev
         with:
           wranglerVersion: '4.40.3'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api-worker
+          preCommands: |
+            set -e
+            for KEY in JWT_SECRET SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY CORS_ALLOW_ORIGIN WEB_PUBLIC_BASE EMAIL_PROVIDER; do
+              VAL="${!KEY}"
+              if [ -n "$VAL" ]; then
+                printf "%s" "$VAL" | npx wrangler secret put "$KEY" --env "$ENV_NAME"
+              fi
+            done
           command: deploy --env dev
-          secrets: |
-            JWT_SECRET
-            SUPABASE_URL
-            SUPABASE_SERVICE_ROLE_KEY
-            CORS_ALLOW_ORIGIN
-            WEB_PUBLIC_BASE
-            EMAIL_PROVIDER
 
       - name: Deploy via Wrangler (stage/prod)
         if: ${{ github.ref_name == 'stage' || github.ref_name == 'main' }}
@@ -51,20 +53,18 @@ jobs:
           SES_ACCESS_KEY_ID: ${{ secrets.SES_ACCESS_KEY_ID }}
           SES_SECRET_ACCESS_KEY: ${{ secrets.SES_SECRET_ACCESS_KEY }}
           SES_SENDER_EMAIL: ${{ secrets.SES_SENDER_EMAIL }}
+          ENV_NAME: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
         with:
           wranglerVersion: '4.40.3'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api-worker
+          preCommands: |
+            set -e
+            for KEY in JWT_SECRET SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY CORS_ALLOW_ORIGIN WEB_PUBLIC_BASE EMAIL_PROVIDER SES_REGION SES_ACCESS_KEY_ID SES_SECRET_ACCESS_KEY SES_SENDER_EMAIL; do
+              VAL="${!KEY}"
+              if [ -n "$VAL" ]; then
+                printf "%s" "$VAL" | npx wrangler secret put "$KEY" --env "$ENV_NAME"
+              fi
+            done
           command: deploy --env ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
-          secrets: |
-            JWT_SECRET
-            SUPABASE_URL
-            SUPABASE_SERVICE_ROLE_KEY
-            CORS_ALLOW_ORIGIN
-            WEB_PUBLIC_BASE
-            EMAIL_PROVIDER
-            SES_REGION
-            SES_ACCESS_KEY_ID
-            SES_SECRET_ACCESS_KEY
-            SES_SENDER_EMAIL
