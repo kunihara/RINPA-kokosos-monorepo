@@ -39,6 +39,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
+          echo "CF_TOKEN_LEN=$(printf %s \"$CLOUDFLARE_API_TOKEN\" | wc -c)"
+          CF_TOKEN_VERIFY_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)
+          echo "CF_TOKEN_VERIFY_CODE=$CF_TOKEN_VERIFY_CODE"
           wrangler whoami
           PROJECT=${{ format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
           BRANCH=${{ github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev' }}

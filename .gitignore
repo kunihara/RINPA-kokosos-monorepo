@@ -33,6 +33,8 @@ apps/web/.env.production.local
 apps/api-worker/.wrangler/
 apps/api-worker/dist/
 **/.dev.vars
+.github/env/*.secrets
+stage.test
 
 # GitHub Environment secret files (do not commit real values)
 .github/env/*.secrets
