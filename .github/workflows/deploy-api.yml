@@ -22,6 +22,11 @@ jobs:
           CORS_ALLOW_ORIGIN: ${{ secrets.CORS_ALLOW_ORIGIN }}
           WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          SES_REGION: ${{ secrets.SES_REGION }}
+          SES_ACCESS_KEY_ID: ${{ secrets.SES_ACCESS_KEY_ID }}
+          SES_SECRET_ACCESS_KEY: ${{ secrets.SES_SECRET_ACCESS_KEY }}
+          SES_SENDER_EMAIL: ${{ secrets.SES_SENDER_EMAIL }}
+          DEFAULT_USER_EMAIL: ${{ secrets.DEFAULT_USER_EMAIL }}
         with:
           wranglerVersion: '4.40.3'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -33,3 +38,10 @@ jobs:
             SUPABASE_URL
             SUPABASE_SERVICE_ROLE_KEY
             CORS_ALLOW_ORIGIN
+            WEB_PUBLIC_BASE
+            EMAIL_PROVIDER
+            SES_REGION
+            SES_ACCESS_KEY_ID
+            SES_SECRET_ACCESS_KEY
+            SES_SENDER_EMAIL
+            DEFAULT_USER_EMAIL
