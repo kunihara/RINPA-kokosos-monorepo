@@ -1,8 +1,9 @@
 KokoSOS Monorepo (MVP skeleton)
 
 Overview
+- Requirements spec: docs/requirements.md
 - iOS app triggers alerts; this repo provides the API, web receiver, and DB schema.
-- Stack: Cloudflare Workers (API), Next.js 14 (receiver web), Supabase Postgres (DB), AWS SES (email placeholder).
+- Stack: Cloudflare Workers (API), Next.js 14 (receiver web), Supabase Postgres (DB), AWS SES (email).
 
 Structure
 - apps/api-worker: Cloudflare Workers API with JWT and SSE skeleton.
@@ -19,7 +20,7 @@ Quickstart
 - DB: apply `db/schema.sql` to Supabase（クラウド or Supabase CLIでローカル起動）。
 
 Environment
-- Copy `.env.example` to `.env` in each app as needed. Register secrets in your platform (Wrangler, Vercel/Pages, Supabase, GitHub Actions).
+- Copy `.env.example` to `.env` in each app as needed. Register secrets in your platform (Wrangler, Cloudflare Pages, Supabase, GitHub Actions).
 
 Docker notes
 - `docker-compose` は API(8787) と Web(3000) を起動。ブラウザは `http://localhost:3000` へアクセスし、クライアントJSが `http://localhost:8787` に直接アクセスします。
@@ -55,8 +56,7 @@ Security
 - Revocations checked to immediately invalidate tokens.
 - Security headers set: HSTS, Referrer-Policy, X-Frame-Options, CSP (nonce-based skeleton).
 
-Notes
-- Email sending is a placeholder; integrate AWS SES in production.
+- Email sending uses AWS SES (local dev may use MailHog).
 - SSE broadcasting is stubbed; connect to storage/pubsub as you wire Supabase/Workers Durable Objects.
 - iOS（UIKit / XcodeGen）
 - 生成: `brew install xcodegen` 後、`cd apps/ios && xcodegen generate && open KokoSOS.xcodeproj`
