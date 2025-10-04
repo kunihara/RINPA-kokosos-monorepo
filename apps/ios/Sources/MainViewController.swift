@@ -122,6 +122,12 @@ final class MainViewController: UIViewController {
         ])
     }
 
+    private func showAlert(_ title: String, _ msg: String) {
+        let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+
     private func updateRecipientsChip() {
         let count = selectedRecipients.count
         recipientsButton.setTitle("受信者: \(count)名", for: .normal)
