@@ -46,6 +46,7 @@ Endpoints (API)
 - POST `/alert/start`: Start sharing, returns `shareToken` and alert metadata.
 - POST `/alert/:id/update`: Periodic location update.
 - POST `/alert/:id/stop`: Stop or arrived.
+- POST `/alert/:id/extend`: Extend max_duration (server clamps within 5m–6h).
 - POST `/alert/:id/revoke`: Revoke link immediately.
 - GET `/public/alert/:token`: Initial state for receiver.
 - GET `/public/alert/:token/stream`: SSE stream for live updates.

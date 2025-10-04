@@ -30,6 +30,7 @@
 - locations(id, alert_id, lat, lng, accuracy_m, battery_pct, captured_at)
 - deliveries(id, alert_id, contact_id, channel[push|email], status, created_at)
 - revocations(alert_id, revoked_at)
+- reactions(id, alert_id, contact_id, preset, created_at)  ← 受信者のプリセット返信を保存
 
 保持期間は alerts/locations/deliveries を 24〜48h に制限。
 
@@ -41,12 +42,20 @@
 - POST `/alert/start` … 共有開始（初期位置・バッテリー送信／shareToken生成／メール送信）
 - POST `/alert/:id/update` … 定期位置更新（1〜5分間隔）
 - POST `/alert/:id/stop` … 停止／到着通知
+- POST `/alert/:id/extend` … 共有時間を延長（max_duration_sec を +N秒／サーバ側で5分〜6時間にクランプ）
 - POST `/alert/:id/revoke` … 即時失効
 
 ### 受信者用 (Web公開API・JWT必須)
-- GET `/public/alert/:token` … 初期データ（状態・最新位置・残り時間・権限）
+- GET `/public/alert/:token` … 初期データ（種別type・状態・最新位置・残り時間・権限）
 - GET `/public/alert/:token/stream` … SSEによるライブ更新
 - POST `/public/alert/:token/react` … プリセット返信（受信者→送信者へAPNs通知想定）
+
+SSEイベント（例）
+- `{ type: 'hello' | 'keepalive' }`
+- `{ type: 'location', latest: { lat, lng, accuracy_m, battery_pct, captured_at } }`（emergency のみ）
+- `{ type: 'status', status: 'active' | 'ended' | 'timeout' }`
+- `{ type: 'extended', remaining_sec, max_duration_sec, added_sec }`
+- `{ type: 'reaction', preset, ts }`
 
 ---
 
@@ -60,6 +69,7 @@
   - CSP (nonceベース、第三者スクリプト最小)
 - ログ：トークンは必ずマスク化して保存。
 - データ最小化：名前や電話番号は受信者権限に応じて制御。
+- 権限（受信者）：JWTに`contact_id`がある個別招待リンクのみ返信可（`can_reply=true`）。汎用共有トークンは返信不可。
 
 ---
 
@@ -67,12 +77,14 @@
 - Route: `/s/[token]`
 - 初期表示：ローディングUI
 - 初期Fetch: `/public/alert/:token` → 状態, 位置, 残り時間
-- SSE購読: `/public/alert/:token/stream` → ライブ更新
+- SSE購読: `/public/alert/:token/stream` → ライブ更新（延長・返信も即時反映）
 - UI要素：
   - ステータス（共有中/終了/期限切れ）
-  - 地図（現在地ピン＋精度円、簡易履歴）
-  - 最終更新時刻・残り時間・バッテリー
-  - CTAボタン：電話・プリセット返信・110へ電話（権限scopeで制御）
+  - 地図（現在地ピン＋精度円、簡易履歴）※ going_home では非表示
+  - 最終更新時刻・残り時間（1秒カウントダウン）・バッテリー
+  - 延長トースト（例: 「+X分延長されました」）
+  - 返信トースト（例: 「返信: OK」）
+  - CTAボタン：電話・プリセット返信（複数プリセット）・110へ電話（権限に応じて制御）
 
 ---
 
@@ -91,7 +103,8 @@
 
 ## 追加要件
 - MVPでは録音・録画は非搭載（将来の拡張候補）
-- 最大共有時間は60分（延長可能）
-- 「帰るモード」は出発・到着のみ通知（経路共有なし）
+- 最大共有時間は60分（延長可能）。帰るモードは設定から最大共有時間を変更可能（既定120分）。
+- 「帰るモード」は出発・到着のみ通知（経路共有なし）／送信者は到着時に手動停止。
+- iOSはローカル通知でリマインダー（既定30分後／設定で変更可／バックグラウンドでも通知）。
 - 受信ページリンクは24hで失効、即時失効可
 - メール送信時に受信者ごとに固有トークンURLを生成（誤共有リスクを抑止）
