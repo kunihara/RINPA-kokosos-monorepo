@@ -6,6 +6,7 @@ final class SettingsStore {
     private init() {}
 
     private let keyArrivalReminder = "arrivalReminderMinutes"
+    private let keyGoingHomeMax = "goingHomeMaxMinutes"
 
     var arrivalReminderMinutes: Int {
         get {
@@ -18,5 +19,17 @@ final class SettingsStore {
             NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
         }
     }
-}
 
+    var goingHomeMaxMinutes: Int {
+        get {
+            let v = UserDefaults.standard.integer(forKey: keyGoingHomeMax)
+            return v > 0 ? v : 120 // 既定120分
+        }
+        set {
+            // 30〜240分の範囲に制限
+            let clamped = max(30, min(newValue, 240))
+            UserDefaults.standard.set(clamped, forKey: keyGoingHomeMax)
+            NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
+        }
+    }
+}

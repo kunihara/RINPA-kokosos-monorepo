@@ -135,12 +135,14 @@ final class MainViewController: UIViewController {
                 do {
                     guard let loc = location else { throw NSError(domain: "loc", code: 1) }
                     let battery = LocationService.batteryPercent()
+                    // 共有時間: 緊急は既定60分、帰るモードは設定値から
+                    let maxMinutes = (type == "going_home") ? SettingsStore.shared.goingHomeMaxMinutes : 60
                     let res = try await api.startAlert(lat: loc.coordinate.latitude,
                                                         lng: loc.coordinate.longitude,
                                                         accuracy: loc.horizontalAccuracy,
                                                         battery: battery,
                                                         type: type,
-                                                        maxDurationSec: 3600)
+                                                        maxDurationSec: maxMinutes * 60)
                     statusLabel.text = "共有を開始しました\nAlertID: \(res.id)\nToken: \(res.shareToken.prefix(16))…"
                     let mode: AlertSession.Mode = {
                         if let m = AlertSession.Mode(rawValue: res.type.rawValue) { return m }

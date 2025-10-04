@@ -169,11 +169,13 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   // Create alert row
   const userId = await ensureDefaultUserId(sb, env)
+  // Sanitize max duration (server-side clamp). Allow 5 minutes to 6 hours.
+  const clampedMax = Math.min(6 * 3600, Math.max(5 * 60, initial.max_duration_sec))
   const alertRes = await sb.insert('alerts', {
     user_id: userId,
     type: initial.type,
     status: 'active',
-    max_duration_sec: initial.max_duration_sec,
+    max_duration_sec: clampedMax,
   })
   if (!alertRes.ok) return json({ error: 'db_error', detail: alertRes.error }, { status: 500 })
   const alert = alertRes.data[0]
