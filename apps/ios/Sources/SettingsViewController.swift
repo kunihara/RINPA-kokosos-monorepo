@@ -9,6 +9,7 @@ final class SettingsViewController: UIViewController {
     private let maxLabel = UILabel()
     private let maxSegmented = UISegmentedControl(items: ["60分", "90分", "120分", "180分", "240分"])
     private let maxOptions = [60, 90, 120, 180, 240]
+    private let recipientsButton = UIButton(type: .system)
 
     // API Base URL override
     private let apiGroupLabel = UILabel()
@@ -41,6 +42,10 @@ final class SettingsViewController: UIViewController {
         view.addSubview(reminderSegmented)
         view.addSubview(maxLabel)
         view.addSubview(maxSegmented)
+        recipientsButton.setTitle("受信者の設定", for: .normal)
+        recipientsButton.addTarget(self, action: #selector(openRecipients), for: .touchUpInside)
+        recipientsButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(recipientsButton)
 
         // API override UI
         apiGroupLabel.text = "APIベースURL(上級者向け)"
@@ -78,7 +83,10 @@ final class SettingsViewController: UIViewController {
             maxSegmented.topAnchor.constraint(equalTo: maxLabel.bottomAnchor, constant: 12),
             maxSegmented.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            apiGroupLabel.topAnchor.constraint(equalTo: maxSegmented.bottomAnchor, constant: 32),
+            recipientsButton.topAnchor.constraint(equalTo: maxSegmented.bottomAnchor, constant: 28),
+            recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            apiGroupLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 32),
             apiGroupLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             apiGroupLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
@@ -122,5 +130,11 @@ final class SettingsViewController: UIViewController {
     @objc private func apiEditingDidEnd() {
         let text = apiTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
         SettingsStore.shared.apiBaseURLOverride = text
+    }
+
+    @objc private func openRecipients() {
+        let vc = OnboardingRecipientsViewController()
+        let nav = UINavigationController(rootViewController: vc)
+        present(nav, animated: true)
     }
 }

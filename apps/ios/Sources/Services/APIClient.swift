@@ -81,7 +81,7 @@ struct APIClient {
         return (t?.isEmpty == false) ? t : nil
     }
 
-    func startAlert(lat: Double, lng: Double, accuracy: Double?, battery: Int?, type: String = "emergency", maxDurationSec: Int = 3600) async throws -> StartAlertResponse {
+    func startAlert(lat: Double, lng: Double, accuracy: Double?, battery: Int?, type: String = "emergency", maxDurationSec: Int = 3600, recipients: [String]) async throws -> StartAlertResponse {
         var req = URLRequest(url: endpoint("alert", "start"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -92,7 +92,8 @@ struct APIClient {
             "accuracy_m": accuracy,
             "battery_pct": battery,
             "type": type,
-            "max_duration_sec": maxDurationSec
+            "max_duration_sec": maxDurationSec,
+            "recipients": recipients
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
 

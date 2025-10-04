@@ -18,6 +18,7 @@ final class MainViewController: UIViewController {
     private let locationService = LocationService()
     private let bgTracker = BackgroundLocationTracker()
     private let api = APIClient()
+    private let contactsClient = ContactsClient()
     private var session: AlertSession? { didSet { updateControls() } }
     private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
     private var reminderIntervalSec: TimeInterval { TimeInterval(SettingsStore.shared.arrivalReminderMinutes * 60) }
@@ -60,6 +61,10 @@ final class MainViewController: UIViewController {
         view.addSubview(startHomeButton)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
+        recipientsButton.setTitle("受信者: 0名", for: .normal)
+        recipientsButton.addTarget(self, action: #selector(tapRecipients), for: .touchUpInside)
+        recipientsButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(recipientsButton)
         controlsStack.axis = .horizontal
         controlsStack.spacing = 12
         controlsStack.alignment = .center
@@ -87,7 +92,10 @@ final class MainViewController: UIViewController {
             startHomeButton.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 16),
             startHomeButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            statusLabel.topAnchor.constraint(equalTo: startHomeButton.bottomAnchor, constant: 24),
+            recipientsButton.topAnchor.constraint(equalTo: startHomeButton.bottomAnchor, constant: 16),
+            recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 24),
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
@@ -99,6 +107,11 @@ final class MainViewController: UIViewController {
             countdownView.widthAnchor.constraint(equalToConstant: 160),
             countdownView.heightAnchor.constraint(equalToConstant: 100)
         ])
+    }
+
+    private func updateRecipientsChip() {
+        let count = selectedRecipients.count
+        recipientsButton.setTitle("受信者: \(count)名", for: .normal)
     }
 
     @objc private func tapStartEmergency() {
@@ -134,6 +147,11 @@ final class MainViewController: UIViewController {
     }
 
     private func kickoff(type: String) {
+        // Require at least one recipient
+        guard !selectedRecipients.isEmpty else {
+            showAlert("受信者未選択", "まず『受信者』をタップして、送信先を選択してください。")
+            return
+        }
         statusLabel.text = "位置情報を取得中…"
         locationService.requestOneShotLocation { [weak self] location in
             guard let self else { return }
@@ -148,7 +166,8 @@ final class MainViewController: UIViewController {
                                                         accuracy: loc.horizontalAccuracy,
                                                         battery: battery,
                                                         type: type,
-                                                        maxDurationSec: maxMinutes * 60)
+                                                        maxDurationSec: maxMinutes * 60,
+                                                        recipients: self.selectedRecipients)
                     self.statusLabel.text = "共有を開始しました\nAlertID: \(res.id)\nToken: \(res.shareToken.prefix(16))…"
                     let mode: AlertSession.Mode = {
                         if let m = AlertSession.Mode(rawValue: res.type.rawValue) { return m }
@@ -174,6 +193,16 @@ final class MainViewController: UIViewController {
                 }
             }
         }
+    }
+
+    @objc private func tapRecipients() {
+        let picker = ContactsPickerViewController()
+        picker.onDone = { [weak self] emails in
+            self?.selectedRecipients = emails
+            self?.dismiss(animated: true)
+        }
+        let nav = UINavigationController(rootViewController: picker)
+        present(nav, animated: true)
     }
 
     private func startPeriodicUpdates() {
@@ -305,3 +334,5 @@ final class MainViewController: UIViewController {
         navigationController?.setViewControllers([signin], animated: true)
     }
 }
+    private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
+    private let recipientsButton = UIButton(type: .system)
