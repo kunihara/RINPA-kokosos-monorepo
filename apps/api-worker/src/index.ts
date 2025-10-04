@@ -198,14 +198,55 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     captured_at: startedAt,
   })
   const shareToken = await signJwtHs256({ alert_id: alertId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
-  // Send emails if recipients provided
-  if (initial.recipients.length > 0 && env.WEB_PUBLIC_BASE) {
+  // Resolve recipients
+  let recipients: { contact_id: string; email: string }[] = []
+  // Helper: normalize emails
+  const norm = (s: string) => s.trim().toLowerCase()
+  // 1) If explicitly provided, upsert/fetch contacts by email for this user
+  if (initial.recipients.length > 0) {
+    const explicit = initial.recipients.map(norm).filter((e) => /.+@.+\..+/.test(e))
+    if (explicit.length > 0) {
+      // Fetch existing contacts
+      const list = await sb.select('contacts', 'id,email', `user_id=eq.${encodeURIComponent(userId)}&email=in.(${explicit.map(encodeURIComponent).join(',')})`)
+      const found = new Map<string, string>((list.ok ? list.data : []).map((r: any) => [norm(String(r.email)), String(r.id)]))
+      for (const e of explicit) {
+        const id = found.get(e)
+        if (id) {
+          recipients.push({ contact_id: id, email: e })
+        } else {
+          // Create contact with name=email as fallback
+          const ins = await sb.insert('contacts', { user_id: userId, name: e, email: e })
+          if (ins.ok && ins.data.length > 0) {
+            recipients.push({ contact_id: ins.data[0].id as string, email: e })
+          }
+        }
+      }
+    }
+  }
+  // 2) If still empty, fallback to all contacts of this user
+  if (recipients.length === 0) {
+    const list = await sb.select('contacts', 'id,email', `user_id=eq.${encodeURIComponent(userId)}`)
+    if (list.ok) {
+      for (const r of list.data as any[]) {
+        const e = norm(String(r.email || ''))
+        if (/.+@.+\..+/.test(e)) recipients.push({ contact_id: String(r.id), email: e })
+      }
+    }
+  }
+  // 3) Send emails and store deliveries
+  if (recipients.length > 0 && env.WEB_PUBLIC_BASE) {
     const emailer = makeEmailProvider(env)
-    for (const to of initial.recipients) {
-      const contactId = crypto.randomUUID()
-      const token = await signJwtHs256({ alert_id: alertId, contact_id: contactId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
+    for (const r of recipients) {
+      const token = await signJwtHs256({ alert_id: alertId, contact_id: r.contact_id, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
       const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/s/${encodeURIComponent(token)}`
-      ctx.waitUntil(emailer.send({ to, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) }))
+      ctx.waitUntil((async () => {
+        try {
+          await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) })
+          await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
+        } catch (e) {
+          await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'error' })
+        }
+      })())
     }
   }
   const state = {
