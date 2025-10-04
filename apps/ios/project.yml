@@ -14,7 +14,7 @@ configs:
 settings:
   base:
     PRODUCT_NAME: KokoSOS
-    PRODUCT_BUNDLE_IDENTIFIER: com.kokosos.app
+    PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
     TARGETED_DEVICE_FAMILY: 1
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
@@ -71,9 +71,10 @@ targets:
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
+        DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
         SUPPORTED_PLATFORMS: iphonesimulator iphoneos
         OTHER_LDFLAGS: ""
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
     info:
       path: Resources/Info.plist
       properties:
