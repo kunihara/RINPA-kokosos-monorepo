@@ -16,6 +16,7 @@ final class MainViewController: UIViewController {
     private var reminderTimer: Timer?
     private var remaining = 0
     private let locationService = LocationService()
+    private let bgTracker = BackgroundLocationTracker()
     private let api = APIClient()
     private var session: AlertSession? { didSet { updateControls() } }
     private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
@@ -159,6 +160,10 @@ final class MainViewController: UIViewController {
                         self.statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。"
                         self.scheduleArrivalReminder()
                     }
+                    // 緊急モードではバックグラウンド追跡を開始
+                    if mode == .emergency {
+                        self.bgTracker.start(alertId: res.id)
+                    }
                     self.startPeriodicUpdates()
                 } catch {
                     self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
@@ -218,6 +223,7 @@ final class MainViewController: UIViewController {
         updateTimer?.invalidate(); updateTimer = nil
         reminderTimer?.invalidate(); reminderTimer = nil
         NotificationService.shared.cancelArrivalReminder()
+        bgTracker.stop()
         statusLabel.text = message
         session = nil
     }

@@ -34,6 +34,10 @@
   <string>緊急時の現在地共有のため位置情報を使用します。</string>
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
   <string>緊急共有の継続のためバックグラウンドで位置情報を使用します。</string>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>location</string>
+  </array>
 
   <key>APIBaseURL</key>
   <string>$(API_BASE_URL)</string>
