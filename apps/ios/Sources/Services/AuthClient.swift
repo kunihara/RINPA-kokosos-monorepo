@@ -109,6 +109,27 @@ struct AuthClient {
         }
     }
 
+    /// Resend signup confirmation email
+    func resendSignup(email: String, redirectTo: String? = nil) async throws {
+        var comps = URLComponents()
+        comps.scheme = config.supabaseURL.scheme
+        comps.host = config.supabaseURL.host
+        comps.port = config.supabaseURL.port
+        comps.path = "/auth/v1/resend"
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        var body: [String: Any] = ["email": email, "type": "signup"]
+        if let redirectTo, !redirectTo.isEmpty { body["redirect_to"] = redirectTo }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "確認メールの再送に失敗しました"])
+        }
+    }
+
     // OAuth via ASWebAuthenticationSession (Apple/Google/Facebook)
     func signInWithOAuth(provider: String, presentationAnchor: ASPresentationAnchor?) async throws -> String {
         // Construct authorize URL from base components to avoid malformed hosts

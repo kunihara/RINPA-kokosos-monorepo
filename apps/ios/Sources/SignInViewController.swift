@@ -7,6 +7,7 @@ final class SignInViewController: UIViewController {
     private let signInButton = UIButton(type: .system)
     private let signUpButton = UIButton(type: .system)
     private let resetButton = UIButton(type: .system)
+    private let resendConfirmButton = UIButton(type: .system)
     private let stack = UIStackView()
     private let oauthStack = UIStackView()
     private let infoLabel = UILabel()
@@ -44,6 +45,10 @@ final class SignInViewController: UIViewController {
         resetButton.titleLabel?.font = .systemFont(ofSize: 13)
         resetButton.addTarget(self, action: #selector(tapReset), for: .touchUpInside)
 
+        resendConfirmButton.setTitle("確認メールを再送", for: .normal)
+        resendConfirmButton.titleLabel?.font = .systemFont(ofSize: 13)
+        resendConfirmButton.addTarget(self, action: #selector(tapResendConfirm), for: .touchUpInside)
+
         infoLabel.text = "メール+パスワード または SNS でサインイン"
         infoLabel.font = .systemFont(ofSize: 13)
         infoLabel.textColor = .secondaryLabel
@@ -61,7 +66,7 @@ final class SignInViewController: UIViewController {
         let fbBtn = makeOAuthButton(title: "Facebookで続ける") { [weak self] in self?.startOAuth("facebook") }
         [appleBtn, googleBtn, fbBtn].forEach { oauthStack.addArrangedSubview($0) }
 
-        [titleLabel, emailField, passwordField, signInButton, signUpButton, resetButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
+        [titleLabel, emailField, passwordField, signInButton, signUpButton, resetButton, resendConfirmButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
         view.addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -154,6 +159,39 @@ final class SignInViewController: UIViewController {
             do {
                 try await auth.sendPasswordReset(email: email)
                 showAlert("送信しました", "パスワード再設定メールを送信しました。メール内の手順に従ってください。")
+            } catch {
+                showAlert("送信失敗", error.localizedDescription)
+            }
+        }
+    }
+
+    @objc private func tapResendConfirm() {
+        guard let email = emailField.text, !email.isEmpty else {
+            showAlert("入力エラー", "登録メールアドレスを入力してください")
+            return
+        }
+        Task { @MainActor in
+            resendConfirmButton.isEnabled = false
+            defer { resendConfirmButton.isEnabled = true }
+            guard let auth = AuthClient() else {
+                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL/SupabaseAnonKey を設定してください。")
+                return
+            }
+            let info = Bundle.main.infoDictionary
+            let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
+            let redirect: String
+            if let b = base, !b.isEmpty {
+                redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback"
+            } else if let h = host, !h.isEmpty {
+                redirect = "https://\(h)/auth/callback"
+            } else {
+                redirect = "\(scheme)://oauth-callback"
+            }
+            do {
+                try await auth.resendSignup(email: email, redirectTo: redirect)
+                showAlert("送信しました", "確認メールを再送しました。メール内のリンクから確認を完了してください。")
             } catch {
                 showAlert("送信失敗", error.localizedDescription)
             }
