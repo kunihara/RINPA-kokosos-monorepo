@@ -90,3 +90,6 @@ targets:
         UIUserInterfaceStyle: Light
         LSApplicationCategoryType: public.app-category.navigation
         CFBundleURLTypes: []
+        # Supabase Auth client config (fill via xcconfig or edit here for dev)
+        SupabaseURL: "https://YOUR-PROJECT-REF.supabase.co"
+        SupabaseAnonKey: "YOUR-ANON-KEY"

@@ -2,7 +2,7 @@ import Foundation
 
 struct APIClient {
     let baseURL: URL
-    private let authTokenKey = "APIAuthToken"
+    static let authTokenUserDefaultsKey = "APIAuthToken"
 
     init() {
         let dict = Bundle.main.infoDictionary
@@ -13,16 +13,21 @@ struct APIClient {
     // 簡易的なトークン保存（将来Supabase Authのaccess_tokenを格納）
     func setAuthToken(_ token: String?) {
         if let t = token, !t.isEmpty {
-            UserDefaults.standard.set(t, forKey: authTokenKey)
+            UserDefaults.standard.set(t, forKey: APIClient.authTokenUserDefaultsKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: authTokenKey)
+            UserDefaults.standard.removeObject(forKey: APIClient.authTokenUserDefaultsKey)
         }
     }
 
     private func applyAuth(_ req: inout URLRequest) {
-        if let t = UserDefaults.standard.string(forKey: authTokenKey), !t.isEmpty {
+        if let t = UserDefaults.standard.string(forKey: APIClient.authTokenUserDefaultsKey), !t.isEmpty {
             req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
         }
+    }
+
+    func currentAuthToken() -> String? {
+        let t = UserDefaults.standard.string(forKey: APIClient.authTokenUserDefaultsKey)
+        return (t?.isEmpty == false) ? t : nil
     }
 
     func startAlert(lat: Double, lng: Double, accuracy: Double?, battery: Int?, type: String = "emergency", maxDurationSec: Int = 3600) async throws -> StartAlertResponse {

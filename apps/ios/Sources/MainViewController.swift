@@ -74,6 +74,7 @@ final class MainViewController: UIViewController {
         controlsStack.addArrangedSubview(revokeButton)
         view.addSubview(controlsStack)
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "設定", style: .plain, target: self, action: #selector(tapSettings))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "サインアウト", style: .plain, target: self, action: #selector(tapSignOut))
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
@@ -285,5 +286,12 @@ final class MainViewController: UIViewController {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func tapSignOut() {
+        APIClient().setAuthToken(nil)
+        // ルートをサインインへ
+        let signin = SignInViewController()
+        navigationController?.setViewControllers([signin], animated: true)
     }
 }
