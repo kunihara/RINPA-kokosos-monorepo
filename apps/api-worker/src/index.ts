@@ -104,6 +104,7 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   // accept UUIDs with hyphens or any non-slash segment
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/update$/, handler: handleAlertUpdate },
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/stop$/, handler: handleAlertStop },
+  { method: 'POST', pattern: /^\/alert\/([^/]+)\/extend$/, handler: handleAlertExtend },
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/revoke$/, handler: handleAlertRevoke },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)$/, handler: handlePublicAlert },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/stream$/, handler: handlePublicAlertStream },
@@ -254,6 +255,32 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
   await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
   return json({ status: 'ended' })
+}
+
+async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/alert\/([^/]+)\/extend/)
+  if (!m) return notFound()
+  const alertId = m[1]
+  const body = await req.json().catch(() => null)
+  if (!body) return json({ error: 'invalid_json' }, { status: 400 })
+  const extend_sec_raw = (body.extend_sec as number | undefined) ?? ((body.extend_min as number | undefined) ? (body.extend_min as number) * 60 : undefined)
+  if (typeof extend_sec_raw !== 'number' || !Number.isFinite(extend_sec_raw)) return json({ error: 'invalid_body' }, { status: 400 })
+  const extendSec = Math.max(60, Math.min(6 * 3600, Math.floor(extend_sec_raw)))
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const a = await sb.select('alerts', 'id,status,max_duration_sec', `id=eq.${alertId}`, 1)
+  if (!a.ok || a.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
+  const alert = a.data[0] as any
+  if (alert.status !== 'active') return json({ error: 'not_active' }, { status: 400 })
+  const current = Number(alert.max_duration_sec) || 3600
+  const nextMax = Math.min(6 * 3600, current + extendSec)
+  await sb.update('alerts', { max_duration_sec: nextMax }, `id=eq.${alertId}`)
+  // Optional: nudge receivers
+  try {
+    const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+    await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'active' }) })
+  } catch {}
+  return json({ ok: true, max_duration_sec: nextMax })
 }
 
 async function handleAlertRevoke({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {

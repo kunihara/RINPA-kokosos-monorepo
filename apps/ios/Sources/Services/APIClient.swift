@@ -64,6 +64,18 @@ struct APIClient {
             throw URLError(.badServerResponse)
         }
     }
+
+    func extendAlert(id: String, extendMinutes: Int) async throws {
+        var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/extend"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["extend_sec": extendMinutes * 60]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
 }
 
 struct StartAlertResponse: Codable {

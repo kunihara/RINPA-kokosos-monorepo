@@ -9,6 +9,7 @@ final class MainViewController: UIViewController {
     private let controlsStack = UIStackView()
     private let stopButton = UIButton(type: .system)
     private let revokeButton = UIButton(type: .system)
+    private let extendButton = UIButton(type: .system)
     private let countdownView = UILabel()
     private var countdownTimer: Timer?
     private var updateTimer: Timer?
@@ -66,7 +67,10 @@ final class MainViewController: UIViewController {
         stopButton.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
         revokeButton.setTitle("即時失効", for: .normal)
         revokeButton.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
+        extendButton.setTitle("延長", for: .normal)
+        extendButton.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
         controlsStack.addArrangedSubview(stopButton)
+        controlsStack.addArrangedSubview(extendButton)
         controlsStack.addArrangedSubview(revokeButton)
         view.addSubview(controlsStack)
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "設定", style: .plain, target: self, action: #selector(tapSettings))
@@ -221,6 +225,25 @@ final class MainViewController: UIViewController {
         let active = (session?.status == .active)
         stopButton.isEnabled = active
         revokeButton.isEnabled = active
+        extendButton.isEnabled = active
+    }
+
+    @objc private func tapExtend() {
+        guard let session else { return }
+        let sheet = UIAlertController(title: "共有時間を延長", message: nil, preferredStyle: .actionSheet)
+        func add(_ min: Int) {
+            sheet.addAction(UIAlertAction(title: "+\(min)分", style: .default, handler: { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    do { try await self.api.extendAlert(id: session.id, extendMinutes: min); self.statusLabel.text = "共有を延長しました（+\(min)分）" }
+                    catch { self.statusLabel.text = "延長に失敗: \(error.localizedDescription)" }
+                }
+            }))
+        }
+        [15,30,45,60].forEach(add)
+        sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        if let pop = sheet.popoverPresentationController { pop.sourceView = extendButton; pop.sourceRect = extendButton.bounds }
+        present(sheet, animated: true)
     }
 
     private func scheduleArrivalReminder() {
