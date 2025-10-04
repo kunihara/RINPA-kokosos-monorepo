@@ -18,12 +18,13 @@ final class MainViewController: UIViewController {
     private let api = APIClient()
     private var session: AlertSession? { didSet { updateControls() } }
     private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
-    private let reminderIntervalSec: TimeInterval = 30 * 60 // 30分後に到着リマインダー
+    private var reminderIntervalSec: TimeInterval { TimeInterval(SettingsStore.shared.arrivalReminderMinutes * 60) }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         setupUI()
+        NotificationCenter.default.addObserver(self, selector: #selector(onSettingsChanged), name: SettingsStore.changedNotification, object: nil)
     }
 
     private func setupUI() {
@@ -68,6 +69,7 @@ final class MainViewController: UIViewController {
         controlsStack.addArrangedSubview(stopButton)
         controlsStack.addArrangedSubview(revokeButton)
         view.addSubview(controlsStack)
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "設定", style: .plain, target: self, action: #selector(tapSettings))
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
@@ -241,5 +243,22 @@ final class MainViewController: UIViewController {
                 }
             }
         }
+    }
+
+    @objc private func tapSettings() {
+        let vc = SettingsViewController()
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    @objc private func onSettingsChanged() {
+        // 帰るモードで共有中なら、新しい間隔でリマインダーを再スケジュール
+        guard session?.status == .active, session?.mode == .going_home else { return }
+        reminderTimer?.invalidate(); reminderTimer = nil
+        NotificationService.shared.cancelArrivalReminder()
+        scheduleArrivalReminder()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
