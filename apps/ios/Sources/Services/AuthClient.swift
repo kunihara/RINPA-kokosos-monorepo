@@ -13,17 +13,22 @@ struct AuthClient {
         // Read from Info.plist and validate/trim
         let info = Bundle.main.infoDictionary
         let rawURL = (info?["SupabaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawHost = (info?["SupabaseHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let rawAnon = (info?["SupabaseAnonKey"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let s = rawURL, let base = URL(string: s), base.scheme == "https", base.host != nil,
-              let anon = rawAnon, !anon.isEmpty else {
-            return nil
+        var base: URL? = nil
+        if let s = rawURL, let u = URL(string: s), u.scheme == "https", u.host != nil {
+            base = u
+        } else if let host = rawHost, !host.isEmpty {
+            // Build https URL from host fallback to avoid xcconfig '//' comment pitfalls
+            base = URL(string: "https://\(host)")
         }
+        guard let finalBase = base, let anon = rawAnon, !anon.isEmpty else { return nil }
         #if DEBUG
-        print("[AuthClient] SupabaseURL=\(base.absoluteString)")
+        print("[AuthClient] SupabaseURL=\(finalBase.absoluteString)")
                // Print only prefix of anon key for safety
         if let pref = rawAnon?.prefix(6) { print("[AuthClient] SupabaseAnonKey(6)=\(pref)…") }
         #endif
-        self.config = Config(supabaseURL: base, anonKey: anon)
+        self.config = Config(supabaseURL: finalBase, anonKey: anon)
     }
 
     func signIn(email: String, password: String) async throws -> String { // returns access_token

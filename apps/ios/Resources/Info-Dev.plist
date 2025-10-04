@@ -51,6 +51,8 @@
   <!-- Supabase Auth (Dev) -->
   <key>SupabaseURL</key>
   <string>$(SUPABASE_URL)</string>
+  <key>SupabaseHost</key>
+  <string>$(SUPABASE_HOST)</string>
   <key>SupabaseAnonKey</key>
   <string>$(SUPABASE_ANON_KEY)</string>
   <key>OAuthRedirectScheme</key>
