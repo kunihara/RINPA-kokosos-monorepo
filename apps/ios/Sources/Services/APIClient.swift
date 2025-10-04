@@ -3,11 +3,51 @@ import Foundation
 struct APIClient {
     let baseURL: URL
     static let authTokenUserDefaultsKey = "APIAuthToken"
+    static let baseURLOverrideKey = "APIBaseURLOverride"
 
     init() {
         let dict = Bundle.main.infoDictionary
-        let base = dict?["APIBaseURL"] as? String ?? "http://localhost:8787"
-        self.baseURL = URL(string: base) ?? URL(string: "http://localhost:8787")!
+        // 1) User override from Settings (for device testing or custom endpoints)
+        if let override = UserDefaults.standard.string(forKey: APIClient.baseURLOverrideKey),
+           let url = URL(string: override), !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self.baseURL = url
+            return
+        }
+
+        // Helper: treat unresolved $(VAR) as invalid
+        func isUnresolvedVariable(_ s: String) -> Bool { s.contains("$(") }
+
+        // 2) Info.plist URL value
+        let base = (dict?["APIBaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Guard against placeholder domains left as-is and unresolved variables
+        let invalidPlaceholders = ["YOUR_WORKERS_DOMAIN", "YOUR_PROD_DOMAIN", "YOUR_", "<", ">"]
+        if let b = base, !isUnresolvedVariable(b), !invalidPlaceholders.contains(where: { b.contains($0) }), let url = URL(string: b) {
+            self.baseURL = url
+            return
+        }
+
+        // 3) Info.plist Host + Scheme fallback (avoids xcconfig '//' comment pitfalls)
+        let host = (dict?["APIBaseHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scheme = ((dict?["APIBaseScheme"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)) ?? "https"
+        if let h = host, !h.isEmpty, !isUnresolvedVariable(h) {
+            if var comps = URLComponents() as URLComponents? {
+                comps.scheme = scheme.isEmpty ? "https" : scheme
+                comps.host = h
+                // Allow optional port specified as part of host like "localhost:8787"
+                if h.contains(":"), let last = h.split(separator: ":").last, let p = Int(last) {
+                    comps.host = String(h.split(separator: ":").dropLast().joined(separator: ":"))
+                    comps.port = p
+                }
+                comps.path = "/"
+                if let url = comps.url {
+                    self.baseURL = url
+                    return
+                }
+            }
+        }
+
+        // 4) Fallback (local dev)
+        self.baseURL = URL(string: "http://localhost:8787")!
     }
 
     // 簡易的なトークン保存（将来Supabase Authのaccess_tokenを格納）

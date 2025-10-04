@@ -79,3 +79,5 @@ Security
 - ビルド構成: Debug/Release × Dev/Stage/Prod（6構成）。`apps/ios/Configs/*.xcconfig`で `API_BASE_URL` を環境ごとに設定。
 - 実行に必要な権限: 位置情報（フォアグラウンド/常時）
 - 起動フロー: アプリ起動 → 3秒カウントダウン → `/alert/start` へ初回位置とバッテリーを送信 → shareToken表示
+ - 実機テスト時のAPI接続: デバイスから`localhost`は使えません。アプリ内「設定 > APIベースURL」に `http://<MacのIP>:8787`（ローカル開発）または公開APIのURLを入力してください（未設定時はInfo.plistの`APIBaseURL`/`APIBaseHost`を使用）。
+ - xcconfigの`//`コメント問題の回避: `API_BASE_URL`に`https://...`を書くと`//`以降がコメントとして無視される場合があります。Secrets-*.xcconfig では `API_BASE_HOST=kokosos-api-<env>.<your>.workers.dev` とし、`API_BASE_SCHEME=https` を併用してください。コード側で `APIBaseHost` として解決します。

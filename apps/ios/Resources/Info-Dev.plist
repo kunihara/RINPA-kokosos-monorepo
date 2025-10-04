@@ -48,6 +48,10 @@
 
   <key>APIBaseURL</key>
   <string>$(API_BASE_URL)</string>
+  <key>APIBaseHost</key>
+  <string>$(API_BASE_HOST)</string>
+  <key>APIBaseScheme</key>
+  <string>$(API_BASE_SCHEME)</string>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>

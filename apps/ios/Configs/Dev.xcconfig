@@ -1,5 +1,7 @@
 #include "Base.xcconfig"
 API_BASE_URL = http://localhost:8787
+API_BASE_HOST = 
+API_BASE_SCHEME = http
 // Common secrets (local, DO NOT COMMIT): DEVELOPMENT_TEAM などを定義
 #include "Secrets-Common.xcconfig"
 // Env secrets (local, DO NOT COMMIT): SUPABASE_URL/SUPABASE_ANON_KEY/OAUTH_REDIRECT_SCHEME/APP_BUNDLE_ID
