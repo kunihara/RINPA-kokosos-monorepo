@@ -102,6 +102,12 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
   { method: 'GET', pattern: /^\/_diag\/alert\/([^/]+)$/, handler: handleDiag },
   { method: 'POST', pattern: /^\/_diag\/alert\/([^/]+)\/publish$/, handler: handleDiagPublish },
+  // Contacts (sender auth required)
+  { method: 'GET', pattern: /^\/contacts$/, handler: handleContactsList },
+  { method: 'POST', pattern: /^\/contacts\/bulk_upsert$/, handler: handleContactsBulkUpsert },
+  { method: 'POST', pattern: /^\/contacts\/([^/]+)\/send_verify$/, handler: handleContactSendVerify },
+  // Verify (public)
+  { method: 'GET', pattern: /^\/public\/verify\/([^/]+)$/, handler: handleVerifyContact },
   { method: 'POST', pattern: /^\/alert\/start$/, handler: handleAlertStart },
   // accept UUIDs with hyphens or any non-slash segment
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/update$/, handler: handleAlertUpdate },
@@ -172,6 +178,8 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     recipients: (Array.isArray(body.recipients) ? (body.recipients as string[]) : [])
   }
   if (typeof initial.lat !== 'number' || typeof initial.lng !== 'number') return json({ error: 'invalid_location' }, { status: 400 })
+  // Require explicit recipients (privacy-by-default)
+  if (!initial.recipients || initial.recipients.length === 0) return json({ error: 'no_recipients' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   // Create alert row
@@ -198,42 +206,22 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     captured_at: startedAt,
   })
   const shareToken = await signJwtHs256({ alert_id: alertId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
-  // Resolve recipients
-  let recipients: { contact_id: string; email: string }[] = []
-  // Helper: normalize emails
+  // Resolve recipients strictly (verified only)
   const norm = (s: string) => s.trim().toLowerCase()
-  // 1) If explicitly provided, upsert/fetch contacts by email for this user
-  if (initial.recipients.length > 0) {
-    const explicit = initial.recipients.map(norm).filter((e) => /.+@.+\..+/.test(e))
-    if (explicit.length > 0) {
-      // Fetch existing contacts
-      const list = await sb.select('contacts', 'id,email', `user_id=eq.${encodeURIComponent(userId)}&email=in.(${explicit.map(encodeURIComponent).join(',')})`)
-      const found = new Map<string, string>((list.ok ? list.data : []).map((r: any) => [norm(String(r.email)), String(r.id)]))
-      for (const e of explicit) {
-        const id = found.get(e)
-        if (id) {
-          recipients.push({ contact_id: id, email: e })
-        } else {
-          // Create contact with name=email as fallback
-          const ins = await sb.insert('contacts', { user_id: userId, name: e, email: e })
-          if (ins.ok && ins.data.length > 0) {
-            recipients.push({ contact_id: ins.data[0].id as string, email: e })
-          }
-        }
-      }
-    }
+  const requested = initial.recipients.map(norm).filter((e: string) => /.+@.+\..+/.test(e))
+  if (requested.length === 0) return json({ error: 'no_recipients' }, { status: 400 })
+  const list2 = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId)}&email=in.(${requested.map(encodeURIComponent).join(',')})`)
+  const rows = (list2.ok ? (list2.data as any[]) : [])
+  const byEmail = new Map<string, any>(rows.map((r) => [norm(String(r.email)), r]))
+  const invalid: string[] = []
+  const recipients: { contact_id: string; email: string }[] = []
+  for (const e of requested) {
+    const row = byEmail.get(e)
+    if (!row || !row.verified_at) invalid.push(e)
+    else recipients.push({ contact_id: String(row.id), email: e })
   }
-  // 2) If still empty, fallback to all contacts of this user
-  if (recipients.length === 0) {
-    const list = await sb.select('contacts', 'id,email', `user_id=eq.${encodeURIComponent(userId)}`)
-    if (list.ok) {
-      for (const r of list.data as any[]) {
-        const e = norm(String(r.email || ''))
-        if (/.+@.+\..+/.test(e)) recipients.push({ contact_id: String(r.id), email: e })
-      }
-    }
-  }
-  // 3) Send emails and store deliveries
+  if (invalid.length > 0) return json({ error: 'invalid_recipients', pending: invalid }, { status: 400 })
+  // Send emails and store deliveries; record alert_recipients(start)
   if (recipients.length > 0 && env.WEB_PUBLIC_BASE) {
     const emailer = makeEmailProvider(env)
     for (const r of recipients) {
@@ -243,6 +231,7 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
         try {
           await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) })
           await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
+          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: r.contact_id, email: r.email, purpose: 'start' })
         } catch (e) {
           await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'error' })
         }
@@ -265,6 +254,91 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     shareToken,
   }
   return json(state)
+}
+
+// ---------- Contacts API
+function isValidEmail(email: string): boolean {
+  return /.+@.+\..+/.test(email)
+}
+
+async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  const url = new URL(req.url)
+  const status = (url.searchParams.get('status') || 'all').toLowerCase()
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  let query = `user_id=eq.${encodeURIComponent(auth.userId!)}`
+  if (status === 'verified') query += `&verified_at=not.is.null`
+  else if (status === 'pending') query += `&verified_at=is.null`
+  const res = await sb.select('contacts', 'id,name,email,role,capabilities,verified_at', query)
+  return json({ items: res.ok ? res.data : [] })
+}
+
+async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  const body = await req.json().catch(() => null)
+  if (!body || !Array.isArray(body.contacts)) return json({ error: 'invalid_body' }, { status: 400 })
+  const sendVerify = Boolean(body.send_verify)
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const out: any[] = []
+  for (const c of body.contacts as Array<{ email: string; name?: string }>) {
+    const email = String((c.email || '').toLowerCase().trim())
+    if (!isValidEmail(email)) continue
+    // Try find by email
+    const found = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(auth.userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
+    if (found.ok && found.data.length > 0) {
+      out.push(found.data[0])
+    } else {
+      const ins = await sb.insert('contacts', { user_id: auth.userId, name: c.name || email, email })
+      if (ins.ok && ins.data.length > 0) out.push(ins.data[0])
+    }
+    if (sendVerify) {
+      const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(auth.userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
+      if (list.ok && list.data.length > 0 && !(list.data[0] as any).verified_at) {
+        await sendVerifyForContact(env, list.data[0] as any)
+      }
+    }
+  }
+  return json({ ok: true, items: out })
+}
+
+async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  const m = req.url.match(/\/contacts\/([^/]+)\/send_verify/)
+  if (!m) return notFound()
+  const id = m[1]
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const found = await sb.select('contacts', 'id,email,verified_at', `id=eq.${id}`, 1)
+  if (!found.ok || found.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
+  const c = found.data[0] as any
+  await sendVerifyForContact(env, c)
+  return json({ ok: true })
+}
+
+async function sendVerifyForContact(env: Env, contact: { id: string; email: string }) {
+  if (!env.WEB_PUBLIC_BASE) return
+  const token = await signJwtHs256({ action: 'verify', contact_id: contact.id, exp: nowSec() + 7 * 24 * 3600 }, env.JWT_SECRET)
+  const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/verify/${encodeURIComponent(token)}`
+  const emailer = makeEmailProvider(env)
+  await emailer.send({ to: String(contact.email), subject: 'KokoSOS 受信許可の確認', html: emailVerifyHtml(link) })
+}
+
+async function handleVerifyContact({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const token = decodeURIComponent(req.url.split('/public/verify/')[1] || '')
+  const payload = await verifyJwtHs256(token, env.JWT_SECRET)
+  if (!payload) return json({ ok: false, error: 'invalid_token' }, { status: 400 })
+  if ((payload as any).action !== 'verify') return json({ ok: false, error: 'invalid_action' }, { status: 400 })
+  const contactId = String((payload as any).contact_id || '')
+  if (!contactId) return json({ ok: false, error: 'invalid_contact' }, { status: 400 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  await sb.update('contacts', { verified_at: new Date().toISOString() }, `id=eq.${contactId}`)
+  return json({ ok: true })
 }
 
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -305,6 +379,22 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   await sb.update('alerts', { status: 'ended', ended_at }, `id=eq.${alertId}`)
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
   await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
+  // If going_home, send arrival emails to start recipients
+  try {
+    const a = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+    const aType = (a.ok && a.data.length > 0) ? String((a.data[0] as any).type) : ''
+    if (aType === 'going_home' && env.WEB_PUBLIC_BASE) {
+      const list = await sb.select('alert_recipients', 'contact_id,email', `alert_id=eq.${alertId}&purpose=eq.start`)
+      const emailer = makeEmailProvider(env)
+      for (const r of (list.ok ? (list.data as any[]) : [])) {
+        try {
+          await emailer.send({ to: String(r.email), subject: 'KokoSOS 到着のお知らせ', html: emailArrivalHtml() })
+          await sb.insert('deliveries', { alert_id: alertId, contact_id: String(r.contact_id), channel: 'email', status: 'sent' })
+          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: String(r.contact_id), email: String(r.email), purpose: 'arrival' })
+        } catch {}
+      }
+    }
+  } catch {}
   return json({ status: 'ended' })
 }
 
@@ -811,6 +901,21 @@ function emailInviteHtml(link: string): string {
   <p>KokoSOS からの緊急共有リンクです。</p>
   <p><a href="${link}">${link}</a></p>
   <p>このリンクは24時間で失効します。</p>
+</div>`
+}
+
+function emailVerifyHtml(link: string): string {
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
+  <p>KokoSOS からの受信許可の確認です。</p>
+  <p>以下のボタンから受信許可を完了してください。</p>
+  <p><a href="${link}">受信許可を確認する</a></p>
+  <p>誤って登録された場合は、このメールを無視してください。</p>
+</div>`
+}
+
+function emailArrivalHtml(): string {
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
+  <p>到着を確認しました。ご安心ください。</p>
 </div>`
 }
 

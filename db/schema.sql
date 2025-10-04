@@ -13,6 +13,7 @@ create table if not exists contacts (
   user_id uuid not null references users(id) on delete cascade,
   name text not null,
   email text not null,
+  verified_at timestamptz,
   role text,
   capabilities jsonb default '{}'::jsonb
 );
@@ -47,6 +48,27 @@ create table if not exists deliveries (
   channel text not null check (channel in ('push','email')),
   status text,
   created_at timestamptz not null default now()
+);
+
+-- Verification tokens for contacts (store only hash)
+create table if not exists contact_verifications (
+  id uuid primary key default gen_random_uuid(),
+  contact_id uuid not null references contacts(id) on delete cascade,
+  token_hash text not null,
+  created_at timestamptz not null default now(),
+  used_at timestamptz,
+  expires_at timestamptz
+);
+create index if not exists idx_contact_verifications_contact on contact_verifications(contact_id);
+
+-- Alert recipients mapping for reuse at arrival
+create table if not exists alert_recipients (
+  alert_id uuid not null references alerts(id) on delete cascade,
+  contact_id uuid not null references contacts(id) on delete cascade,
+  email text not null,
+  purpose text not null check (purpose in ('start','arrival')),
+  created_at timestamptz not null default now(),
+  primary key(alert_id, contact_id, purpose)
 );
 
 create table if not exists revocations (
