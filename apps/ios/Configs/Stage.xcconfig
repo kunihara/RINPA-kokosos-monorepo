@@ -1,6 +1,6 @@
 #include "Base.xcconfig"
 API_BASE_URL = https://kokosos-api-stage.YOUR_WORKERS_DOMAIN
-# Common secrets (local, DO NOT COMMIT): DEVELOPMENT_TEAM などを定義
+// Common secrets (local, DO NOT COMMIT): DEVELOPMENT_TEAM などを定義
 #include "Secrets-Common.xcconfig"
-# Env secrets (local, DO NOT COMMIT)
+// Env secrets (local, DO NOT COMMIT)
 #include "Secrets-Stage.xcconfig"
