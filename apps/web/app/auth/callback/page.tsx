@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from 'react'
 
 export default function AuthCallbackPage() {
   const [attempted, setAttempted] = useState(false)
-  const scheme = 'kokosos://oauth-callback'
+  // Decide app scheme per environment domain. Fallback to 'kokosos'.
+  const scheme = (() => {
+    if (typeof window === 'undefined') return 'kokosos://oauth-callback'
+    const host = window.location.host
+    if (host.includes('-dev')) return 'kokosos-dev://oauth-callback'
+    if (host.includes('-stage')) return 'kokosos-stage://oauth-callback'
+    return 'kokosos://oauth-callback'
+  })()
   const hash = typeof window !== 'undefined' ? window.location.hash : ''
   const params = useMemo(() => (hash && hash.startsWith('#') ? hash : ''), [hash])
   useEffect(() => {
@@ -34,4 +41,3 @@ export default function AuthCallbackPage() {
     </main>
   )
 }
-
