@@ -61,6 +61,7 @@ SSEイベント（例）
 
 ## セキュリティ
 - トークン：JWT署名付き。含む情報は alert_id, contact_id, scope, exp (≤24h)
+- 送信者認証：Supabase Auth（Email/Password, Apple, Google, Facebook）。WorkersはSupabaseのJWT(RS256)をJWKSで検証しuser_idを抽出
 - 失効：revocationsテーブルを参照して即時無効化可能。
 - HTTPヘッダ：
   - HSTS
@@ -94,6 +95,7 @@ SSEイベント（例）
   - Web → Cloudflare Pages 自動ビルド
   - DB → supabase db push
 - Secrets管理：`.env` を用意し `.env.example` を共有。GitHub Secrets に登録。
+- Supabase Auth: Providers（Apple/Google/Facebook/Email）を有効化。Redirect URL設定。Workers側は `SUPABASE_URL`/`SUPABASE_JWKS_URL` を設定。
 - 監視：UptimeRobotでヘルスチェック。Cloudflare Analyticsでアクセス確認。
 - 運用コスト：
   - 小規模（数千MAU）：数ドル〜数十ドル/月

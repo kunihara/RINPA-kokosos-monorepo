@@ -2,6 +2,7 @@ import Foundation
 
 struct APIClient {
     let baseURL: URL
+    private let authTokenKey = "APIAuthToken"
 
     init() {
         let dict = Bundle.main.infoDictionary
@@ -9,10 +10,26 @@ struct APIClient {
         self.baseURL = URL(string: base) ?? URL(string: "http://localhost:8787")!
     }
 
+    // 簡易的なトークン保存（将来Supabase Authのaccess_tokenを格納）
+    func setAuthToken(_ token: String?) {
+        if let t = token, !t.isEmpty {
+            UserDefaults.standard.set(t, forKey: authTokenKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: authTokenKey)
+        }
+    }
+
+    private func applyAuth(_ req: inout URLRequest) {
+        if let t = UserDefaults.standard.string(forKey: authTokenKey), !t.isEmpty {
+            req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
     func startAlert(lat: Double, lng: Double, accuracy: Double?, battery: Int?, type: String = "emergency", maxDurationSec: Int = 3600) async throws -> StartAlertResponse {
         var req = URLRequest(url: baseURL.appendingPathComponent("/alert/start"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuth(&req)
         let body: [String: Any?] = [
             "lat": lat,
             "lng": lng,
@@ -34,6 +51,7 @@ struct APIClient {
         var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/update"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyAuth(&req)
         let body: [String: Any?] = [
             "lat": lat,
             "lng": lng,
@@ -50,6 +68,7 @@ struct APIClient {
     func stopAlert(id: String) async throws {
         var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/stop"))
         req.httpMethod = "POST"
+        applyAuth(&req)
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
@@ -59,6 +78,7 @@ struct APIClient {
     func revokeAlert(id: String) async throws {
         var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/revoke"))
         req.httpMethod = "POST"
+        applyAuth(&req)
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)

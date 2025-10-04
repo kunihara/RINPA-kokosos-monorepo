@@ -2,6 +2,8 @@ export interface Env {
   JWT_SECRET: string
   SUPABASE_URL?: string
   SUPABASE_SERVICE_ROLE_KEY?: string
+  SUPABASE_JWKS_URL?: string
+  REQUIRE_AUTH_SENDER?: string
   SES_REGION?: string
   SES_ACCESS_KEY_ID?: string
   SES_SECRET_ACCESS_KEY?: string
@@ -128,6 +130,8 @@ async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Respo
       DEFAULT_USER_EMAIL: env.DEFAULT_USER_EMAIL || null,
       SUPABASE_URL_preview: env.SUPABASE_URL || null,
       SUPABASE_SERVICE_ROLE_KEY_preview: env.SUPABASE_SERVICE_ROLE_KEY ? `${(env.SUPABASE_SERVICE_ROLE_KEY as string).slice(0,4)}…` : null,
+      SUPABASE_JWKS_URL: env.SUPABASE_JWKS_URL || (env.SUPABASE_URL ? `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json` : null),
+      REQUIRE_AUTH_SENDER: env.REQUIRE_AUTH_SENDER || 'false',
     },
   }
   return json(body)
@@ -154,6 +158,8 @@ async function handleDiagPublish({ req, env }: Parameters<RouteHandler>[0]): Pro
 }
 
 async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
   const initial = {
@@ -169,7 +175,7 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   // Create alert row
-  const userId = await ensureDefaultUserId(sb, env)
+  const userId = user.userId ?? (await ensureDefaultUserId(sb, env))
   // Sanitize max duration (server-side clamp). Allow 5 minutes to 6 hours.
   const clampedMax = Math.min(6 * 3600, Math.max(5 * 60, initial.max_duration_sec))
   const alertRes = await sb.insert('alerts', {
@@ -221,6 +227,8 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
 }
 
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
   const m = req.url.match(/\/alert\/([^/]+)\/update/)
@@ -245,6 +253,8 @@ async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Pro
 }
 
 async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const m = req.url.match(/\/alert\/([^/]+)\/stop/)
   if (!m) return notFound()
   const alertId = m[1]
@@ -258,6 +268,8 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
 }
 
 async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const m = req.url.match(/\/alert\/([^/]+)\/extend/)
   if (!m) return notFound()
   const alertId = m[1]
@@ -289,6 +301,8 @@ async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Pro
 }
 
 async function handleAlertRevoke({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const m = req.url.match(/\/alert\/([^/]+)\/revoke/)
   if (!m) return notFound()
   const alertId = m[1]
@@ -587,6 +601,63 @@ function supabase(env: Env) {
       return { ok, data: (dataJson as any[]) || [], error: ok ? null : await res.text() }
     },
   }
+}
+
+// -------- Supabase Auth (JWT RS256) verification and sender extraction
+type AuthCheck = { ok: true; userId: string | null } | { ok: false; error: string; status: number }
+
+async function getSenderFromAuth(req: Request, env: Env): Promise<AuthCheck> {
+  const requireAuth = (env.REQUIRE_AUTH_SENDER || 'false').toLowerCase() === 'true'
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return requireAuth ? { ok: false, error: 'unauthorized', status: 401 } : { ok: true, userId: null }
+  const m = authz.match(/^Bearer\s+(.+)$/i)
+  if (!m) return requireAuth ? { ok: false, error: 'unauthorized', status: 401 } : { ok: true, userId: null }
+  const token = m[1]
+  const verified = await verifySupabaseJwt(token, env).catch(() => null)
+  if (!verified) return requireAuth ? { ok: false, error: 'invalid_token', status: 401 } : { ok: true, userId: null }
+  const sub = typeof verified.sub === 'string' ? verified.sub : null
+  if (!sub) return requireAuth ? { ok: false, error: 'invalid_token', status: 401 } : { ok: true, userId: null }
+  return { ok: true, userId: sub }
+}
+
+type Jwk = { kid: string; kty: string; alg: string; use?: string; n?: string; e?: string }
+let jwksCache: { keys: Jwk[]; fetchedAt: number } | null = null
+
+async function verifySupabaseJwt(token: string, env: Env): Promise<Record<string, unknown> | null> {
+  const [hB64, pB64, sB64] = token.split('.')
+  if (!hB64 || !pB64 || !sB64) return null
+  const header = JSON.parse(new TextDecoder().decode(base64urlToUint8Array(hB64))) as { alg: string; kid?: string }
+  if (header.alg !== 'RS256') return null
+  const kid = header.kid
+  const jwksUrl = env.SUPABASE_JWKS_URL || (env.SUPABASE_URL ? `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json` : '')
+  if (!jwksUrl) return null
+  // Fetch/cached JWKS
+  const now = Date.now()
+  if (!jwksCache || now - jwksCache.fetchedAt > 15 * 60 * 1000) {
+    const res = await fetch(jwksUrl)
+    if (!res.ok) return null
+    const { keys } = (await res.json()) as { keys: Jwk[] }
+    jwksCache = { keys, fetchedAt: now }
+  }
+  const jwk = jwksCache.keys.find((k) => !kid || k.kid === kid)
+  if (!jwk || jwk.kty !== 'RSA' || !jwk.n || !jwk.e) return null
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true } as JsonWebKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify']
+  )
+  const data = new TextEncoder().encode(`${hB64}.${pB64}`)
+  const sig = base64urlToUint8Array(sB64)
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, sig, data)
+  if (!ok) return null
+  const payload = JSON.parse(new TextDecoder().decode(base64urlToUint8Array(pB64))) as Record<string, unknown>
+  // Basic claim checks
+  const issOk = typeof payload.iss === 'string' && env.SUPABASE_URL && (payload.iss as string).startsWith(env.SUPABASE_URL.replace(/\/$/, '') + '/auth/v1')
+  const expOk = typeof payload.exp === 'number' ? nowSec() < (payload.exp as number) : true
+  if (!issOk || !expOk) return null
+  return payload
 }
 
 // (replaced by Durable Object: AlertHub)

@@ -4,6 +4,7 @@ Overview
 - Requirements spec: docs/requirements.md
 - iOS app triggers alerts; this repo provides the API, web receiver, and DB schema.
 - Stack: Cloudflare Workers (API), Next.js 14 (receiver web), Supabase Postgres (DB), AWS SES (email).
+ - Auth (sender): Supabase Auth (Email/Password, Apple, Google, Facebook)
 
 Structure
 - apps/api-worker: Cloudflare Workers API with JWT and SSE skeleton.
@@ -21,6 +22,10 @@ Quickstart
 
 Environment
 - Copy `.env.example` to `.env` in each app as needed. Register secrets in your platform (Wrangler, Cloudflare Pages, Supabase, GitHub Actions).
+ - API auth (optional → recommended):
+   - `SUPABASE_URL=https://<project-ref>.supabase.co`
+   - `SUPABASE_JWKS_URL=https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json` (省略時は自動導出)
+   - `REQUIRE_AUTH_SENDER=true` を有効にすると `/alert/*` は Authorization: Bearer <Supabase access_token> を必須に
 
 Docker notes
 - `docker-compose` は API(8787) と Web(3000) を起動。ブラウザは `http://localhost:3000` へアクセスし、クライアントJSが `http://localhost:8787` に直接アクセスします。
@@ -51,6 +56,10 @@ Endpoints (API)
 - GET `/public/alert/:token`: Initial state for receiver.
 - GET `/public/alert/:token/stream`: SSE stream for live updates.
 - POST `/public/alert/:token/react`: Preset reaction from receiver.
+
+Auth (sender)
+- Use Supabase Auth on clients (iOS/Android/Web) to obtain `access_token`, then call `/alert/*` with `Authorization: Bearer <token>`.
+- Workers verifies the token via Supabase JWKS (RS256) and uses `sub` as `user_id`.
 
 Security
 - JWT HS256 with `alert_id`, `contact_id`, `scope`, `exp` (≤24h).
