@@ -1,4 +1,6 @@
 #include "Base.xcconfig"
 API_BASE_URL = https://kokosos-api.YOUR_PROD_DOMAIN
-# Secrets (local, DO NOT COMMIT)
+# Common secrets (local, DO NOT COMMIT): DEVELOPMENT_TEAM などを定義
+#include "Secrets-Common.xcconfig"
+# Env secrets (local, DO NOT COMMIT)
 #include "Secrets-Prod.xcconfig"

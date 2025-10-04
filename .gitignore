@@ -83,3 +83,4 @@ docs/screenshots/*
 apps/ios/Configs/Secrets-Dev.xcconfig
 apps/ios/Configs/Secrets-Stage.xcconfig
 apps/ios/Configs/Secrets-Prod.xcconfig
+apps/ios/Configs/Secrets-Common.xcconfig
