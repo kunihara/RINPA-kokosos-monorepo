@@ -52,5 +52,7 @@
   <string>$(OAUTH_REDIRECT_SCHEME)</string>
   <key>EmailRedirectBase</key>
   <string>$(EMAIL_REDIRECT_BASE)</string>
+  <key>EmailRedirectHost</key>
+  <string>$(EMAIL_REDIRECT_HOST)</string>
 </dict>
 </plist>

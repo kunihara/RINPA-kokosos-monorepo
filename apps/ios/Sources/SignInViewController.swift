@@ -116,8 +116,16 @@ final class SignInViewController: UIViewController {
             do {
                 let info = Bundle.main.infoDictionary
                 let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
-                let redirect = (base?.isEmpty == false) ? (base!.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback") : "\(scheme)://oauth-callback"
+                let redirect: String
+                if let b = base, !b.isEmpty {
+                    redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback"
+                } else if let h = host, !h.isEmpty {
+                    redirect = "https://\(h)/auth/callback"
+                } else {
+                    redirect = "\(scheme)://oauth-callback"
+                }
                 if let token = try await auth.signUp(email: email, password: pass, redirectTo: redirect) {
                     api.setAuthToken(token)
                     let main = MainViewController()
