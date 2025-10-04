@@ -81,5 +81,18 @@ targets:
         SUPPORTED_PLATFORMS: iphonesimulator iphoneos
         OTHER_LDFLAGS: ""
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+      configs:
+        Debug-Dev:
+          INFOPLIST_FILE: Resources/Info-Dev.plist
+        Debug-Stage:
+          INFOPLIST_FILE: Resources/Info-Stage.plist
+        Debug-Prod:
+          INFOPLIST_FILE: Resources/Info-Prod.plist
+        Release-Dev:
+          INFOPLIST_FILE: Resources/Info-Dev.plist
+        Release-Stage:
+          INFOPLIST_FILE: Resources/Info-Stage.plist
+        Release-Prod:
+          INFOPLIST_FILE: Resources/Info-Prod.plist
     info:
       path: Resources/Info.plist
