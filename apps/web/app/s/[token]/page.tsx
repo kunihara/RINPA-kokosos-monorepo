@@ -29,6 +29,8 @@ export default function ReceiverPage({ params }: any) {
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const lastEventAtRef = useRef<number>(0)
   const [remainingLocal, setRemainingLocal] = useState<number>(0)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let closed = false
@@ -73,7 +75,12 @@ export default function ReceiverPage({ params }: any) {
           lastEventAtRef.current = Date.now()
           if (evt.type === 'location') setState((s) => (s && s.type !== 'going_home' ? { ...s, latest: evt.latest } : s))
           if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
-          if (evt.type === 'extended') setState((s) => (s ? { ...s, remaining_sec: typeof evt.remaining_sec === 'number' ? evt.remaining_sec : s.remaining_sec } : s))
+          if (evt.type === 'extended') {
+            setState((s) => (s ? { ...s, remaining_sec: typeof evt.remaining_sec === 'number' ? evt.remaining_sec : s.remaining_sec } : s))
+            try { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) } catch {}
+            setToast('共有時間が延長されました')
+            toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+          }
           // reset backoff on successful message
           retryMs = 1000
         } catch {}
@@ -347,6 +354,13 @@ export default function ReceiverPage({ params }: any) {
             </a>
           </div>
         </section>
+      )}
+      {toast && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 16, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
+          <div style={{ background: 'rgba(17,24,39,0.95)', color: 'white', padding: '10px 14px', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}>
+            {toast}
+          </div>
+        </div>
       )}
     </main>
   )
