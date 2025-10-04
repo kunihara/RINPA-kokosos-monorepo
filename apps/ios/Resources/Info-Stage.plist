@@ -41,5 +41,12 @@
 
   <key>APIBaseURL</key>
   <string>$(API_BASE_URL)</string>
+  <!-- Supabase Auth (Stage) -->
+  <key>SupabaseURL</key>
+  <string>$(SUPABASE_URL)</string>
+  <key>SupabaseAnonKey</key>
+  <string>$(SUPABASE_ANON_KEY)</string>
+  <key>OAuthRedirectScheme</key>
+  <string>$(OAUTH_REDIRECT_SCHEME)</string>
 </dict>
 </plist>
