@@ -10,16 +10,28 @@ struct AuthClient {
     let config: Config
 
     init?() {
-        let dict = Bundle.main.infoDictionary
-        guard let supabase = dict?["SupabaseURL"] as? String,
-              let url = URL(string: supabase),
-              let anon = dict?["SupabaseAnonKey"] as? String,
-              !anon.isEmpty else { return nil }
-        self.config = Config(supabaseURL: url, anonKey: anon)
+        // Read from Info.plist and validate/trim
+        let info = Bundle.main.infoDictionary
+        let rawURL = (info?["SupabaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawAnon = (info?["SupabaseAnonKey"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let s = rawURL, let base = URL(string: s), base.scheme == "https", base.host != nil,
+              let anon = rawAnon, !anon.isEmpty else {
+            return nil
+        }
+        #if DEBUG
+        print("[AuthClient] SupabaseURL=\(base.absoluteString)")
+               // Print only prefix of anon key for safety
+        if let pref = rawAnon?.prefix(6) { print("[AuthClient] SupabaseAnonKey(6)=\(pref)…") }
+        #endif
+        self.config = Config(supabaseURL: base, anonKey: anon)
     }
 
     func signIn(email: String, password: String) async throws -> String { // returns access_token
-        var comps = URLComponents(url: config.supabaseURL.appendingPathComponent("/auth/v1/token"), resolvingAgainstBaseURL: false)!
+        var comps = URLComponents()
+        comps.scheme = config.supabaseURL.scheme
+        comps.host = config.supabaseURL.host
+        comps.port = config.supabaseURL.port
+        comps.path = "/auth/v1/token"
         comps.queryItems = [URLQueryItem(name: "grant_type", value: "password")]
         var req = URLRequest(url: comps.url!)
         req.httpMethod = "POST"
@@ -43,10 +55,14 @@ struct AuthClient {
 
     // OAuth via ASWebAuthenticationSession (Apple/Google/Facebook)
     func signInWithOAuth(provider: String, presentationAnchor: ASPresentationAnchor?) async throws -> String {
-        // Construct authorize URL
+        // Construct authorize URL from base components to avoid malformed hosts
         let redirectScheme = (Bundle.main.infoDictionary?["OAuthRedirectScheme"] as? String) ?? "kokosos"
         let redirectURI = "\(redirectScheme)://oauth-callback"
-        var comps = URLComponents(url: config.supabaseURL.appendingPathComponent("/auth/v1/authorize"), resolvingAgainstBaseURL: false)!
+        var comps = URLComponents()
+        comps.scheme = config.supabaseURL.scheme
+        comps.host = config.supabaseURL.host
+        comps.port = config.supabaseURL.port
+        comps.path = "/auth/v1/authorize"
         comps.queryItems = [
             URLQueryItem(name: "provider", value: provider),
             URLQueryItem(name: "redirect_to", value: redirectURI),
