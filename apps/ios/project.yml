@@ -89,7 +89,11 @@ targets:
         UIStatusBarStyle: UIStatusBarStyleDefault
         UIUserInterfaceStyle: Light
         LSApplicationCategoryType: public.app-category.navigation
-        CFBundleURLTypes: []
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - kokosos
+            CFBundleURLName: com.kokosos.oauth
         # Supabase Auth client config (fill via xcconfig or edit here for dev)
         SupabaseURL: "https://YOUR-PROJECT-REF.supabase.co"
         SupabaseAnonKey: "YOUR-ANON-KEY"
+        OAuthRedirectScheme: "kokosos"

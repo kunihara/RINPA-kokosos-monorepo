@@ -6,6 +6,7 @@ final class SignInViewController: UIViewController {
     private let passwordField = UITextField()
     private let signInButton = UIButton(type: .system)
     private let stack = UIStackView()
+    private let oauthStack = UIStackView()
     private let infoLabel = UILabel()
 
     private let api = APIClient()
@@ -34,8 +35,8 @@ final class SignInViewController: UIViewController {
         signInButton.setTitle("サインイン", for: .normal)
         signInButton.addTarget(self, action: #selector(tapSignIn), for: .touchUpInside)
 
-        infoLabel.text = "Apple/Google/Facebookは後で追加予定です。まずはメールとパスワードでサインインしてください。"
-        infoLabel.font = .systemFont(ofSize: 12)
+        infoLabel.text = "メール+パスワード または SNS でサインイン"
+        infoLabel.font = .systemFont(ofSize: 13)
         infoLabel.textColor = .secondaryLabel
         infoLabel.numberOfLines = 0
         infoLabel.textAlignment = .center
@@ -44,7 +45,14 @@ final class SignInViewController: UIViewController {
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        [titleLabel, emailField, passwordField, signInButton, infoLabel].forEach { stack.addArrangedSubview($0) }
+        oauthStack.axis = .vertical
+        oauthStack.spacing = 8
+        let appleBtn = makeOAuthButton(title: "Appleで続ける") { [weak self] in self?.startOAuth("apple") }
+        let googleBtn = makeOAuthButton(title: "Googleで続ける") { [weak self] in self?.startOAuth("google") }
+        let fbBtn = makeOAuthButton(title: "Facebookで続ける") { [weak self] in self?.startOAuth("facebook") }
+        [appleBtn, googleBtn, fbBtn].forEach { oauthStack.addArrangedSubview($0) }
+
+        [titleLabel, emailField, passwordField, signInButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
         view.addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -83,5 +91,32 @@ final class SignInViewController: UIViewController {
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
-}
 
+    private func makeOAuthButton(title: String, action: @escaping () -> Void) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(title, for: .normal)
+        b.backgroundColor = .secondarySystemBackground
+        b.layer.cornerRadius = 8
+        b.contentEdgeInsets = UIEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
+        b.addAction(UIAction(handler: { _ in action() }), for: .touchUpInside)
+        return b
+    }
+
+    private func startOAuth(_ provider: String) {
+        Task { @MainActor in
+            guard let auth = AuthClient() else {
+                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL / SupabaseAnonKey を設定してください。")
+                return
+            }
+            do {
+                let token = try await auth.signInWithOAuth(provider: provider, presentationAnchor: view.window)
+                api.setAuthToken(token)
+                // Mainへ遷移
+                let main = MainViewController()
+                navigationController?.setViewControllers([main], animated: true)
+            } catch {
+                showAlert("サインイン失敗", error.localizedDescription)
+            }
+        }
+    }
+}
