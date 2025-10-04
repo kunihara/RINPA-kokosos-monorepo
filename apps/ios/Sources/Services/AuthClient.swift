@@ -66,15 +66,16 @@ struct AuthClient {
         comps.host = config.supabaseURL.host
         comps.port = config.supabaseURL.port
         comps.path = "/auth/v1/signup"
-        if let redirectTo, !redirectTo.isEmpty {
-            comps.queryItems = [URLQueryItem(name: "redirect_to", value: redirectTo)]
-        }
         var req = URLRequest(url: comps.url!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
-        let body: [String: Any] = ["email": email, "password": password]
+        var body: [String: Any] = ["email": email, "password": password]
+        if let redirectTo, !redirectTo.isEmpty {
+            // Supabase: email confirmation redirect is specified via 'email_redirect_to'
+            body["email_redirect_to"] = redirectTo
+        }
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
