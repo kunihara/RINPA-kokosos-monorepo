@@ -70,6 +70,10 @@ targets:
       - path: Resources
         excludes:
           - "**/*.xcassets/**"
+          - "Info.plist"
+          - "Info-Dev.plist"
+          - "Info-Stage.plist"
+          - "Info-Prod.plist"
     resources:
       - path: Resources/Assets.xcassets
     scheme:
