@@ -200,6 +200,7 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     }
   }
   const state = {
+    type: initial.type as 'emergency' | 'going_home',
     id: alertId,
     status: 'active',
     started_at: startedAt,
@@ -226,6 +227,13 @@ async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Pro
   if (typeof lat !== 'number' || typeof lng !== 'number') return json({ error: 'invalid_location' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // If this alert is "going_home", do not store or broadcast live locations (privacy-friendly mode)
+  const typeRes = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+  if (!typeRes.ok) return json({ error: 'db_error', detail: typeRes.error }, { status: 500 })
+  const aType = typeRes.data[0]?.type as string | undefined
+  if (aType === 'going_home') {
+    return json({ ok: true, ignored: true })
+  }
   const captured_at = new Date().toISOString()
   await sb.insert('locations', { alert_id: alertId, lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at })
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
@@ -275,10 +283,15 @@ async function handlePublicAlert({ req, env }: Parameters<RouteHandler>[0]): Pro
   const alertRes = await sb.select('alerts', '*', `id=eq.${alertId}`, 1)
   if (!alertRes.ok || alertRes.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
   const alert = alertRes.data[0]
-  const latestRes = await sb.select('locations', '*', `alert_id=eq.${alertId}&order=captured_at.desc&limit=1`, 1)
-  const latest = latestRes.ok && latestRes.data.length > 0 ? latestRes.data[0] : null
+  // In "going_home" mode, do not expose latest location to public API
+  let latest: any = null
+  if (alert.type !== 'going_home') {
+    const latestRes = await sb.select('locations', '*', `alert_id=eq.${alertId}&order=captured_at.desc&limit=1`, 1)
+    latest = latestRes.ok && latestRes.data.length > 0 ? latestRes.data[0] : null
+  }
   const remaining = computeRemaining(alert.started_at, alert.max_duration_sec, alert.ended_at)
   const resp = {
+    type: (alert.type as 'emergency' | 'going_home') ?? 'emergency',
     status: (alert.status as 'active' | 'ended' | 'timeout') ?? 'active',
     remaining_sec: remaining,
     latest: latest
@@ -357,6 +370,11 @@ async function handlePublicAlertLocations({ req, env }: Parameters<RouteHandler>
   // Revocation check
   const revoked = await sb.select('revocations', '*', `alert_id=eq.${alertId}`, 1)
   if (revoked.ok && revoked.data.length > 0) return json({ error: 'revoked' }, { status: 401 })
+  // In "going_home" mode, do not return location history
+  const alertRes = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+  if (!alertRes.ok) return json({ error: 'db_error', detail: alertRes.error }, { status: 500 })
+  const aType = alertRes.data[0]?.type as string | undefined
+  if (aType === 'going_home') return json({ items: [] })
   const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100)
   const order = (url.searchParams.get('order') || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc'
   const q = `alert_id=eq.${alertId}&order=captured_at.${order}&limit=${limit}`

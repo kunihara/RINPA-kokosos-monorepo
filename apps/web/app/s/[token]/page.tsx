@@ -7,6 +7,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 export const runtime = 'edge'
 
 type AlertState = {
+  type: 'emergency' | 'going_home'
   status: 'active' | 'ended' | 'timeout'
   remaining_sec: number
   latest: null | { lat: number; lng: number; accuracy_m: number | null; battery_pct: number | null; captured_at: string }
@@ -36,14 +37,16 @@ export default function ReceiverPage({ params }: any) {
         if (!res.ok) throw new Error('failed to load')
         const data = (await res.json()) as AlertState
         if (!closed) setState(data)
-        // Load initial history (route)
+        // Load initial history (route) only for emergency mode
         try {
-          const r = await fetch(`${apiBase}/public/alert/${encodeURIComponent(token)}/locations?limit=200&order=asc`)
-          if (r.ok) {
-            const j = (await r.json()) as { items: { lat: number; lng: number }[] }
-            routeCoordsRef.current = j.items.map((x) => [x.lng, x.lat])
-            // If map is ready, reflect immediately
-            if (mapInstance.current) updateRoute(mapInstance.current)
+          if (data.type !== 'going_home') {
+            const r = await fetch(`${apiBase}/public/alert/${encodeURIComponent(token)}/locations?limit=200&order=asc`)
+            if (r.ok) {
+              const j = (await r.json()) as { items: { lat: number; lng: number }[] }
+              routeCoordsRef.current = j.items.map((x) => [x.lng, x.lat])
+              // If map is ready, reflect immediately
+              if (mapInstance.current) updateRoute(mapInstance.current)
+            }
           }
         } catch {}
       } catch (e) {
@@ -67,7 +70,7 @@ export default function ReceiverPage({ params }: any) {
         try {
           const evt = JSON.parse(ev.data)
           lastEventAtRef.current = Date.now()
-          if (evt.type === 'location') setState((s) => (s ? { ...s, latest: evt.latest } : s))
+          if (evt.type === 'location') setState((s) => (s && s.type !== 'going_home' ? { ...s, latest: evt.latest } : s))
           if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
           // reset backoff on successful message
           retryMs = 1000
@@ -119,10 +122,11 @@ export default function ReceiverPage({ params }: any) {
 
   const remaining = useMemo(() => (state ? Math.max(0, state.remaining_sec) : 0), [state])
 
-  // Initialize Mapbox map when token and container are ready
+  // Initialize Mapbox map when token and container are ready (skip for going_home)
   useEffect(() => {
     if (!mapRef.current) return
     if (!mapboxToken) return
+    if (state?.type === 'going_home') return
     if (mapInstance.current) return
     mapboxgl.accessToken = mapboxToken
     const map = new mapboxgl.Map({
@@ -305,14 +309,20 @@ export default function ReceiverPage({ params }: any) {
             最終更新: {state.latest ? new Date(state.latest.captured_at).toLocaleString() : '—'} / バッテリー:{' '}
             {state.latest?.battery_pct ?? '—'}%
           </div>
-          <div style={{ height: 320, borderRadius: 8, overflow: 'hidden', position: 'relative', background: '#e5e7eb' }}>
-            {!mapboxToken && (
-              <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, background: 'rgba(255,255,255,0.8)' }}>
-                <div style={{ color: '#111827' }}>地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）</div>
-              </div>
-            )}
-            <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-          </div>
+          {state.type === 'going_home' ? (
+            <div style={{ padding: 12, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, color: '#7c2d12' }}>
+              帰るモード: 出発と到着のみ通知します（位置のライブ共有はありません）
+            </div>
+          ) : (
+            <div style={{ height: 320, borderRadius: 8, overflow: 'hidden', position: 'relative', background: '#e5e7eb' }}>
+              {!mapboxToken && (
+                <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, background: 'rgba(255,255,255,0.8)' }}>
+                  <div style={{ color: '#111827' }}>地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）</div>
+                </div>
+              )}
+              <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <a href="tel:0000000000" style={btn()}>電話</a>
             <button style={btn()} onClick={() => react('ok')} disabled={!state.permissions.can_reply}>
