@@ -71,7 +71,6 @@ targets:
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
         SUPPORTED_PLATFORMS: iphonesimulator iphoneos
         OTHER_LDFLAGS: ""
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
