@@ -41,6 +41,17 @@
 
   <key>APIBaseURL</key>
   <string>$(API_BASE_URL)</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.kokosos.oauth</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>$(OAUTH_REDIRECT_SCHEME)</string>
+      </array>
+    </dict>
+  </array>
   <!-- Supabase Auth (Stage) -->
   <key>SupabaseURL</key>
   <string>$(SUPABASE_URL)</string>
