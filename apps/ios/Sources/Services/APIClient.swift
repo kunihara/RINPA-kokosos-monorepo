@@ -92,8 +92,8 @@ struct APIClient {
         req.httpBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
 
         let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
         return try JSONDecoder().decode(StartAlertResponse.self, from: data)
     }
@@ -110,9 +110,9 @@ struct APIClient {
             "battery_pct": battery,
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
-        let (_, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
 
@@ -120,9 +120,9 @@ struct APIClient {
         var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/stop"))
         req.httpMethod = "POST"
         applyAuth(&req)
-        let (_, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
 
@@ -142,9 +142,9 @@ struct APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["extend_sec": extendMinutes * 60]
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        let (_, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
 }
@@ -165,4 +165,24 @@ struct StartAlertResponse: Codable {
     let max_duration_sec: Int
     let latest: Latest
     let shareToken: String
+}
+
+enum APIError: LocalizedError {
+    case http(status: Int, body: String?)
+
+    var errorDescription: String? {
+        switch self {
+        case let .http(status, body):
+            let msg = (body?.isEmpty == false ? body! : nil) ?? ""
+            // Try to extract {"error":"...","detail":"..."}
+            if let data = msg.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let e = (json["error"] as? String) ?? ""
+                let d = (json["detail"] as? String) ?? ""
+                let joined = [e, d].filter { !$0.isEmpty }.joined(separator: ": ")
+                if !joined.isEmpty { return "サーバーエラー(\(status)): \(joined)" }
+            }
+            return "サーバーエラー(\(status))"
+        }
+    }
 }
