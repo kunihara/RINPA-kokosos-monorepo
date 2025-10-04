@@ -60,12 +60,15 @@ struct AuthClient {
 
     /// Sign up with email & password.
     /// - Returns: access_token if即時ログインが成立、nilの場合はメール確認が必要
-    func signUp(email: String, password: String) async throws -> String? {
+    func signUp(email: String, password: String, redirectTo: String? = nil) async throws -> String? {
         var comps = URLComponents()
         comps.scheme = config.supabaseURL.scheme
         comps.host = config.supabaseURL.host
         comps.port = config.supabaseURL.port
         comps.path = "/auth/v1/signup"
+        if let redirectTo, !redirectTo.isEmpty {
+            comps.queryItems = [URLQueryItem(name: "redirect_to", value: redirectTo)]
+        }
         var req = URLRequest(url: comps.url!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

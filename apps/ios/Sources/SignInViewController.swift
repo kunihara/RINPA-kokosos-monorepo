@@ -114,7 +114,9 @@ final class SignInViewController: UIViewController {
                 return
             }
             do {
-                if let token = try await auth.signUp(email: email, password: pass) {
+                let scheme = (Bundle.main.infoDictionary?["OAuthRedirectScheme"] as? String) ?? "kokosos"
+                let redirect = "\(scheme)://oauth-callback"
+                if let token = try await auth.signUp(email: email, password: pass, redirectTo: redirect) {
                     api.setAuthToken(token)
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
