@@ -142,26 +142,26 @@ final class MainViewController: UIViewController {
                     let battery = LocationService.batteryPercent()
                     // 共有時間: 緊急は既定60分、帰るモードは設定値から
                     let maxMinutes = (type == "going_home") ? SettingsStore.shared.goingHomeMaxMinutes : 60
-                    let res = try await api.startAlert(lat: loc.coordinate.latitude,
+                    let res = try await self.api.startAlert(lat: loc.coordinate.latitude,
                                                         lng: loc.coordinate.longitude,
                                                         accuracy: loc.horizontalAccuracy,
                                                         battery: battery,
                                                         type: type,
                                                         maxDurationSec: maxMinutes * 60)
-                    statusLabel.text = "共有を開始しました\nAlertID: \(res.id)\nToken: \(res.shareToken.prefix(16))…"
+                    self.statusLabel.text = "共有を開始しました\nAlertID: \(res.id)\nToken: \(res.shareToken.prefix(16))…"
                     let mode: AlertSession.Mode = {
                         if let m = AlertSession.Mode(rawValue: res.type.rawValue) { return m }
                         return AlertSession.Mode(rawValue: type) ?? .emergency
                     }()
-                    session = AlertSession(id: res.id, shareToken: res.shareToken, status: .active, mode: mode)
+                    self.session = AlertSession(id: res.id, shareToken: res.shareToken, status: .active, mode: mode)
                     if mode == .going_home {
                         // 帰るモードでは送信者が手動停止する運用のため、明示ガイダンスを表示
-                        statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。"
-                        scheduleArrivalReminder()
+                        self.statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。"
+                        self.scheduleArrivalReminder()
                     }
-                    startPeriodicUpdates()
+                    self.startPeriodicUpdates()
                 } catch {
-                    statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
+                    self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
                 }
             }
         }
@@ -201,16 +201,16 @@ final class MainViewController: UIViewController {
     @objc private func tapStop() {
         guard let session else { return }
         Task { @MainActor in
-            do { try await api.stopAlert(id: session.id); self.session?.status = .ended; teardownActiveSession(with: "共有を停止しました") }
-            catch { statusLabel.text = "停止に失敗: \(error.localizedDescription)" }
+            do { try await self.api.stopAlert(id: session.id); self.session?.status = .ended; self.teardownActiveSession(with: "共有を停止しました") }
+            catch { self.statusLabel.text = "停止に失敗: \(error.localizedDescription)" }
         }
     }
 
     @objc private func tapRevoke() {
         guard let session else { return }
         Task { @MainActor in
-            do { try await api.revokeAlert(id: session.id); self.session?.status = .revoked; teardownActiveSession(with: "リンクを即時失効しました") }
-            catch { statusLabel.text = "失効に失敗: \(error.localizedDescription)" }
+            do { try await self.api.revokeAlert(id: session.id); self.session?.status = .revoked; self.teardownActiveSession(with: "リンクを即時失効しました") }
+            catch { self.statusLabel.text = "失効に失敗: \(error.localizedDescription)" }
         }
     }
 
