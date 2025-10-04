@@ -143,6 +143,10 @@ final class MainViewController: UIViewController {
                         return AlertSession.Mode(rawValue: type) ?? .emergency
                     }()
                     session = AlertSession(id: res.id, shareToken: res.shareToken, status: .active, mode: mode)
+                    if mode == .going_home {
+                        // 帰るモードでは送信者が手動停止する運用のため、明示ガイダンスを表示
+                        statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。"
+                    }
                     startPeriodicUpdates()
                 } catch {
                     statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
