@@ -19,6 +19,8 @@ final class MainViewController: UIViewController {
     private let bgTracker = BackgroundLocationTracker()
     private let api = APIClient()
     private let contactsClient = ContactsClient()
+    private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
+    private let recipientsButton = UIButton(type: .system)
     private var session: AlertSession? { didSet { updateControls() } }
     private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
     private var reminderIntervalSec: TimeInterval { TimeInterval(SettingsStore.shared.arrivalReminderMinutes * 60) }
@@ -345,5 +347,3 @@ final class MainViewController: UIViewController {
         navigationController?.setViewControllers([signin], animated: true)
     }
 }
-    private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
-    private let recipientsButton = UIButton(type: .system)
