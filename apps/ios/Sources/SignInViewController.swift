@@ -5,6 +5,8 @@ final class SignInViewController: UIViewController {
     private let emailField = UITextField()
     private let passwordField = UITextField()
     private let signInButton = UIButton(type: .system)
+    private let signUpButton = UIButton(type: .system)
+    private let resetButton = UIButton(type: .system)
     private let stack = UIStackView()
     private let oauthStack = UIStackView()
     private let infoLabel = UILabel()
@@ -35,6 +37,13 @@ final class SignInViewController: UIViewController {
         signInButton.setTitle("サインイン", for: .normal)
         signInButton.addTarget(self, action: #selector(tapSignIn), for: .touchUpInside)
 
+        signUpButton.setTitle("新規登録", for: .normal)
+        signUpButton.addTarget(self, action: #selector(tapSignUp), for: .touchUpInside)
+
+        resetButton.setTitle("パスワードをお忘れですか？", for: .normal)
+        resetButton.titleLabel?.font = .systemFont(ofSize: 13)
+        resetButton.addTarget(self, action: #selector(tapReset), for: .touchUpInside)
+
         infoLabel.text = "メール+パスワード または SNS でサインイン"
         infoLabel.font = .systemFont(ofSize: 13)
         infoLabel.textColor = .secondaryLabel
@@ -52,7 +61,7 @@ final class SignInViewController: UIViewController {
         let fbBtn = makeOAuthButton(title: "Facebookで続ける") { [weak self] in self?.startOAuth("facebook") }
         [appleBtn, googleBtn, fbBtn].forEach { oauthStack.addArrangedSubview($0) }
 
-        [titleLabel, emailField, passwordField, signInButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
+        [titleLabel, emailField, passwordField, signInButton, signUpButton, resetButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
         view.addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -90,6 +99,53 @@ final class SignInViewController: UIViewController {
         let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    @objc private func tapSignUp() {
+        guard let email = emailField.text, !email.isEmpty, let pass = passwordField.text, !pass.isEmpty else {
+            showAlert("入力エラー", "メールとパスワードを入力してください")
+            return
+        }
+        Task { @MainActor in
+            signUpButton.isEnabled = false
+            defer { signUpButton.isEnabled = true }
+            guard let auth = AuthClient() else {
+                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL/SupabaseAnonKey を設定してください。")
+                return
+            }
+            do {
+                if let token = try await auth.signUp(email: email, password: pass) {
+                    api.setAuthToken(token)
+                    let main = MainViewController()
+                    navigationController?.setViewControllers([main], animated: true)
+                } else {
+                    showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、サインインを行ってください。")
+                }
+            } catch {
+                showAlert("サインアップ失敗", error.localizedDescription)
+            }
+        }
+    }
+
+    @objc private func tapReset() {
+        guard let email = emailField.text, !email.isEmpty else {
+            showAlert("入力エラー", "登録メールアドレスを入力してください")
+            return
+        }
+        Task { @MainActor in
+            resetButton.isEnabled = false
+            defer { resetButton.isEnabled = true }
+            guard let auth = AuthClient() else {
+                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL/SupabaseAnonKey を設定してください。")
+                return
+            }
+            do {
+                try await auth.sendPasswordReset(email: email)
+                showAlert("送信しました", "パスワード再設定メールを送信しました。メール内の手順に従ってください。")
+            } catch {
+                showAlert("送信失敗", error.localizedDescription)
+            }
+        }
     }
 
     private func makeOAuthButton(title: String, action: @escaping () -> Void) -> UIButton {

@@ -58,6 +58,53 @@ struct AuthClient {
         return token
     }
 
+    /// Sign up with email & password.
+    /// - Returns: access_token if即時ログインが成立、nilの場合はメール確認が必要
+    func signUp(email: String, password: String) async throws -> String? {
+        var comps = URLComponents()
+        comps.scheme = config.supabaseURL.scheme
+        comps.host = config.supabaseURL.host
+        comps.port = config.supabaseURL.port
+        comps.path = "/auth/v1/signup"
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = ["email": email, "password": password]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if !(200..<300).contains(http.statusCode) {
+            let msg = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "auth", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "サインアップに失敗しました (\(http.statusCode)) \(msg)"])
+        }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        // メール確認がOFFな場合はaccess_tokenが返る。ONならnil。
+        return json?["access_token"] as? String
+    }
+
+    /// Send password reset email
+    func sendPasswordReset(email: String, redirectTo: String? = nil) async throws {
+        var comps = URLComponents()
+        comps.scheme = config.supabaseURL.scheme
+        comps.host = config.supabaseURL.host
+        comps.port = config.supabaseURL.port
+        comps.path = "/auth/v1/recover"
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        var body: [String: Any] = ["email": email]
+        if let redirectTo { body["redirect_to"] = redirectTo }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "パスワードリセットの送信に失敗しました"])
+        }
+    }
+
     // OAuth via ASWebAuthenticationSession (Apple/Google/Facebook)
     func signInWithOAuth(provider: String, presentationAnchor: ASPresentationAnchor?) async throws -> String {
         // Construct authorize URL from base components to avoid malformed hosts
