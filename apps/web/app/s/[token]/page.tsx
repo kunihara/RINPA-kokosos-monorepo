@@ -84,7 +84,7 @@ export default function ReceiverPage({ params }: any) {
           }
           if (evt.type === 'reaction') {
             try { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) } catch {}
-            const label = String(evt.preset || '返信')
+            const label = labelForPreset(String(evt.preset || 'reply'))
             setToast(`返信: ${label}`)
             toastTimerRef.current = setTimeout(() => setToast(null), 2500)
           }
@@ -351,14 +351,14 @@ export default function ReceiverPage({ params }: any) {
               <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <a href="tel:0000000000" style={btn()}>電話</a>
-            <button style={btn()} onClick={() => react('ok')} disabled={!state.permissions.can_reply}>
-              プリセット返信
-            </button>
-            <a href="tel:110" style={btn({ variant: 'danger' })}>
-              110へ電話
-            </a>
+            {/* プリセット返信（複数） */}
+            <button style={btn()} onClick={() => react('ok')} disabled={!state.permissions.can_reply}>OK</button>
+            <button style={btn()} onClick={() => react('on_my_way')} disabled={!state.permissions.can_reply}>向かっています</button>
+            <button style={btn()} onClick={() => react('will_call')} disabled={!state.permissions.can_reply}>今すぐ連絡します</button>
+            <button style={btn({ variant: 'danger' })} onClick={() => react('call_police')} disabled={!state.permissions.can_reply}>通報しました</button>
+            <a href="tel:110" style={btn({ variant: 'danger' })}>110へ電話</a>
           </div>
         </section>
       )}
@@ -380,6 +380,16 @@ export default function ReceiverPage({ params }: any) {
         body: JSON.stringify({ preset }),
       })
     } catch {}
+  }
+
+  function labelForPreset(preset: string): string {
+    const map: Record<string, string> = {
+      ok: 'OK',
+      on_my_way: '向かっています',
+      will_call: '今すぐ連絡します',
+      call_police: '通報しました',
+    }
+    return map[preset] || preset
   }
 }
 
