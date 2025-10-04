@@ -208,6 +208,7 @@ final class MainViewController: UIViewController {
     private func teardownActiveSession(with message: String) {
         updateTimer?.invalidate(); updateTimer = nil
         reminderTimer?.invalidate(); reminderTimer = nil
+        NotificationService.shared.cancelArrivalReminder()
         statusLabel.text = message
         session = nil
     }
@@ -219,16 +220,25 @@ final class MainViewController: UIViewController {
     }
 
     private func scheduleArrivalReminder() {
+        // 可能ならローカル通知を使う。拒否された場合のみフォアグラウンド用タイマーにフォールバック。
         reminderTimer?.invalidate()
-        // 軽量MVP: フォアグラウンド時にのみ30分後のアラートを表示（バックグラウンドでは動作しません）
-        reminderTimer = Timer.scheduledTimer(withTimeInterval: reminderIntervalSec, repeats: false) { [weak self] _ in
+        NotificationService.shared.requestAuthorizationIfNeeded { [weak self] granted in
             guard let self else { return }
-            Task { @MainActor in
-                let alert = UIAlertController(title: "到着リマインダー",
-                                              message: "到着したら『停止』をタップしてください。",
-                                              preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-                self.present(alert, animated: true)
+            if granted {
+                NotificationService.shared.cancelArrivalReminder()
+                NotificationService.shared.scheduleArrivalReminder(after: reminderIntervalSec)
+            } else {
+                // フォアグラウンド時のみの簡易リマインダー
+                Task { @MainActor in
+                    self.reminderTimer = Timer.scheduledTimer(withTimeInterval: self.reminderIntervalSec, repeats: false) { [weak self] _ in
+                        guard let self else { return }
+                        let alert = UIAlertController(title: "到着リマインダー",
+                                                      message: "到着したら『停止』をタップしてください。",
+                                                      preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+                        self.present(alert, animated: true)
+                    }
+                }
             }
         }
     }
