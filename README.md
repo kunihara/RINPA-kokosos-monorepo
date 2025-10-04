@@ -42,6 +42,12 @@ GitHub デプロイ（Cloudflare dev/stage/prod）
   - API用: `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SES_*`, `CORS_ALLOW_ORIGIN`
   - Web用（必要に応じて）: `NEXT_PUBLIC_API_BASE` 等はPagesの「環境変数」側で設定推奨
 
+iOS CI（任意）
+- Workflow: `.github/workflows/ios-build.yml` が Dev/Stage/Prod をマトリクスでビルド
+- 環境ごと（Environments: dev/stage/prod）に以下のSecretsを登録:
+  - `SUPABASE_URL`, `SUPABASE_ANON_KEY`（`OAUTH_REDIRECT_SCHEME`は未設定時 `kokosos`）
+- CIは `apps/ios/Configs/Secrets-<Env>.xcconfig` を生成し、`xcodegen generate` → `xcodebuild` を実行
+
 Cloudflare 側準備
 - Workers: wrangler は環境ごとに `name` を分離（`apps/api-worker/wrangler.toml:1`）。
 - Pages: `kokosos-web-dev`, `kokosos-web-stage`, `kokosos-web-prod` の3プロジェクトを作成（同一リポ参照でも可）。

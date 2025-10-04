@@ -1,0 +1,67 @@
+name: iOS Build (Dev/Stage/Prod)
+
+on:
+  push:
+    branches: [dev, stage, main]
+  pull_request:
+
+jobs:
+  build-ios:
+    name: iOS Build (${{ matrix.env_name }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - env_name: dev
+            cfg_suffix: Dev
+          - env_name: stage
+            cfg_suffix: Stage
+          - env_name: prod
+            cfg_suffix: Prod
+    environment: ${{ matrix.env_name }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          set -euo pipefail
+          brew update
+          brew install xcodegen
+
+      - name: Write iOS Secrets xcconfig (matrix=${{ matrix.cfg_suffix }})
+        working-directory: apps/ios
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          OAUTH_REDIRECT_SCHEME: ${{ secrets.OAUTH_REDIRECT_SCHEME || 'kokosos' }}
+        run: |
+          set -euo pipefail
+          CFG=${{ matrix.cfg_suffix }}
+          FILE="Configs/Secrets-${CFG}.xcconfig"
+          : "${SUPABASE_URL:?Missing SUPABASE_URL secret for environment ${{ matrix.env_name }}}"
+          : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY secret for environment ${{ matrix.env_name }}}"
+          echo "Writing $FILE"
+          {
+            printf 'SUPABASE_URL = %s\n' "$SUPABASE_URL"
+            printf 'SUPABASE_ANON_KEY = %s\n' "$SUPABASE_ANON_KEY"
+            printf 'OAUTH_REDIRECT_SCHEME = %s\n' "$OAUTH_REDIRECT_SCHEME"
+          } > "$FILE"
+
+      - name: Generate Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      - name: Build (Simulator, Debug-${{ matrix.cfg_suffix }})
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            build | xcpretty || exit ${PIPESTATUS[0]}
+
