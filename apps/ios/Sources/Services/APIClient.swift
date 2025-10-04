@@ -8,10 +8,15 @@ struct APIClient {
     init() {
         let dict = Bundle.main.infoDictionary
         // 1) User override from Settings (for device testing or custom endpoints)
-        if let override = UserDefaults.standard.string(forKey: APIClient.baseURLOverrideKey),
-           let url = URL(string: override), !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            self.baseURL = url
-            return
+        if let override = UserDefaults.standard.string(forKey: APIClient.baseURLOverrideKey) {
+            let trimmed = override.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, let url = URL(string: trimmed), let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+                let schemeOK = (comps.scheme == "http" || comps.scheme == "https")
+                if schemeOK, let host = comps.host, !host.isEmpty {
+                    self.baseURL = url
+                    return
+                }
+            }
         }
 
         // Helper: treat unresolved $(VAR) as invalid
@@ -21,7 +26,7 @@ struct APIClient {
         let base = (dict?["APIBaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         // Guard against placeholder domains left as-is and unresolved variables
         let invalidPlaceholders = ["YOUR_WORKERS_DOMAIN", "YOUR_PROD_DOMAIN", "YOUR_", "<", ">"]
-        if let b = base, !isUnresolvedVariable(b), !invalidPlaceholders.contains(where: { b.contains($0) }), let url = URL(string: b) {
+        if let b = base, !isUnresolvedVariable(b), !invalidPlaceholders.contains(where: { b.contains($0) }), let url = URL(string: b), let comps = URLComponents(url: url, resolvingAgainstBaseURL: false), (comps.scheme == "http" || comps.scheme == "https"), let host = comps.host, !host.isEmpty {
             self.baseURL = url
             return
         }
@@ -32,14 +37,15 @@ struct APIClient {
         if let h = host, !h.isEmpty, !isUnresolvedVariable(h) {
             if var comps = URLComponents() as URLComponents? {
                 comps.scheme = scheme.isEmpty ? "https" : scheme
-                comps.host = h
                 // Allow optional port specified as part of host like "localhost:8787"
                 if h.contains(":"), let last = h.split(separator: ":").last, let p = Int(last) {
                     comps.host = String(h.split(separator: ":").dropLast().joined(separator: ":"))
                     comps.port = p
+                } else {
+                    comps.host = h
                 }
                 comps.path = "/"
-                if let url = comps.url {
+                if let url = comps.url, let c = URLComponents(url: url, resolvingAgainstBaseURL: false), let chost = c.host, !chost.isEmpty {
                     self.baseURL = url
                     return
                 }
