@@ -101,6 +101,56 @@ SSEイベント（例）
 
 ---
 
+## Push通知（将来計画）
+
+方針（iOS/Android/Webを見据えた最適解）
+- メッセージ基盤: Firebase Cloud Messaging (FCM) を採用
+  - iOSは FCM→APNs 経由、Androidは FCM 直配信
+  - 無料枠が厚く、クロスプラットフォームで一元化しやすい
+- 送信サービス: AWS Lambda（Node.js + Firebase Admin SDK）
+  - 再試行や無効トークン回収を実装しやすい
+  - 秘密情報は AWS Secrets Manager で管理
+- 連携: Cloudflare Workers →（Cloudflare Queues）→ Lambda
+  - Workers は通知イベント発火役に専念、バーストはQueuesで吸収
+
+WorkersからAPNs直送を避ける理由
+- APNsはHTTP/2前提で、Workersの外向きfetchは任意オリジンへのHTTP/2を保証しないため運用上の不安定リスクがある
+- FCM採用によりHTTP/1.1ベースの送信やAdmin SDK利用で実装が簡素化
+
+データモデル（将来追加）
+- devices(id, user_id, platform[ios|android|web], fcm_token, valid, last_seen_at, created_at)
+
+API（将来追加）
+- POST /devices/register … fcm_token登録（user紐付け・プラットフォーム付与）
+- POST /devices/unregister … fcm_token無効化
+- 既存イベント発火はWorkersが担当（reaction/opened/extended）
+
+イベントスキーマ（Queues→Lambda）
+- 共通: { id, type: 'reaction'|'opened'|'extended', user_id, tokens: string[], data: {...}, ts }
+- 例: reaction → data = { preset }
+- 例: opened → data = { ua, ip (オプション) }
+- 例: extended → data = { added_sec, remaining_sec }
+
+Lambda実装メモ
+- Firebase Admin SDKで sendMulticast / sendEachForMulticast を使用
+- 応答で無効トークン(410/invalid)を回収し devices.valid=false
+- 429/5xxは指数バックオフで再試行、DLQ(SQS)へ退避
+
+セキュリティ
+- Firebaseサービスアカウント鍵はSecrets Manager（KMS）で暗号化・最小権限・定期ローテーション
+- Apple開発者プログラム登録（$99/年）とAPNs設定（FCMコンソール）
+
+概算コスト（小規模）
+- FCM: 無料
+- Lambda/API Gateway/Queues: 無料枠〜数ドル/月
+- Apple Developer Program: $99/年
+
+導入ロードマップ
+1) devicesテーブルと /devices/register を先に実装（クライアントのトークン収集）
+2) Workers→Queues→Lambdaの経路を用意（最初はWebhookでも可）
+3) reaction/opened/extended の通知種別を段階導入（まずは reaction）
+4) 監視/再試行/無効トークン回収の運用整備
+
 ## 追加要件
 - MVPでは録音・録画は非搭載（将来の拡張候補）
 - 最大共有時間は60分（延長可能）。帰るモードは設定から最大共有時間を変更可能（既定120分）。
