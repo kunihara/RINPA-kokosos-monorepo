@@ -28,6 +28,7 @@ export default function ReceiverPage({ params }: any) {
   const routeCoordsRef = useRef<[number, number][]>([])
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const lastEventAtRef = useRef<number>(0)
+  const [remainingLocal, setRemainingLocal] = useState<number>(0)
 
   useEffect(() => {
     let closed = false
@@ -72,6 +73,7 @@ export default function ReceiverPage({ params }: any) {
           lastEventAtRef.current = Date.now()
           if (evt.type === 'location') setState((s) => (s && s.type !== 'going_home' ? { ...s, latest: evt.latest } : s))
           if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
+          if (evt.type === 'extended') setState((s) => (s ? { ...s, remaining_sec: typeof evt.remaining_sec === 'number' ? evt.remaining_sec : s.remaining_sec } : s))
           // reset backoff on successful message
           retryMs = 1000
         } catch {}
@@ -121,6 +123,18 @@ export default function ReceiverPage({ params }: any) {
   }, [apiBase, token])
 
   const remaining = useMemo(() => (state ? Math.max(0, state.remaining_sec) : 0), [state])
+
+  // Drive a 1-second ticking countdown locally; resync when server value changes
+  useEffect(() => {
+    setRemainingLocal(remaining)
+    if (remaining <= 0) return
+    let val = remaining
+    const id = setInterval(() => {
+      val -= 1
+      setRemainingLocal(Math.max(0, val))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [remaining])
 
   // Initialize Mapbox map when token and container are ready (skip for going_home)
   useEffect(() => {
@@ -304,7 +318,7 @@ export default function ReceiverPage({ params }: any) {
       {state && (
         <section style={{ display: 'grid', gap: 8 }}>
           <div>ステータス: {labelStatus(state.status)}</div>
-          <div>残り時間: {formatDuration(remaining)}</div>
+          <div>残り時間: {formatDuration(remainingLocal)}</div>
           <div>
             最終更新: {state.latest ? new Date(state.latest.captured_at).toLocaleString() : '—'} / バッテリー:{' '}
             {state.latest?.battery_pct ?? '—'}%

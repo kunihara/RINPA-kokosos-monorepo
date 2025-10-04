@@ -268,7 +268,7 @@ async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Pro
   const extendSec = Math.max(60, Math.min(6 * 3600, Math.floor(extend_sec_raw)))
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  const a = await sb.select('alerts', 'id,status,max_duration_sec', `id=eq.${alertId}`, 1)
+  const a = await sb.select('alerts', 'id,status,max_duration_sec,started_at,ended_at', `id=eq.${alertId}`, 1)
   if (!a.ok || a.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
   const alert = a.data[0] as any
   if (alert.status !== 'active') return json({ error: 'not_active' }, { status: 400 })
@@ -278,7 +278,11 @@ async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Pro
   // Optional: nudge receivers
   try {
     const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
-    await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'active' }) })
+    const remaining = computeRemaining(alert.started_at as string, nextMax, alert.ended_at as string | null)
+    await stub.fetch('https://do/publish', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'extended', max_duration_sec: nextMax, remaining_sec: remaining }),
+    })
   } catch {}
   return json({ ok: true, max_duration_sec: nextMax })
 }
