@@ -67,6 +67,7 @@ struct APIClient {
 }
 
 struct StartAlertResponse: Codable {
+    enum Mode: String, Codable { case emergency, going_home }
     struct Latest: Codable {
         let lat: Double
         let lng: Double
@@ -74,6 +75,7 @@ struct StartAlertResponse: Codable {
         let battery_pct: Int?
         let captured_at: String
     }
+    let type: Mode
     let id: String
     let status: String
     let started_at: String

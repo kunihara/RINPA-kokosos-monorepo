@@ -138,7 +138,11 @@ final class MainViewController: UIViewController {
                                                         type: type,
                                                         maxDurationSec: 3600)
                     statusLabel.text = "共有を開始しました\nAlertID: \(res.id)\nToken: \(res.shareToken.prefix(16))…"
-                    session = AlertSession(id: res.id, shareToken: res.shareToken, status: .active)
+                    let mode: AlertSession.Mode = {
+                        if let m = AlertSession.Mode(rawValue: res.type.rawValue) { return m }
+                        return AlertSession.Mode(rawValue: type) ?? .emergency
+                    }()
+                    session = AlertSession(id: res.id, shareToken: res.shareToken, status: .active, mode: mode)
                     startPeriodicUpdates()
                 } catch {
                     statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
@@ -150,6 +154,8 @@ final class MainViewController: UIViewController {
     private func startPeriodicUpdates() {
         updateTimer?.invalidate()
         guard let session else { return }
+        // going_home モードでは経路共有を行わないため定期更新を行わない
+        guard session.mode == .emergency else { return }
         updateTimer = Timer.scheduledTimer(withTimeInterval: updateIntervalSec, repeats: true) { [weak self] _ in
             self?.sendUpdate(session: session)
         }
