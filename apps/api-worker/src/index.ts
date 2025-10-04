@@ -331,7 +331,11 @@ async function handlePublicAlert({ req, env }: Parameters<RouteHandler>[0]): Pro
     latest: latest
       ? { lat: latest.lat, lng: latest.lng, accuracy_m: latest.accuracy_m ?? null, battery_pct: latest.battery_pct ?? null, captured_at: latest.captured_at }
       : null,
-    permissions: { can_call: true, can_reply: true, can_call_police: true },
+    permissions: { 
+      can_call: true, 
+      can_reply: !!(payload as any).contact_id, 
+      can_call_police: true 
+    },
   }
   return json(resp)
 }
@@ -423,6 +427,21 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
   if (!payload) return json({ error: 'invalid_token' }, { status: 401 })
   const body = await req.json().catch(() => null)
   if (!body || typeof body.preset !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
+  const preset: string = String(body.preset)
+  // only allow simple short tokens like 'ok', 'help', 'call_police'
+  if (!/^[a-z0-9_-]{1,32}$/i.test(preset)) return json({ error: 'invalid_preset' }, { status: 400 })
+  const alertId = String((payload as any).alert_id)
+  const contactId = (payload as any).contact_id as string | undefined
+  if (!contactId) return json({ error: 'forbidden' }, { status: 403 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // Save
+  await sb.insert('reactions', { alert_id: alertId, contact_id: contactId, preset })
+  // Broadcast
+  try {
+    const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+    await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'reaction', preset, ts: Date.now() }) })
+  } catch {}
   return json({ ok: true })
 }
 

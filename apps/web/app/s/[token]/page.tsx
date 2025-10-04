@@ -82,6 +82,12 @@ export default function ReceiverPage({ params }: any) {
             setToast(addedMin ? `+${addedMin}分延長されました` : '共有時間が延長されました')
             toastTimerRef.current = setTimeout(() => setToast(null), 3000)
           }
+          if (evt.type === 'reaction') {
+            try { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) } catch {}
+            const label = String(evt.preset || '返信')
+            setToast(`返信: ${label}`)
+            toastTimerRef.current = setTimeout(() => setToast(null), 2500)
+          }
           // reset backoff on successful message
           retryMs = 1000
         } catch {}

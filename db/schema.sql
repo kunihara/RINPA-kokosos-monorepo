@@ -54,6 +54,17 @@ create table if not exists revocations (
   revoked_at timestamptz not null default now()
 );
 
+-- Receiver reactions (preset replies)
+create table if not exists reactions (
+  id uuid primary key default gen_random_uuid(),
+  alert_id uuid not null references alerts(id) on delete cascade,
+  contact_id uuid not null,
+  preset text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_reactions_alert_time on reactions(alert_id, created_at desc);
+
 -- Retention: purge alerts/locations/deliveries older than 48h
 create or replace function purge_old_data() returns void language plpgsql as $$
 begin
