@@ -133,6 +133,8 @@ final class SignInViewController: UIViewController {
                 }
                 if let token = try await auth.signUp(email: email, password: pass, redirectTo: redirect) {
                     api.setAuthToken(token)
+                    // サインアップ直後は受信者オンボーディングへ誘導（Main表示後に1回だけ）
+                    UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
                 } else {

@@ -30,6 +30,17 @@ final class MainViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(onSettingsChanged), name: SettingsStore.changedNotification, object: nil)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        let key = "ShouldShowRecipientsOnboardingOnce"
+        if UserDefaults.standard.bool(forKey: key), presentedViewController == nil {
+            UserDefaults.standard.set(false, forKey: key)
+            let vc = OnboardingRecipientsViewController()
+            let nav = UINavigationController(rootViewController: vc)
+            present(nav, animated: true)
+        }
+    }
+
     private func setupUI() {
         titleLabel.text = "KokoSOS"
         titleLabel.font = .boldSystemFont(ofSize: 24)
