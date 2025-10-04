@@ -78,7 +78,8 @@ export default function ReceiverPage({ params }: any) {
           if (evt.type === 'extended') {
             setState((s) => (s ? { ...s, remaining_sec: typeof evt.remaining_sec === 'number' ? evt.remaining_sec : s.remaining_sec } : s))
             try { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) } catch {}
-            setToast('共有時間が延長されました')
+            const addedMin = typeof evt.added_sec === 'number' ? Math.max(1, Math.round(evt.added_sec / 60)) : null
+            setToast(addedMin ? `+${addedMin}分延長されました` : '共有時間が延長されました')
             toastTimerRef.current = setTimeout(() => setToast(null), 3000)
           }
           // reset backoff on successful message

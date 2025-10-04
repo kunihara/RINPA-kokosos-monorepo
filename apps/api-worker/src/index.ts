@@ -279,9 +279,10 @@ async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Pro
   try {
     const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
     const remaining = computeRemaining(alert.started_at as string, nextMax, alert.ended_at as string | null)
+    const added = nextMax - current
     await stub.fetch('https://do/publish', {
       method: 'POST',
-      body: JSON.stringify({ type: 'extended', max_duration_sec: nextMax, remaining_sec: remaining }),
+      body: JSON.stringify({ type: 'extended', max_duration_sec: nextMax, remaining_sec: remaining, added_sec: added }),
     })
   } catch {}
   return json({ ok: true, max_duration_sec: nextMax })
