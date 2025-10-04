@@ -125,6 +125,70 @@ SSEイベント（例）
   - エンドポイントはパスセグメントで結合する（例: `("alert", "start")`）。先頭 `/` を含む文字列を `appendingPathComponent("/alert/start")` に渡すと `%2Falert%2Fstart` となり 404 になるため注意。
 
 ## インフラと運用
+
+---
+
+## 受信者選定・検証（追加仕様）
+
+目的
+- 無差別送信を避け、送信前に「誰に送るか」を明示選択する。
+- 連絡先に存在しない相手でもメール入力で迅速に登録できる。
+- 検証済み（verify済）の受信者のみを既定で送信対象にする。
+
+送信前フロー（MVP）
+- 初回オンボーディング
+  - ステップ: 説明 → 権限（位置情報）→ 受信者の設定 → 状態確認 → 完了
+  - 受信者の設定: メールアドレスを入力（複数可、カンマ/改行対応）。追加したメールは pending として一覧に表示し、「確認メールを送信」で検証メールを一括送信。
+  - 状態確認: pending/verified を表示。未検証は「再送」が可能。
+- メイン画面（送信前）
+  - 「受信者を選択（検証済み）」のチップを常時表示。タップでピッカーを開く。
+  - 緊急/帰るボタンは「既定の受信者セット」があれば1タップ開始。なければピッカーへ誘導。
+
+受信者ピッカー（UI）
+- 上部: 検索＋「メールを追加」入力欄（未登録メールはその場で候補化）。
+- リスト: 名前/メール/ステータス（verified/pending）/役割（家族・友人等）。
+- セクション/タブ: すべて / お気に入り / 検証済み / 最近。
+- 選択ルール: 既定は verified のみ選択可（pending は灰色・選択不可）。
+- 下部: 選択件数＋決定（0件は無効）。
+- 既定セット: モード別（緊急/帰る）に既定受信者を保存/上書き。
+
+送信ルール
+- 緊急モード: start 時に「選択受信者（verifiedのみ）」へメール送信。
+- 帰るモード: start（任意/設定）＋ stop（到着）で同じ受信者にメール送信。
+- サーバー側で受信者自動補完（contacts全件）などの無差別送信は行わない。
+
+検証（verify）フロー
+- 検証メール: 「KokoSOS からの受信許可の確認」リンクを送付。`WEB_PUBLIC_BASE/verify/:token`。
+- Web側で token を検証し `contacts.verified_at` をセット。完了画面を表示。
+- アプリのピッカーでは verified のみ選択可能（将来オプションで未検証許可も可）。
+
+データモデル（拡張）
+- contacts
+  - 追加: `verified_at timestamptz`（null=未検証）。
+  - 既存: `role text`, `capabilities jsonb`（`notify_emergency`, `notify_going_home`, `email_allowed` など。未設定は true 扱い）。
+- contact_verifications（新規）
+  - `id, contact_id, token_hash, created_at, used_at, expires_at`（token本体は保存しない）。
+- alert_recipients（新規）
+  - `alert_id, contact_id, email, purpose('start'|'arrival'), created_at`（到着通知に同一受信者を再利用）。
+
+API（最小追加案）
+- `GET /contacts?status=verified|pending|all` … ピッカー表示用。
+- `POST /contacts/bulk_upsert` … `{ contacts: [{ email, name?, role? }] }` を pending で作成/更新（オプションで `send_verify=true`）。
+- `POST /contacts/:id/send_verify` … 検証メール再送。
+- `GET /public/verify/:token` … 検証確定（`verified_at` セット）。
+- `POST /alert/start` … `recipients: string[]` を必須に（未検証を含む場合は 400 + `invalid_recipients`）。
+- `POST /alert/:id/stop` … `alert_recipients` を参照し、going_home の到着通知を送信。
+
+優先表示/効率化
+- 並び順: お気に入り > 役割（家族）> 最近使用 > その他。
+- クイックフィルタ: 役割「家族」。
+- 入力補助: 重複排除・簡易バリデーション・ペースト複数追加。
+
+段階導入
+1) contacts.verified_at と検証エンドポイントを実装。
+2) iOS オンボーディング（受信者入力→検証送信→状態表示）。
+3) 受信者ピッカー＋既定セット。`/alert/start` は recipients 必須・未検証は不許可。
+4) `alert_recipients` と到着通知（going_home）を実装。
 - 開発/デプロイ：
   - Workers → wrangler dev/deploy
   - Web → Cloudflare Pages 自動ビルド
