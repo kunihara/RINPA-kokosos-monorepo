@@ -12,11 +12,13 @@ final class MainViewController: UIViewController {
     private let countdownView = UILabel()
     private var countdownTimer: Timer?
     private var updateTimer: Timer?
+    private var reminderTimer: Timer?
     private var remaining = 0
     private let locationService = LocationService()
     private let api = APIClient()
     private var session: AlertSession? { didSet { updateControls() } }
     private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
+    private let reminderIntervalSec: TimeInterval = 30 * 60 // 30分後に到着リマインダー
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -146,6 +148,7 @@ final class MainViewController: UIViewController {
                     if mode == .going_home {
                         // 帰るモードでは送信者が手動停止する運用のため、明示ガイダンスを表示
                         statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。"
+                        scheduleArrivalReminder()
                     }
                     startPeriodicUpdates()
                 } catch {
@@ -204,6 +207,7 @@ final class MainViewController: UIViewController {
 
     private func teardownActiveSession(with message: String) {
         updateTimer?.invalidate(); updateTimer = nil
+        reminderTimer?.invalidate(); reminderTimer = nil
         statusLabel.text = message
         session = nil
     }
@@ -212,5 +216,20 @@ final class MainViewController: UIViewController {
         let active = (session?.status == .active)
         stopButton.isEnabled = active
         revokeButton.isEnabled = active
+    }
+
+    private func scheduleArrivalReminder() {
+        reminderTimer?.invalidate()
+        // 軽量MVP: フォアグラウンド時にのみ30分後のアラートを表示（バックグラウンドでは動作しません）
+        reminderTimer = Timer.scheduledTimer(withTimeInterval: reminderIntervalSec, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                let alert = UIAlertController(title: "到着リマインダー",
+                                              message: "到着したら『停止』をタップしてください。",
+                                              preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+                self.present(alert, animated: true)
+            }
+        }
     }
 }
