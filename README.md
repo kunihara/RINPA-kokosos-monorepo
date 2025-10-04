@@ -79,5 +79,31 @@ Security
 - ビルド構成: Debug/Release × Dev/Stage/Prod（6構成）。`apps/ios/Configs/*.xcconfig`で `API_BASE_URL` を環境ごとに設定。
 - 実行に必要な権限: 位置情報（フォアグラウンド/常時）
 - 起動フロー: アプリ起動 → 3秒カウントダウン → `/alert/start` へ初回位置とバッテリーを送信 → shareToken表示
- - 実機テスト時のAPI接続: デバイスから`localhost`は使えません。アプリ内「設定 > APIベースURL」に `http://<MacのIP>:8787`（ローカル開発）または公開APIのURLを入力してください（未設定時はInfo.plistの`APIBaseURL`/`APIBaseHost`を使用）。
- - xcconfigの`//`コメント問題の回避: `API_BASE_URL`に`https://...`を書くと`//`以降がコメントとして無視される場合があります。Secrets-*.xcconfig では `API_BASE_HOST=kokosos-api-<env>.<your>.workers.dev` とし、`API_BASE_SCHEME=https` を併用してください。コード側で `APIBaseHost` として解決します。
+- 実機テスト時のAPI接続: デバイスから`localhost`は使えません。アプリ内「設定 > APIベースURL」に `http://<MacのIP>:8787`（ローカル開発）または公開APIのURLを入力してください（未設定時はInfo.plistの`APIBaseURL`/`APIBaseHost`を使用）。
+- xcconfigの`//`コメント問題の回避: `API_BASE_URL`に`https://...`を書くと`//`以降がコメントとして無視される場合があります。Secrets-*.xcconfig では `API_BASE_HOST=kokosos-api-<env>.<your>.workers.dev` とし、`API_BASE_SCHEME=https` を併用してください。コード側で `APIBaseHost` として解決します。
+
+**iOS 接続設定/仕様（追記）**
+- 呼び出すAPI（Cloudflare Workers）
+  - 送信者用: `POST /alert/start|:id/update|:id/stop|:id/extend|:id/revoke`
+  - 公開用: `GET /public/alert/:token`, `GET /public/alert/:token/stream`, `POST /public/alert/:token/react`
+  - 認証: `Authorization: Bearer <Supabase access_token>`（`REQUIRE_AUTH_SENDER=true`時必須）
+- iOSの接続先の決定優先度（APIClient）
+  1) アプリ内「設定 > APIベースURL」の上書き値（http/https かつ host 必須のときのみ有効）
+  2) Info.plistの`APIBaseURL`（有効URLのとき）
+  3) Info.plistの`APIBaseHost` + `APIBaseScheme`（有効hostのとき）
+  4) フォールバック: `http://localhost:8787`（Dev向け）
+- Info/xcconfigキー（Stage/Prodはhttps推奨）
+  - Info.plist: `APIBaseURL`, `APIBaseHost`, `APIBaseScheme`
+  - xcconfig: `API_BASE_URL`, `API_BASE_HOST`, `API_BASE_SCHEME`（Secrets-*.xcconfigで上書き可）
+- 既知の注意点と対処
+  - 実機は`localhost`不可。公開ドメインまたはLAN IPを指定。
+  - `API_BASE_URL`に`https://...`を直書きすると`//`以降がコメント扱いになるケースあり → `API_BASE_HOST`/`API_BASE_SCHEME`を使用。
+  - エンドポイントURLはパスセグメントで結合（先頭`/`は付けない）。`/alert/start`を`appendingPathComponent("/alert/start")`に渡すと`%2Falert%2Fstart`になり404になるため修正済み。
+- エラーハンドリング（アプリ表示）
+  - ホスト解決失敗: 「設定>APIベースURL」を促すメッセージ（現在のURLを併記）
+  - サーバー非2xx: `サーバーエラー(ステータス)` とレスポンスJSONの`error/detail`を整形表示（切り分け容易）
+- トラブルシュート
+  - APIヘルス: `GET https://<APIホスト>/_health`（`REQUIRE_AUTH_SENDER`, `SUPABASE_URL_preview` 等を確認）
+  - 401 invalid_token: Workersの`SUPABASE_URL`がiOSのプロジェクトと不一致/`REQUIRE_AUTH_SENDER`設定の確認
+  - 500 server_misconfig: Workersの`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`未設定
+  - 400 invalid_location: `lat/lng`未送信（通常は位置取得完了後に送信）

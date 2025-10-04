@@ -85,9 +85,44 @@ SSEイベント（例）
   - 最終更新時刻・残り時間（1秒カウントダウン）・バッテリー
   - 延長トースト（例: 「+X分延長されました」）
   - 返信トースト（例: 「返信: OK」）
-  - CTAボタン：電話・プリセット返信（複数プリセット）・110へ電話（権限に応じて制御）
+- CTAボタン：電話・プリセット返信（複数プリセット）・110へ電話（権限に応じて制御）
 
 ---
+
+## iOS クライアント接続仕様（追記）
+
+- 呼び出すAPI（Cloudflare Workers）
+  - 送信者用: `POST /alert/start` / `POST /alert/:id/update` / `POST /alert/:id/stop` / `POST /alert/:id/extend` / `POST /alert/:id/revoke`
+  - 公開用（参考）: `GET /public/alert/:token` / `GET /public/alert/:token/stream` / `POST /public/alert/:token/react`
+  - 認証: `Authorization: Bearer <Supabase access_token>`（`REQUIRE_AUTH_SENDER=true` 時は必須）
+
+- 接続先の決定順序（iOSアプリ内の実装）
+  1) アプリ内「設定 > APIベースURL」の上書き値（http/https かつ host 必須のときのみ採用）
+  2) Info.plist の `APIBaseURL`（有効なURLのとき）
+  3) Info.plist の `APIBaseHost` + `APIBaseScheme`（ホスト/ポート指定からURLを組み立て）
+  4) フォールバック: `http://localhost:8787`（Dev想定）
+
+- xcconfig/Info のキー（Secrets-*.xcconfig で上書き可）
+  - Info.plist: `APIBaseURL`, `APIBaseHost`, `APIBaseScheme`
+  - xcconfig: `API_BASE_URL`, `API_BASE_HOST`, `API_BASE_SCHEME`
+  - 備考: `API_BASE_URL` に `https://...` を直書きすると `//` 以降がコメント扱いになるケースがあるため、ステージ/本番では `API_BASE_HOST=kokosos-api-<env>.<your>.workers.dev` と `API_BASE_SCHEME=https` を推奨。
+
+- 実機での注意
+  - 実機は `localhost` に到達できないため、公開ドメイン（例: workers.dev のサブドメインやカスタムドメイン）またはLAN IPを指定する。
+  - DevはATS緩和（http可）。Stage/Prodはhttps必須。
+
+- エラーハンドリング（アプリ表示）
+  - ホスト解決失敗（cannotFindHost）: 「設定 > APIベースURL」で到達可能なURLを促すメッセージを表示。
+  - サーバー非2xx（-1011 等）: `サーバーエラー(ステータス)` とレスポンスJSONの `error/detail` を整形して表示（401/400/500 の切り分けが容易）。
+
+- トラブルシュート
+  - ヘルスチェック: `GET https://<APIホスト>/_health` で `REQUIRE_AUTH_SENDER` / `SUPABASE_URL_preview` などを確認。
+  - 401 invalid_token: Workers の `SUPABASE_URL` が iOSのSupabaseプロジェクトと不一致、またはトークン未送付。
+  - 500 server_misconfig: Workers の `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 未設定。
+  - 400 invalid_location: `lat/lng` 未送信。
+
+- 実装メモ（URL組み立て）
+  - エンドポイントはパスセグメントで結合する（例: `("alert", "start")`）。先頭 `/` を含む文字列を `appendingPathComponent("/alert/start")` に渡すと `%2Falert%2Fstart` となり 404 になるため注意。
 
 ## インフラと運用
 - 開発/デプロイ：
