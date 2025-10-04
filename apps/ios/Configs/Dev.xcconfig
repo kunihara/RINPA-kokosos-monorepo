@@ -1,2 +1,4 @@
 #include "Base.xcconfig"
 API_BASE_URL = http://localhost:8787
+# Secrets (local, DO NOT COMMIT): create 'Secrets-Dev.xcconfig' and define SUPABASE_URL/SUPABASE_ANON_KEY/OAUTH_REDIRECT_SCHEME
+#include "Secrets-Dev.xcconfig"
