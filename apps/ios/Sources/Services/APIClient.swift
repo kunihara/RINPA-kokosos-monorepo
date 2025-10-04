@@ -56,6 +56,11 @@ struct APIClient {
         self.baseURL = URL(string: "http://localhost:8787")!
     }
 
+    // Build endpoint URL by joining path segments safely (no leading slashes)
+    private func endpoint(_ segments: String...) -> URL {
+        return segments.reduce(baseURL) { url, seg in url.appendingPathComponent(seg) }
+    }
+
     // 簡易的なトークン保存（将来Supabase Authのaccess_tokenを格納）
     func setAuthToken(_ token: String?) {
         if let t = token, !t.isEmpty {
@@ -77,7 +82,7 @@ struct APIClient {
     }
 
     func startAlert(lat: Double, lng: Double, accuracy: Double?, battery: Int?, type: String = "emergency", maxDurationSec: Int = 3600) async throws -> StartAlertResponse {
-        var req = URLRequest(url: baseURL.appendingPathComponent("/alert/start"))
+        var req = URLRequest(url: endpoint("alert", "start"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyAuth(&req)
@@ -99,7 +104,7 @@ struct APIClient {
     }
 
     func updateAlert(id: String, lat: Double, lng: Double, accuracy: Double?, battery: Int?) async throws {
-        var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/update"))
+        var req = URLRequest(url: endpoint("alert", id, "update"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyAuth(&req)
@@ -117,7 +122,7 @@ struct APIClient {
     }
 
     func stopAlert(id: String) async throws {
-        var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/stop"))
+        var req = URLRequest(url: endpoint("alert", id, "stop"))
         req.httpMethod = "POST"
         applyAuth(&req)
         let (data, resp) = try await URLSession.shared.data(for: req)
@@ -127,7 +132,7 @@ struct APIClient {
     }
 
     func revokeAlert(id: String) async throws {
-        var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/revoke"))
+        var req = URLRequest(url: endpoint("alert", id, "revoke"))
         req.httpMethod = "POST"
         applyAuth(&req)
         let (_, resp) = try await URLSession.shared.data(for: req)
@@ -137,7 +142,7 @@ struct APIClient {
     }
 
     func extendAlert(id: String, extendMinutes: Int) async throws {
-        var req = URLRequest(url: baseURL.appendingPathComponent("/alert/\(id)/extend"))
+        var req = URLRequest(url: endpoint("alert", id, "extend"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["extend_sec": extendMinutes * 60]
