@@ -5,9 +5,10 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private let table = UITableView(frame: .zero, style: .insetGrouped)
     private let searchBar = UISearchBar()
     private let client = ContactsClient()
-    private var all: [Contact] = []
-    private var filtered: [Contact] = []
+    private var verified: [Contact] = []
+    private var pending: [Contact] = []
     private var selectedEmails = Set<String>()
+    private var emailInputs: [String] = [""]
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,6 +25,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(searchBar)
         view.addSubview(table)
+        table.register(AddEmailCell.self, forCellReuseIdentifier: "AddEmailCell")
         NSLayoutConstraint.activate([
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -37,22 +39,40 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     }
 
     private func norm(_ s: String) -> String { s.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
+    private func isValidEmail(_ s: String) -> Bool { let p = ".+@.+\\..+"; return s.range(of: p, options: .regularExpression) != nil }
 
     private func applyFilter(_ q: String?) {
         let query = (q ?? "").lowercased()
-        if query.isEmpty { filtered = all }
-        else {
-            filtered = all.filter { c in
-                let nm = (c.name ?? "").lowercased()
-                let em = c.email.lowercased()
-                return nm.contains(query) || em.contains(query)
-            }
+        if query.isEmpty {
+            // no-op; keep original ordering
+        } else {
+            verified = verified.filter { ( ($0.name ?? "").lowercased().contains(query) ) || $0.email.lowercased().contains(query) }
+            pending = pending.filter { ( ($0.name ?? "").lowercased().contains(query) ) || $0.email.lowercased().contains(query) }
         }
         table.reloadData()
     }
 
     @objc private func tapDone() {
-        onDone?(Array(selectedEmails))
+        // Process direct inputs: send verify for valid emails (non-empty)
+        let emails = emailInputs.map { norm($0) }.filter { !$0.isEmpty && isValidEmail($0) }
+        if !emails.isEmpty {
+            Task { @MainActor in
+                do {
+                    _ = try await client.bulkUpsert(emails: emails, sendVerify: true)
+                    let a = UIAlertController(title: "送信しました", message: "入力したメールに確認メールを送信しました。検証完了後に選択できるようになります。", preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
+                        self?.onDone?(Array(self?.selectedEmails ?? []))
+                    })
+                    present(a, animated: true)
+                } catch {
+                    let a = UIAlertController(title: "送信失敗", message: error.localizedDescription, preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "OK", style: .default))
+                    present(a, animated: true)
+                }
+            }
+        } else {
+            onDone?(Array(selectedEmails))
+        }
     }
 
     @objc private func tapClose() { dismiss(animated: true) }
@@ -66,9 +86,10 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
 
     private func load() async {
         do {
-            let items = try await client.list(status: "verified")
+            let items = try await client.list(status: "all")
             await MainActor.run {
-                self.all = items
+                self.verified = items.filter { $0.verified_at != nil }
+                self.pending = items.filter { $0.verified_at == nil }
                 self.applyFilter(self.searchBar.text)
             }
         } catch {
@@ -81,33 +102,79 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     }
 
     // MARK: Table
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { filtered.count }
+    func numberOfSections(in tableView: UITableView) -> Int { 3 }
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        switch section {
+        case 0: return verified.count
+        case 1: return pending.count
+        default: return emailInputs.count
+        }
+    }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
-        let c = filtered[indexPath.row]
-        cell.textLabel?.text = c.name?.isEmpty == false ? c.name : c.email
-        var detail = c.email
-        if c.verified_at == nil { detail += " ・未検証" }
-        cell.detailTextLabel?.text = detail
-        cell.selectionStyle = .none
-        let selected = selectedEmails.contains(norm(c.email))
-        cell.accessoryType = selected ? .checkmark : .none
-        cell.isUserInteractionEnabled = isVerified(c)
-        cell.textLabel?.textColor = isVerified(c) ? .label : .secondaryLabel
-        return cell
+        if indexPath.section <= 1 {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cell") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
+            let c = (indexPath.section == 0 ? verified[indexPath.row] : pending[indexPath.row])
+            cell.textLabel?.text = c.name?.isEmpty == false ? c.name : c.email
+            var detail = c.email
+            if c.verified_at == nil { detail += " ・未検証" } else { detail += " ・検証済み" }
+            cell.detailTextLabel?.text = detail
+            cell.selectionStyle = .none
+            let selected = selectedEmails.contains(norm(c.email))
+            cell.accessoryType = selected ? .checkmark : .none
+            cell.isUserInteractionEnabled = (c.verified_at != nil)
+            cell.textLabel?.textColor = (c.verified_at != nil) ? .label : .secondaryLabel
+            return cell
+        } else {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "AddEmailCell", for: indexPath) as! AddEmailCell
+            cell.textField.text = emailInputs[indexPath.row]
+            cell.onChange = { [weak self] text in self?.emailInputs[indexPath.row] = text }
+            cell.onRemove = { [weak self] in
+                guard let self else { return }
+                if self.emailInputs.count > 1 { self.emailInputs.remove(at: indexPath.row); self.table.reloadSections(IndexSet(integer: 2), with: .automatic) }
+            }
+            return cell
+        }
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let c = filtered[indexPath.row]
-        guard isVerified(c) else { return }
+        guard indexPath.section == 0 else { return }
+        let c = verified[indexPath.row]
         let email = norm(c.email)
         let nowSelected = !selectedEmails.contains(email)
         setSelected(email: email, selected: nowSelected)
         table.reloadRows(at: [indexPath], with: .automatic)
     }
 
+    // MARK: Headers
+    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        switch section {
+        case 0: return "連絡先（検証済み・選択可）"
+        case 1: return pending.isEmpty ? nil : "連絡先（未検証・選択不可）"
+        default: return "メールを直接入力（1行=1件、＋で追加）"
+        }
+    }
+
+    // MARK: Footer for add button in inputs
+    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        guard section == 2 else { return nil }
+        let v = UIView()
+        let btn = UIButton(type: .system)
+        btn.setTitle("＋ フィールドを追加", for: .normal)
+        btn.addAction(UIAction(handler: { [weak self] _ in self?.emailInputs.append(""); self?.table.reloadSections(IndexSet(integer: 2), with: .automatic) }), for: .touchUpInside)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        v.addSubview(btn)
+        NSLayoutConstraint.activate([
+            btn.centerXAnchor.constraint(equalTo: v.centerXAnchor),
+            btn.topAnchor.constraint(equalTo: v.topAnchor, constant: 8),
+            btn.bottomAnchor.constraint(equalTo: v.bottomAnchor, constant: -8)
+        ])
+        return v
+    }
+
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { section == 2 ? 48 : 0 }
+
     // MARK: Search
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) { applyFilter(searchText) }
 }
-
