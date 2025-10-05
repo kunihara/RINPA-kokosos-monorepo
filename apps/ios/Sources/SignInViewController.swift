@@ -5,6 +5,7 @@ final class SignInViewController: UIViewController {
     private let emailField = UITextField()
     private let passwordField = UITextField()
     private let signInButton = UIButton(type: .system)
+    private let signUpLinkButton = UIButton(type: .system)
     // サインアップは別画面に分離
     private let resetButton = UIButton(type: .system)
     private let resendConfirmButton = UIButton(type: .system)
@@ -65,8 +66,11 @@ final class SignInViewController: UIViewController {
         [appleBtn, googleBtn, fbBtn].forEach { oauthStack.addArrangedSubview($0) }
 
         [titleLabel, emailField, passwordField, signInButton, resetButton, resendConfirmButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
-        // 右上に「新規登録」導線（別画面）
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "新規登録", style: .plain, target: self, action: #selector(openSignUp))
+        // 画面下に「新規登録の方はこちら」導線
+        signUpLinkButton.setTitle("新規登録の方はこちら", for: .normal)
+        signUpLinkButton.titleLabel?.font = .systemFont(ofSize: 14)
+        signUpLinkButton.addTarget(self, action: #selector(openSignUp), for: .touchUpInside)
+        stack.addArrangedSubview(signUpLinkButton)
         view.addSubview(stack)
 
         NSLayoutConstraint.activate([

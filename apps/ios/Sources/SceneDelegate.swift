@@ -11,7 +11,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     if api.currentAuthToken() != nil {
       rootVC = MainViewController()
     } else {
-      rootVC = AuthEntryViewController()
+      // 初回はサインイン画面を表示
+      rootVC = SignInViewController()
     }
     let root = UINavigationController(rootViewController: rootVC)
     window.rootViewController = root
