@@ -31,6 +31,38 @@ struct AuthClient {
         self.config = Config(supabaseURL: finalBase, anonKey: anon)
     }
 
+    // Refresh access token using stored refresh_token. Returns true if refreshed.
+    static func performRefreshAndStore() async -> Bool {
+        let api = APIClient()
+        guard let refresh = api.currentRefreshToken() else { return false }
+        guard let client = AuthClient() else { return false }
+        do {
+            var comps = URLComponents()
+            comps.scheme = client.config.supabaseURL.scheme
+            comps.host = client.config.supabaseURL.host
+            comps.port = client.config.supabaseURL.port
+            comps.path = "/auth/v1/token"
+            comps.queryItems = [URLQueryItem(name: "grant_type", value: "refresh_token")]
+            var req = URLRequest(url: comps.url!)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue(client.config.anonKey, forHTTPHeaderField: "apikey")
+            req.setValue("Bearer \(client.config.anonKey)", forHTTPHeaderField: "Authorization")
+            let body: [String: Any] = ["refresh_token": refresh]
+            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return false }
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let newAccess = json?["access_token"] as? String else { return false }
+            let newRefresh = json?["refresh_token"] as? String
+            api.setAuthToken(newAccess)
+            if let rt = newRefresh { api.setRefreshToken(rt) }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func signIn(email: String, password: String) async throws -> String { // returns access_token
         var comps = URLComponents()
         comps.scheme = config.supabaseURL.scheme
@@ -55,6 +87,10 @@ struct AuthClient {
         guard let token = json?["access_token"] as? String else {
             throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "トークンを取得できませんでした"])
         }
+        let refresh = json?["refresh_token"] as? String
+        let api = APIClient()
+        api.setAuthToken(token)
+        api.setRefreshToken(refresh)
         return token
     }
 
@@ -84,8 +120,13 @@ struct AuthClient {
             throw NSError(domain: "auth", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "サインアップに失敗しました (\(http.statusCode)) \(msg)"])
         }
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        // メール確認がOFFな場合はaccess_tokenが返る。ONならnil。
-        return json?["access_token"] as? String
+        if let token = json?["access_token"] as? String {
+            let refresh = json?["refresh_token"] as? String
+            let api = APIClient(); api.setAuthToken(token); api.setRefreshToken(refresh)
+            return token
+        }
+        // メール確認がONな場合はnilが返る
+        return nil
     }
 
     /// Send password reset email
@@ -155,8 +196,9 @@ struct AuthClient {
                     return
                 }
                 // Parse fragment for access_token
-                if let token = Self.extractAccessToken(from: url) {
-                    cont.resume(returning: token)
+                if let (access, refresh) = Self.extractTokens(from: url) {
+                    let api = APIClient(); api.setAuthToken(access); api.setRefreshToken(refresh)
+                    cont.resume(returning: access)
                 } else {
                     cont.resume(throwing: NSError(domain: "auth", code: -3, userInfo: [NSLocalizedDescriptionKey: "トークンを取得できませんでした"]))
                 }
@@ -176,7 +218,7 @@ struct AuthClient {
         }
     }
 
-    private static func extractAccessToken(from url: URL) -> String? {
+    private static func extractTokens(from url: URL) -> (String, String?)? {
         // Supabase OAuth callback places tokens in URL fragment: #access_token=...&...
         guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment else { return nil }
         let items = fragment.split(separator: "&").map { String($0) }
@@ -189,7 +231,8 @@ struct AuthClient {
                 dict[key] = val
             }
         }
-        return dict["access_token"]
+        if let at = dict["access_token"] { return (at, dict["refresh_token"]) }
+        return nil
     }
 }
 

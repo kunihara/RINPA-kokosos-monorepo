@@ -3,6 +3,7 @@ import Foundation
 struct APIClient {
     let baseURL: URL
     static let authTokenUserDefaultsKey = "APIAuthToken"
+    static let refreshTokenUserDefaultsKey = "APIRefreshToken"
     static let baseURLOverrideKey = "APIBaseURLOverride"
 
     init() {
@@ -70,6 +71,14 @@ struct APIClient {
         }
     }
 
+    func setRefreshToken(_ token: String?) {
+        if let t = token, !t.isEmpty {
+            UserDefaults.standard.set(t, forKey: APIClient.refreshTokenUserDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: APIClient.refreshTokenUserDefaultsKey)
+        }
+    }
+
     private func applyAuth(_ req: inout URLRequest) {
         if let t = UserDefaults.standard.string(forKey: APIClient.authTokenUserDefaultsKey), !t.isEmpty {
             req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
@@ -81,11 +90,26 @@ struct APIClient {
         return (t?.isEmpty == false) ? t : nil
     }
 
+    func currentRefreshToken() -> String? {
+        let t = UserDefaults.standard.string(forKey: APIClient.refreshTokenUserDefaultsKey)
+        return (t?.isEmpty == false) ? t : nil
+    }
+
+    // Execute a request and if 401 occurs, attempt a one-time refresh and retry
+    private func execute(_ build: () -> URLRequest) async throws -> (Data, HTTPURLResponse) {
+        var req = build()
+        var (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode == 401, currentRefreshToken() != nil {
+            if await AuthClient.performRefreshAndStore() {
+                req = build()
+                (data, resp) = try await URLSession.shared.data(for: req)
+            }
+        }
+        guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return (data, http)
+    }
+
     func startAlert(lat: Double, lng: Double, accuracy: Double?, battery: Int?, type: String = "emergency", maxDurationSec: Int = 3600, recipients: [String]) async throws -> StartAlertResponse {
-        var req = URLRequest(url: endpoint("alert", "start"))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        applyAuth(&req)
         let body: [String: Any?] = [
             "lat": lat,
             "lng": lng,
@@ -95,61 +119,75 @@ struct APIClient {
             "max_duration_sec": maxDurationSec,
             "recipients": recipients
         ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
-
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        let (data, http) = try await execute {
+            var req = URLRequest(url: endpoint("alert", "start"))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            var r = req; applyAuth(&r)
+            r.httpBody = try? JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
+            return r
+        }
+        if !(200..<300).contains(http.statusCode) {
             throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
         return try JSONDecoder().decode(StartAlertResponse.self, from: data)
     }
 
     func updateAlert(id: String, lat: Double, lng: Double, accuracy: Double?, battery: Int?) async throws {
-        var req = URLRequest(url: endpoint("alert", id, "update"))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        applyAuth(&req)
         let body: [String: Any?] = [
             "lat": lat,
             "lng": lng,
             "accuracy_m": accuracy,
             "battery_pct": battery,
         ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        let (data, http) = try await execute {
+            var req = URLRequest(url: endpoint("alert", id, "update"))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            var r = req; applyAuth(&r)
+            r.httpBody = try? JSONSerialization.data(withJSONObject: body.compactMapValues { $0 }, options: [])
+            return r
+        }
+        if !(200..<300).contains(http.statusCode) {
             throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
 
     func stopAlert(id: String) async throws {
-        var req = URLRequest(url: endpoint("alert", id, "stop"))
-        req.httpMethod = "POST"
-        applyAuth(&req)
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        let (data, http) = try await execute {
+            var req = URLRequest(url: endpoint("alert", id, "stop"))
+            req.httpMethod = "POST"
+            var r = req; applyAuth(&r)
+            return r
+        }
+        if !(200..<300).contains(http.statusCode) {
             throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
 
     func revokeAlert(id: String) async throws {
-        var req = URLRequest(url: endpoint("alert", id, "revoke"))
-        req.httpMethod = "POST"
-        applyAuth(&req)
-        let (_, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
+        let (data, http) = try await execute {
+            var req = URLRequest(url: endpoint("alert", id, "revoke"))
+            req.httpMethod = "POST"
+            var r = req; applyAuth(&r)
+            return r
+        }
+        if !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
 
     func extendAlert(id: String, extendMinutes: Int) async throws {
-        var req = URLRequest(url: endpoint("alert", id, "extend"))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["extend_sec": extendMinutes * 60]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        let (data, http) = try await execute {
+            var req = URLRequest(url: endpoint("alert", id, "extend"))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            var r = req; applyAuth(&r)
+            r.httpBody = try? JSONSerialization.data(withJSONObject: body, options: [])
+            return r
+        }
+        if !(200..<300).contains(http.statusCode) {
             throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
