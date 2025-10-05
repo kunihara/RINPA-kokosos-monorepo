@@ -348,8 +348,11 @@ async function handleVerifyContact({ req, env }: Parameters<RouteHandler>[0]): P
 // ---------- Account deletion (caller = authenticated sender)
 async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
   // 強制的に本人認証を要求（REQUIRE_AUTH_SENDER に依存しない）
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
   const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: 401 })
+  if (!auth.ok) return json({ error: 'unauthorized', detail: auth.error }, { status: auth.status })
+  if (!auth.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
   const userId = auth.userId!
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
