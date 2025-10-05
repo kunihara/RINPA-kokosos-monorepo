@@ -182,8 +182,9 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   if (!initial.recipients || initial.recipients.length === 0) return json({ error: 'no_recipients' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  // Create alert row
+  // Ensure user row exists and get id
   const userId = user.userId ?? (await ensureDefaultUserId(sb, env))
+  await ensureUserExists(sb, userId)
   // Sanitize max duration (server-side clamp). Allow 5 minutes to 6 hours.
   const clampedMax = Math.min(6 * 3600, Math.max(5 * 60, initial.max_duration_sec))
   const alertRes = await sb.insert('alerts', {
@@ -283,6 +284,7 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
   const sendVerify = Boolean(body.send_verify)
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  await ensureUserExists(sb, auth.userId!)
   const out: any[] = []
   for (const c of body.contacts as Array<{ email: string; name?: string }>) {
     const email = String((c.email || '').toLowerCase().trim())
@@ -930,4 +932,13 @@ async function ensureDefaultUserId(sb: ReturnType<typeof supabase>, env: Env): P
   const re = await sb.select('users', 'id', `email=eq.${encodeURIComponent(email)}`, 1)
   if (re.ok && re.data.length > 0) return re.data[0].id as string
   throw new Error('failed_to_ensure_default_user')
+}
+
+// Ensure a users row exists with given id (Supabase Auth user id)
+async function ensureUserExists(sb: ReturnType<typeof supabase>, userId: string): Promise<void> {
+  // Try select by id
+  const found = await sb.select('users', 'id', `id=eq.${encodeURIComponent(userId)}`, 1)
+  if (found.ok && found.data.length > 0) return
+  // Insert with explicit id; emailは不明な場合はnull
+  await sb.insert('users', { id: userId as any }).catch(() => undefined)
 }
