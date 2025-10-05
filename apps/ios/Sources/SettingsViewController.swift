@@ -179,8 +179,15 @@ final class SettingsViewController: UIViewController {
         let alert = UIAlertController(title: "アカウント削除", message: "この操作は元に戻せません。全てのデータが削除され、ログアウトします。実行しますか？", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "削除", style: .destructive, handler: { [weak self] _ in
+            guard let self = self else { return }
+            // 要トークン（サインイン）チェック
+            if APIClient().currentAuthToken() == nil {
+                let a = UIAlertController(title: "サインインが必要です", message: "アカウント削除にはサインインが必要です。サインインし直してから実行してください。", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                self.present(a, animated: true)
+                return
+            }
             Task { @MainActor in
-                guard let self else { return }
                 self.deleteAccountButton.isEnabled = false
                 defer { self.deleteAccountButton.isEnabled = true }
                 do {
@@ -189,7 +196,13 @@ final class SettingsViewController: UIViewController {
                     let signin = SignInViewController()
                     self.navigationController?.setViewControllers([signin], animated: true)
                 } catch {
-                    let a = UIAlertController(title: "削除に失敗", message: error.localizedDescription, preferredStyle: .alert)
+                    let msg: String
+                    if let apiErr = error as? APIError, case let .http(status, _) = apiErr, status == 401 {
+                        msg = "サインインが期限切れ/不正です。サインインし直してから実行してください。"
+                    } else {
+                        msg = error.localizedDescription
+                    }
+                    let a = UIAlertController(title: "削除に失敗", message: msg, preferredStyle: .alert)
                     a.addAction(UIAlertAction(title: "OK", style: .default))
                     self.present(a, animated: true)
                 }
