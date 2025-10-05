@@ -38,17 +38,32 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           OAUTH_REDIRECT_SCHEME: ${{ secrets.OAUTH_REDIRECT_SCHEME || 'kokosos' }}
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
         run: |
           set -euo pipefail
           CFG=${{ matrix.cfg_suffix }}
           FILE="Configs/Secrets-${CFG}.xcconfig"
           : "${SUPABASE_URL:?Missing SUPABASE_URL secret for environment ${{ matrix.env_name }}}"
           : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY secret for environment ${{ matrix.env_name }}}"
+          : "${APP_BUNDLE_ID:?Missing APP_BUNDLE_ID secret for environment ${{ matrix.env_name }}}"
           echo "Writing $FILE"
+          # Derive SUPABASE_HOST from SUPABASE_URL
+          SUPABASE_HOST=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^/]+)/?.*#\1#')
+          # Derive EMAIL_REDIRECT_* from WEB_PUBLIC_BASE when provided
+          EMAIL_REDIRECT_BASE=${WEB_PUBLIC_BASE:-}
+          EMAIL_REDIRECT_HOST=""
+          if [ -n "$EMAIL_REDIRECT_BASE" ]; then
+            EMAIL_REDIRECT_HOST=$(printf '%s' "$EMAIL_REDIRECT_BASE" | sed -E 's#^https?://([^/]+)/?.*#\1#')
+          fi
           {
+            printf 'APP_BUNDLE_ID = %s\n' "$APP_BUNDLE_ID"
             printf 'SUPABASE_URL = %s\n' "$SUPABASE_URL"
+            printf 'SUPABASE_HOST = %s\n' "$SUPABASE_HOST"
             printf 'SUPABASE_ANON_KEY = %s\n' "$SUPABASE_ANON_KEY"
             printf 'OAUTH_REDIRECT_SCHEME = %s\n' "$OAUTH_REDIRECT_SCHEME"
+            if [ -n "$EMAIL_REDIRECT_BASE" ]; then printf 'EMAIL_REDIRECT_BASE = %s\n' "$EMAIL_REDIRECT_BASE"; fi
+            if [ -n "$EMAIL_REDIRECT_HOST" ]; then printf 'EMAIL_REDIRECT_HOST = %s\n' "$EMAIL_REDIRECT_HOST"; fi
           } > "$FILE"
 
       - name: Generate Xcode project
