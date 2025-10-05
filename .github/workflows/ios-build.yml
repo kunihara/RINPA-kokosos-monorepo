@@ -96,6 +96,18 @@ jobs:
             -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult \
             build | tee build/xcodebuild-${{ matrix.cfg_suffix }}.log | xcpretty || exit ${PIPESTATUS[0]}
 
+      - name: Print first errors from xcodebuild log (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::First 20 error lines"
+          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture)" build/xcodebuild-${{ matrix.cfg_suffix }}.log | head -n 20 || true
+          echo "::endgroup::"
+          echo "::group::Last 200 lines"
+          tail -n 200 build/xcodebuild-${{ matrix.cfg_suffix }}.log || true
+          echo "::endgroup::"
+
       - name: Show Build Settings (Debug-${{ matrix.cfg_suffix }})
         if: always()
         working-directory: apps/ios
