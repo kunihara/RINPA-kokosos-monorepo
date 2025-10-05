@@ -354,7 +354,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         let v = UIView()
         let btn = UIButton(type: .system)
         btn.setTitle("＋ フィールドを追加", for: .normal)
-        btn.addAction(UIAction(handler: { [weak self] _ in self?.emailInputs.append(""); self?.table.reloadSections(IndexSet(integer: 3), with: .automatic) }), for: .touchUpInside)
+        btn.addAction(UIAction(handler: { [weak self] _ in self?.emailInputs.append(""); self?.table.reloadData() }), for: .touchUpInside)
         btn.translatesAutoresizingMaskIntoConstraints = false
         v.addSubview(btn)
         NSLayoutConstraint.activate([
@@ -440,7 +440,7 @@ extension ContactsPickerViewController: CNContactPickerDelegate {
                 added += 1
             }
         }
-        table.reloadSections(IndexSet(integer: 3), with: .automatic)
+        table.reloadData()
         if added > 0 {
             let a = UIAlertController(title: "追加しました", message: "\(added)件のメールを入力欄に追加しました。確認後に『決定』で送信します。", preferredStyle: .alert)
             a.addAction(UIAlertAction(title: "OK", style: .default))
