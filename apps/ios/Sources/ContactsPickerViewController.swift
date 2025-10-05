@@ -284,7 +284,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             let email = filteredDeviceEmails[indexPath.row].email
             handlePickedEmails([email])
         } else if indexPath.section == 1 {
-            let c = verified[indexPath.row]
+            let c = verifiedDisplay[indexPath.row]
             let email = norm(c.email)
             let nowSelected = !selectedEmails.contains(email)
             setSelected(email: email, selected: nowSelected)
@@ -299,7 +299,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         switch section {
         case 0: return "端末の連絡先（検索可・タップで下に追加）"
         case 1: return "連絡先（検証済み・選択可）"
-        default: return pending.isEmpty ? nil : "連絡先（未検証・選択不可）"
+        default: return pendingDisplay.isEmpty ? nil : "連絡先（未検証・選択不可）"
         }
     }
 
