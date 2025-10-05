@@ -12,6 +12,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private var selectedEmails = Set<String>()
     private var emailInputs: [String] = [""]
     private let contactStore = CNContactStore()
+    private let confirmButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -30,8 +31,18 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         view.addSubview(table)
         table.register(AddEmailCell.self, forCellReuseIdentifier: "AddEmailCell")
         let pickItem = UIBarButtonItem(title: "連絡先から選ぶ", style: .plain, target: self, action: #selector(tapPickDeviceContacts))
-        let doneItem = UIBarButtonItem(title: "決定", style: .done, target: self, action: #selector(tapDone))
-        navigationItem.rightBarButtonItems = [doneItem, pickItem]
+        navigationItem.rightBarButtonItem = pickItem
+
+        // Bottom confirm button
+        confirmButton.setTitle("決定して送信", for: .normal)
+        confirmButton.titleLabel?.font = .boldSystemFont(ofSize: 16)
+        confirmButton.backgroundColor = .systemBlue
+        confirmButton.setTitleColor(.white, for: .normal)
+        confirmButton.layer.cornerRadius = 10
+        confirmButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
+        confirmButton.addTarget(self, action: #selector(tapDone), for: .touchUpInside)
+        confirmButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(confirmButton)
         NSLayoutConstraint.activate([
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -39,7 +50,10 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             table.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
             table.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             table.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            table.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            table.bottomAnchor.constraint(equalTo: confirmButton.topAnchor, constant: -8),
+            confirmButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            confirmButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            confirmButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
         Task { await load() }
     }
@@ -61,23 +75,20 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     @objc private func tapDone() {
         // Process direct inputs: send verify for valid emails (non-empty)
         let emails = emailInputs.map { norm($0) }.filter { !$0.isEmpty && isValidEmail($0) }
-        if !emails.isEmpty {
-            Task { @MainActor in
+        Task { @MainActor in
+            if !emails.isEmpty {
                 do {
                     _ = try await client.bulkUpsert(emails: emails, sendVerify: true)
-                    let a = UIAlertController(title: "送信しました", message: "入力したメールに確認メールを送信しました。検証完了後に選択できるようになります。", preferredStyle: .alert)
-                    a.addAction(UIAlertAction(title: "OK", style: .default) { [weak self] _ in
-                        self?.onDone?(Array(self?.selectedEmails ?? []))
-                    })
-                    present(a, animated: true)
                 } catch {
                     let a = UIAlertController(title: "送信失敗", message: error.localizedDescription, preferredStyle: .alert)
                     a.addAction(UIAlertAction(title: "OK", style: .default))
                     present(a, animated: true)
+                    return
                 }
             }
-        } else {
-            onDone?(Array(selectedEmails))
+            // Close modal and return selected (verified) emails
+            self.onDone?(Array(self.selectedEmails))
+            self.dismiss(animated: true)
         }
     }
 
