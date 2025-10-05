@@ -181,8 +181,8 @@ final class SettingsViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "削除", style: .destructive, handler: { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                deleteAccountButton.isEnabled = false
-                defer { deleteAccountButton.isEnabled = true }
+                self.deleteAccountButton.isEnabled = false
+                defer { self.deleteAccountButton.isEnabled = true }
                 do {
                     try await APIClient().deleteAccount()
                     APIClient().setAuthToken(nil)
