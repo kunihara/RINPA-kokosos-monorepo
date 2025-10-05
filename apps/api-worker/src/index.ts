@@ -350,10 +350,23 @@ async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): P
   // 強制的に本人認証を要求（REQUIRE_AUTH_SENDER に依存しない）
   const authz = req.headers.get('authorization') || req.headers.get('Authorization')
   if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  let userId: string | null = null
+  // 1) まず既存のJWT検証（JWKS）を試す
   const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok) return json({ error: 'unauthorized', detail: auth.error }, { status: auth.status })
-  if (!auth.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
-  const userId = auth.userId!
+  if (auth.ok && auth.userId) {
+    userId = auth.userId
+  } else {
+    // 2) フォールバック: Supabase Authの /auth/v1/user を呼んで検証
+    try {
+      const token = (authz.match(/^Bearer\s+(.+)$/i) || [])[1]
+      if (!token) return json({ error: 'unauthorized', detail: 'invalid_authorization_header' }, { status: 401 })
+      const u = await fetchSupabaseUser(env, token)
+      if (!u.ok || !u.userId) return json({ error: 'unauthorized', detail: 'invalid_token_via_supabase' }, { status: 401 })
+      userId = u.userId
+    } catch {
+      return json({ error: 'unauthorized', detail: 'verify_failed' }, { status: 401 })
+    }
+  }
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
 
@@ -384,6 +397,21 @@ async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): P
   }
 
   return json({ ok: true })
+}
+
+async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: boolean; userId?: string }> {
+  const base = env.SUPABASE_URL?.replace(/\/$/, '')
+  if (!base) return { ok: false }
+  const url = `${base}/auth/v1/user`
+  const res = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY as string, // or anon key if preferred
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+  if (!res.ok) return { ok: false }
+  const j = (await res.json()) as { id?: string }
+  return { ok: true, userId: j.id || undefined }
 }
 
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
