@@ -15,6 +15,8 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private var emailInputs: [String] = [""]
     private let contactStore = CNContactStore()
     private var contactsAuthDenied = false
+    private let inputContainer = UIStackView()
+    private let addFieldButton = UIButton(type: .system)
     private let confirmButton = UIButton(type: .system)
 
     override func viewDidLoad() {
@@ -31,6 +33,17 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         table.translatesAutoresizingMaskIntoConstraints = false
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(searchBar)
+        // Input container (always visible under search bar)
+        inputContainer.axis = .vertical
+        inputContainer.spacing = 8
+        inputContainer.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(inputContainer)
+
+        addFieldButton.setTitle("＋ フィールドを追加", for: .normal)
+        addFieldButton.addTarget(self, action: #selector(tapAddField), for: .touchUpInside)
+        addFieldButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(addFieldButton)
+
         view.addSubview(table)
         table.register(AddEmailCell.self, forCellReuseIdentifier: "AddEmailCell")
         let pickItem = UIBarButtonItem(title: "連絡先から選ぶ", style: .plain, target: self, action: #selector(tapPickDeviceContacts))
@@ -50,7 +63,14 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            table.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
+            inputContainer.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 8),
+            inputContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            inputContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            addFieldButton.topAnchor.constraint(equalTo: inputContainer.bottomAnchor, constant: 8),
+            addFieldButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+
+            table.topAnchor.constraint(equalTo: addFieldButton.bottomAnchor, constant: 8),
             table.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             table.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             table.bottomAnchor.constraint(equalTo: confirmButton.topAnchor, constant: -8),
@@ -58,6 +78,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             confirmButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             confirmButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
+        rebuildInputRows()
         Task { await load(); await loadDeviceContacts() }
     }
 
@@ -111,8 +132,16 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         do {
             let items = try await client.list(status: "all")
             await MainActor.run {
+                let locale = Locale(identifier: "ja_JP")
+                func displayName(_ c: Contact) -> String { (c.name?.isEmpty == false ? c.name! : c.email) }
                 self.verified = items.filter { $0.verified_at != nil }
+                    .sorted { a, b in
+                        displayName(a).compare(displayName(b), options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+                    }
                 self.pending = items.filter { $0.verified_at == nil }
+                    .sorted { a, b in
+                        displayName(a).compare(displayName(b), options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+                    }
                 self.filteredDeviceEmails = self.deviceEmails
                 self.applyFilter(self.searchBar.text)
             }
@@ -187,18 +216,23 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         for (n,e) in results {
             if !seen.contains(e) { seen.insert(e); unique.append((n,e)) }
         }
-        deviceEmails = unique
+        // 五十音順（日本語ローカライズ）でソート（氏名が空ならメールで代替）
+        let locale = Locale(identifier: "ja_JP")
+        deviceEmails = unique.sorted { a, b in
+            let an = a.name.isEmpty ? a.email : a.name
+            let bn = b.name.isEmpty ? b.email : b.name
+            return an.compare(bn, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+        }
     }
 
     // MARK: Table
-    func numberOfSections(in tableView: UITableView) -> Int { 4 }
+    func numberOfSections(in tableView: UITableView) -> Int { 3 }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
         case 0: return contactsAuthDenied ? 1 : filteredDeviceEmails.count
         case 1: return verified.count
-        case 2: return pending.count
-        default: return emailInputs.count
+        default: return pending.count
         }
     }
 
@@ -232,14 +266,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             cell.textLabel?.textColor = (c.verified_at != nil) ? .label : .secondaryLabel
             return cell
         } else {
-            let cell = tableView.dequeueReusableCell(withIdentifier: "AddEmailCell", for: indexPath) as! AddEmailCell
-            cell.textField.text = emailInputs[indexPath.row]
-            cell.onChange = { [weak self] text in self?.emailInputs[indexPath.row] = text }
-            cell.onRemove = { [weak self] in
-                guard let self else { return }
-                if self.emailInputs.count > 1 { self.emailInputs.remove(at: indexPath.row); self.table.reloadSections(IndexSet(integer: 3), with: .automatic) }
-            }
-            return cell
+            return UITableViewCell()
         }
     }
 
@@ -265,8 +292,55 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         switch section {
         case 0: return "端末の連絡先（検索可・タップで下に追加）"
         case 1: return "連絡先（検証済み・選択可）"
-        case 2: return pending.isEmpty ? nil : "連絡先（未検証・選択不可）"
-        default: return "メールを直接入力（1行=1件、＋で追加）"
+        default: return pending.isEmpty ? nil : "連絡先（未検証・選択不可）"
+        }
+    }
+
+    // MARK: Input rows
+    @objc private func tapAddField() {
+        emailInputs.append("")
+        rebuildInputRows()
+    }
+
+    @objc private func onInputEditingChanged(_ tf: UITextField) {
+        let idx = tf.tag
+        guard idx >= 0 && idx < emailInputs.count else { return }
+        emailInputs[idx] = tf.text ?? ""
+    }
+
+    @objc private func onRemoveField(_ sender: UIButton) {
+        let idx = sender.tag
+        guard idx >= 0 && idx < emailInputs.count else { return }
+        if emailInputs.count > 1 { emailInputs.remove(at: idx) }
+        rebuildInputRows()
+    }
+
+    private func rebuildInputRows() {
+        // Clear existing
+        for v in inputContainer.arrangedSubviews { inputContainer.removeArrangedSubview(v); v.removeFromSuperview() }
+        for (i, value) in emailInputs.enumerated() {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.spacing = 8
+            row.alignment = .fill
+            let tf = UITextField()
+            tf.placeholder = "メールアドレス"
+            tf.text = value
+            tf.autocapitalizationType = .none
+            tf.keyboardType = .emailAddress
+            tf.borderStyle = .roundedRect
+            tf.translatesAutoresizingMaskIntoConstraints = false
+            tf.tag = i
+            tf.addTarget(self, action: #selector(onInputEditingChanged(_:)), for: .editingChanged)
+            let remove = UIButton(type: .system)
+            remove.setTitle("−", for: .normal)
+            remove.titleLabel?.font = .boldSystemFont(ofSize: 20)
+            remove.tag = i
+            remove.addTarget(self, action: #selector(onRemoveField(_:)), for: .touchUpInside)
+            remove.setContentHuggingPriority(.required, for: .horizontal)
+            row.addArrangedSubview(tf)
+            row.addArrangedSubview(remove)
+            inputContainer.addArrangedSubview(row)
         }
     }
 
