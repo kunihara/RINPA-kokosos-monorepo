@@ -26,11 +26,11 @@ final class SettingsViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // サインイン済み かつ 受信者が未登録の場合はオンボーディングを提示
+        // サインイン済み かつ 検証済み受信者が0件ならオンボーディングを提示
         if presentedViewController == nil {
             Task { @MainActor in
                 do {
-                    let items = try await ContactsClient().list(status: "all")
+                    let items = try await ContactsClient().list(status: "verified")
                     if items.isEmpty {
                         let vc = OnboardingRecipientsViewController()
                         let nav = UINavigationController(rootViewController: vc)

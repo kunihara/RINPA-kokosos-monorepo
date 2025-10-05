@@ -22,6 +22,7 @@ final class MainViewController: UIViewController {
     private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
     private let recipientsButton = UIButton(type: .system)
     private var session: AlertSession? { didSet { updateControls() } }
+    private var didAutoShowOnboarding = false
     private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
     private var reminderIntervalSec: TimeInterval { TimeInterval(SettingsStore.shared.arrivalReminderMinutes * 60) }
 
@@ -43,14 +44,13 @@ final class MainViewController: UIViewController {
             present(nav, animated: true)
             return
         }
-        // 2) 初回サインインで連絡先が空なら誘導（混乱回避のフォールバック）
-        let everKey = "HasShownRecipientsOnboardingEver"
-        if presentedViewController == nil && !UserDefaults.standard.bool(forKey: everKey) {
+        // 2) 送信に必要な「検証済みの受信者」が0件なら常に誘導
+        if presentedViewController == nil && !didAutoShowOnboarding {
             Task { @MainActor in
                 do {
-                    let items = try await ContactsClient().list(status: "all")
+                    let items = try await ContactsClient().list(status: "verified")
                     if items.isEmpty {
-                        UserDefaults.standard.set(true, forKey: everKey)
+                        didAutoShowOnboarding = true
                         let vc = OnboardingRecipientsViewController()
                         let nav = UINavigationController(rootViewController: vc)
                         present(nav, animated: true)
