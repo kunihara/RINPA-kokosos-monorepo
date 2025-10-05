@@ -21,6 +21,14 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private let inputContainer = UIStackView()
     private let addFieldButton = UIButton(type: .system)
     private let confirmButton = UIButton(type: .system)
+    private lazy var keyboardToolbar: UIToolbar = {
+        let tb = UIToolbar()
+        tb.sizeToFit()
+        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let close = UIBarButtonItem(title: "閉じる", style: .done, target: self, action: #selector(tapDismissKeyboard))
+        tb.items = [flex, close]
+        return tb
+    }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -35,6 +43,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         table.allowsMultipleSelection = true
         table.translatesAutoresizingMaskIntoConstraints = false
         searchBar.translatesAutoresizingMaskIntoConstraints = false
+        searchBar.inputAccessoryView = keyboardToolbar
         view.addSubview(searchBar)
         // Input container (always visible under search bar)
         inputContainer.axis = .vertical
@@ -93,9 +102,24 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         let lcq = query
         let locale = Locale(identifier: "ja_JP")
         func displayName(_ c: Contact) -> String { (c.name?.isEmpty == false ? c.name! : c.email) }
+        func surnameFirst(_ name: String) -> String {
+            // Assume "姓 名" and prefer sorting by 姓 (first token). Fallback to whole.
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            guard let first = trimmed.split(separator: " ").first else { return trimmed }
+            return String(first)
+        }
         if lcq.isEmpty {
-            verifiedDisplay = verifiedAll
-            pendingDisplay  = pendingAll
+            // Ensure default displays are sorted by surname in ja_JP
+            verifiedDisplay = verifiedAll.sorted { a, b in
+                let aKey = surnameFirst(displayName(a))
+                let bKey = surnameFirst(displayName(b))
+                return aKey.compare(bKey, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+            }
+            pendingDisplay  = pendingAll.sorted { a, b in
+                let aKey = surnameFirst(displayName(a))
+                let bKey = surnameFirst(displayName(b))
+                return aKey.compare(bKey, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+            }
             filteredDeviceEmails = deviceEmails
         } else {
             verifiedDisplay = verifiedAll.filter { displayName($0).lowercased().contains(lcq) || $0.email.lowercased().contains(lcq) }
@@ -104,8 +128,8 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
                 pair.name.lowercased().contains(lcq) || pair.email.lowercased().contains(lcq)
             }
             // sort filtered as well
-            verifiedDisplay.sort { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
-            pendingDisplay.sort  { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
+            verifiedDisplay.sort { surnameFirst(displayName($0)).compare(surnameFirst(displayName($1)), options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending }
+            pendingDisplay.sort  { surnameFirst(displayName($0)).compare(surnameFirst(displayName($1)), options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending }
             filteredDeviceEmails.sort { ( $0.name as NSString).localizedStandardCompare($1.name) == .orderedAscending }
         }
         table.reloadData()
@@ -145,10 +169,24 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             let items = try await client.list(status: "all")
             await MainActor.run {
                 func displayName(_ c: Contact) -> String { (c.name?.isEmpty == false ? c.name! : c.email) }
+                func surnameFirst(_ name: String) -> String {
+                    let trimmed = name.trimmingCharacters(in: .whitespaces)
+                    guard let first = trimmed.split(separator: " ").first else { return trimmed }
+                    return String(first)
+                }
+                let locale = Locale(identifier: "ja_JP")
                 self.verifiedAll = items.filter { $0.verified_at != nil }
-                    .sorted { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
+                    .sorted {
+                        let aKey = surnameFirst(displayName($0))
+                        let bKey = surnameFirst(displayName($1))
+                        return aKey.compare(bKey, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+                    }
                 self.pendingAll  = items.filter { $0.verified_at == nil }
-                    .sorted { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
+                    .sorted {
+                        let aKey = surnameFirst(displayName($0))
+                        let bKey = surnameFirst(displayName($1))
+                        return aKey.compare(bKey, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
+                    }
                 self.filteredDeviceEmails = self.deviceEmails
                 self.applyFilter(self.searchBar.text)
             }
@@ -201,16 +239,34 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     }
 
     private func fetchDeviceContactsIfAuthorized() async {
-        var results: [(String, String)] = []
-        let keys: [CNKeyDescriptor] = [CNContactGivenNameKey as NSString, CNContactFamilyNameKey as NSString, CNContactEmailAddressesKey as NSString]
+        var results: [(sortKey: String, name: String, email: String)] = []
+        let keys: [CNKeyDescriptor] = [
+            CNContactGivenNameKey as NSString,
+            CNContactFamilyNameKey as NSString,
+            CNContactPhoneticGivenNameKey as NSString,
+            CNContactPhoneticFamilyNameKey as NSString,
+            CNContactEmailAddressesKey as NSString
+        ]
         let req = CNContactFetchRequest(keysToFetch: keys)
+        req.sortOrder = .familyName
         do {
             try contactStore.enumerateContacts(with: req) { contact, _ in
                 let name = (contact.familyName + " " + contact.givenName).trimmingCharacters(in: .whitespaces)
+                // Prefer phonetic (ふりがな/ローマ字読み) of family name for sorting
+                let familyKana = contact.phoneticFamilyName
+                let givenKana = contact.phoneticGivenName
+                let sortKeyBase: String
+                if !familyKana.isEmpty {
+                    sortKeyBase = (familyKana + " " + givenKana).trimmingCharacters(in: .whitespaces)
+                } else {
+                    sortKeyBase = name
+                }
                 for emailValue in contact.emailAddresses {
                     let em = self.norm(emailValue.value as String)
                     if !em.isEmpty && self.isValidEmail(em) {
-                        results.append((name.isEmpty ? em : name, em))
+                        let display = name.isEmpty ? em : name
+                        let sortKey = (display.isEmpty ? em : sortKeyBase)
+                        results.append((sortKey: sortKey, name: display, email: em))
                     }
                 }
             }
@@ -219,17 +275,18 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         }
         // Unique by email
         var seen = Set<String>()
-        var unique: [DeviceEntry] = []
-        for (n,e) in results {
-            if !seen.contains(e) { seen.insert(e); unique.append(DeviceEntry(name: n, email: e)) }
+        var unique: [(sortKey: String, entry: DeviceEntry)] = []
+        for item in results {
+            let e = item.email
+            if !seen.contains(e) { seen.insert(e); unique.append((sortKey: item.sortKey, entry: DeviceEntry(name: item.name, email: e))) }
         }
         // 五十音順（日本語ローカライズ）でソート（氏名が空ならメールで代替）
         let locale = Locale(identifier: "ja_JP")
         deviceEmails = unique.sorted { a, b in
-            let an = a.name.isEmpty ? a.email : a.name
-            let bn = b.name.isEmpty ? b.email : b.name
+            let an = a.sortKey.isEmpty ? (a.entry.name.isEmpty ? a.entry.email : a.entry.name) : a.sortKey
+            let bn = b.sortKey.isEmpty ? (b.entry.name.isEmpty ? b.entry.email : b.entry.name) : b.sortKey
             return an.compare(bn, options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
-        }
+        }.map { $0.entry }
     }
 
     // MARK: Table
@@ -334,6 +391,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             tf.keyboardType = .emailAddress
             tf.borderStyle = .roundedRect
             tf.translatesAutoresizingMaskIntoConstraints = false
+            tf.inputAccessoryView = keyboardToolbar
             tf.tag = i
             tf.addTarget(self, action: #selector(onInputEditingChanged(_:)), for: .editingChanged)
             let remove = UIButton(type: .system)
@@ -346,6 +404,10 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             row.addArrangedSubview(remove)
             inputContainer.addArrangedSubview(row)
         }
+    }
+
+    @objc private func tapDismissKeyboard() {
+        view.endEditing(true)
     }
 
     // MARK: Footer for add button in inputs
@@ -369,6 +431,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
 
     // MARK: Search
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) { applyFilter(searchText) }
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) { searchBar.resignFirstResponder() }
 
     // MARK: Device Contacts Picker
     @objc private func tapPickDeviceContacts() {
@@ -440,6 +503,8 @@ extension ContactsPickerViewController: CNContactPickerDelegate {
                 added += 1
             }
         }
+        // Reflect newly added emails in the input UI immediately
+        rebuildInputRows()
         table.reloadData()
         if added > 0 {
             let a = UIAlertController(title: "追加しました", message: "\(added)件のメールを入力欄に追加しました。確認後に『決定』で送信します。", preferredStyle: .alert)
