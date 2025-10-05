@@ -24,6 +24,25 @@ final class SettingsViewController: UIViewController {
         loadValues()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // サインイン済み かつ 受信者が未登録の場合はオンボーディングを提示
+        if presentedViewController == nil {
+            Task { @MainActor in
+                do {
+                    let items = try await ContactsClient().list(status: "all")
+                    if items.isEmpty {
+                        let vc = OnboardingRecipientsViewController()
+                        let nav = UINavigationController(rootViewController: vc)
+                        present(nav, animated: true)
+                    }
+                } catch {
+                    // 取得失敗時は黙って無視（次回以降に再評価）
+                }
+            }
+        }
+    }
+
     private func setupUI() {
         reminderSegmented.translatesAutoresizingMaskIntoConstraints = false
         reminderSegmented.addTarget(self, action: #selector(changeReminder), for: .valueChanged)
