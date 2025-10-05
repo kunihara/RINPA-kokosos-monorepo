@@ -40,6 +40,8 @@ stage.test
 .github/env/*.secrets
 
 # Supabase (CLI local state)
+# NOTE: supabase/config.toml と supabase/migrations/ はGit管理対象。
+# 以下はローカル実行時の一時/差分情報のためコミットしない。
 supabase/.branches/
 supabase/.temp/
 supabase/volumes/
