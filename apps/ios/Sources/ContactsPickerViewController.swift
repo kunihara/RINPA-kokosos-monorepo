@@ -3,14 +3,15 @@ import Contacts
 import ContactsUI
 
 final class ContactsPickerViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate {
+    private struct DeviceEntry { let name: String; let email: String }
     var onDone: (([String]) -> Void)?
     private let table = UITableView(frame: .zero, style: .insetGrouped)
     private let searchBar = UISearchBar()
     private let client = ContactsClient()
     private var verified: [Contact] = []
     private var pending: [Contact] = []
-    private var deviceEmails: [(name: String, email: String)] = []
-    private var filteredDeviceEmails: [(name: String, email: String)] = []
+    private var deviceEmails: [DeviceEntry] = []
+    private var filteredDeviceEmails: [DeviceEntry] = []
     private var selectedEmails = Set<String>()
     private var emailInputs: [String] = [""]
     private let contactStore = CNContactStore()
@@ -212,9 +213,9 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         }
         // Unique by email
         var seen = Set<String>()
-        var unique: [(String, String)] = []
+        var unique: [DeviceEntry] = []
         for (n,e) in results {
-            if !seen.contains(e) { seen.insert(e); unique.append((n,e)) }
+            if !seen.contains(e) { seen.insert(e); unique.append(DeviceEntry(name: n, email: e)) }
         }
         // 五十音順（日本語ローカライズ）でソート（氏名が空ならメールで代替）
         let locale = Locale(identifier: "ja_JP")
