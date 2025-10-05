@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           brew update
-          brew install xcodegen
+          brew install xcodegen jq
 
       - name: Write iOS Secrets xcconfig (matrix=${{ matrix.cfg_suffix }})
         working-directory: apps/ios
@@ -88,6 +88,7 @@ jobs:
         working-directory: apps/ios
         run: |
           set -euo pipefail
+          mkdir -p build
           xcodebuild -project KokoSOS.xcodeproj \
             -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
             -sdk iphonesimulator \
