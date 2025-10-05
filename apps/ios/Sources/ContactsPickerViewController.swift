@@ -1,4 +1,6 @@
 import UIKit
+import Contacts
+import ContactsUI
 
 final class ContactsPickerViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate {
     var onDone: (([String]) -> Void)?
@@ -9,6 +11,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private var pending: [Contact] = []
     private var selectedEmails = Set<String>()
     private var emailInputs: [String] = [""]
+    private let contactStore = CNContactStore()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -26,6 +29,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         view.addSubview(searchBar)
         view.addSubview(table)
         table.register(AddEmailCell.self, forCellReuseIdentifier: "AddEmailCell")
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "連絡先から選ぶ", style: .plain, target: self, action: #selector(tapPickDeviceContacts))
         NSLayoutConstraint.activate([
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -177,4 +181,76 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
 
     // MARK: Search
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) { applyFilter(searchText) }
+
+    // MARK: Device Contacts Picker
+    @objc private func tapPickDeviceContacts() {
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        switch status {
+        case .notDetermined:
+            contactStore.requestAccess(for: .contacts) { [weak self] granted, _ in
+                DispatchQueue.main.async { if granted { self?.presentContactsPicker() } else { self?.showContactsDenied() } }
+            }
+        case .authorized:
+            presentContactsPicker()
+        case .denied, .restricted:
+            showContactsDenied()
+        @unknown default:
+            showContactsDenied()
+        }
+    }
+
+    private func presentContactsPicker() {
+        let picker = CNContactPickerViewController()
+        picker.delegate = self
+        picker.displayedPropertyKeys = [CNContactEmailAddressesKey]
+        // 有効化: メールを持つ連絡先のみ
+        picker.predicateForEnablingContact = NSPredicate(format: "emailAddresses.@count > 0")
+        // 連絡先単位の選択は不可、メールプロパティ選択のみ許可
+        picker.predicateForSelectionOfContact = NSPredicate(value: false)
+        picker.predicateForSelectionOfProperty = NSPredicate(format: "key == 'emailAddresses'")
+        present(picker, animated: true)
+    }
+
+    private func showContactsDenied() {
+        let a = UIAlertController(title: "連絡先へのアクセスが許可されていません", message: "設定アプリで連絡先アクセスを許可するか、メールを直接入力してください。", preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        a.addAction(UIAlertAction(title: "設定を開く", style: .default, handler: { _ in
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        }))
+        present(a, animated: true)
+    }
+}
+
+extension ContactsPickerViewController: CNContactPickerDelegate {
+    func contactPicker(_ picker: CNContactPickerViewController, didSelect contactProperty: CNContactProperty) {
+        guard contactProperty.key == CNContactEmailAddressesKey, let val = contactProperty.value as? NSString else { return }
+        let email = norm(val as String)
+        handlePickedEmails([email])
+    }
+
+    func contactPicker(_ picker: CNContactPickerViewController, didSelect contacts: [CNContact]) {
+        // 連絡先単位で選択された場合は、その連絡先の全メールを対象（通常はpredicateで無効化済み）
+        var emails: [String] = []
+        for c in contacts { emails.append(contentsOf: c.emailAddresses.map { norm($0.value as String) }) }
+        handlePickedEmails(emails)
+    }
+
+    private func handlePickedEmails(_ emailsRaw: [String]) {
+        let emails = Array(Set(emailsRaw.filter { !$0.isEmpty && isValidEmail($0) }))
+        guard !emails.isEmpty else { return }
+        Task { @MainActor in
+            do {
+                _ = try await client.bulkUpsert(emails: emails, sendVerify: true)
+                let a = UIAlertController(title: "送信しました", message: "選択したメールに確認メールを送信しました。検証完了後に選択できるようになります。", preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak self] _ in
+                    Task { await self?.load() }
+                }))
+                present(a, animated: true)
+            } catch {
+                let a = UIAlertController(title: "送信失敗", message: error.localizedDescription, preferredStyle: .alert)
+                a.addAction(UIAlertAction(title: "OK", style: .default))
+                present(a, animated: true)
+            }
+        }
+    }
 }

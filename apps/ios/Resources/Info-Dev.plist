@@ -70,6 +70,8 @@
   <string>$(SUPABASE_HOST)</string>
   <key>SupabaseAnonKey</key>
   <string>$(SUPABASE_ANON_KEY)</string>
+  <key>NSContactsUsageDescription</key>
+  <string>受信者を連絡先から選ぶために連絡先へのアクセスを使用します。</string>
   <key>OAuthRedirectScheme</key>
   <string>$(OAUTH_REDIRECT_SCHEME)</string>
   <key>EmailRedirectBase</key>
