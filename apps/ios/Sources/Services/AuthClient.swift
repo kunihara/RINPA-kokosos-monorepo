@@ -184,7 +184,8 @@ struct AuthClient {
         comps.queryItems = [
             URLQueryItem(name: "provider", value: provider),
             URLQueryItem(name: "redirect_to", value: redirectURI),
-            URLQueryItem(name: "scopes", value: scopes(for: provider))
+            URLQueryItem(name: "scopes", value: scopes(for: provider)),
+            URLQueryItem(name: "response_type", value: "token")
         ]
         let authURL = comps.url!
         // Start web auth session
@@ -210,11 +211,12 @@ struct AuthClient {
     }
 
     private func scopes(for provider: String) -> String {
+        // refresh_token を確実に得るため offline_access を付与
         switch provider {
-        case "google": return "email profile"
-        case "facebook": return "email public_profile"
-        case "apple": return "name email"
-        default: return "email"
+        case "google": return "email profile offline_access"
+        case "facebook": return "email public_profile offline_access"
+        case "apple": return "name email offline_access"
+        default: return "email offline_access"
         }
     }
 
