@@ -6,6 +6,8 @@ final class SignUpViewController: UIViewController {
     private let passwordField = UITextField()
     private let signUpButton = UIButton(type: .system)
     private let infoLabel = UILabel()
+    private let oauthInfoLabel = UILabel()
+    private let oauthStack = UIStackView()
 
     private let api = APIClient()
 
@@ -39,7 +41,18 @@ final class SignUpViewController: UIViewController {
         infoLabel.numberOfLines = 0
         infoLabel.textAlignment = .center
 
-        let stack = UIStackView(arrangedSubviews: [titleLabel, emailField, passwordField, signUpButton, infoLabel])
+        // OAuth セクション
+        oauthInfoLabel.text = "他の方法で続行"
+        oauthInfoLabel.font = .systemFont(ofSize: 13)
+        oauthInfoLabel.textColor = .secondaryLabel
+        oauthInfoLabel.textAlignment = .center
+        oauthStack.axis = .vertical
+        oauthStack.spacing = 8
+        let appleBtn = makeOAuthButton(title: "Appleで続ける") { [weak self] in self?.startOAuth("apple") }
+        let googleBtn = makeOAuthButton(title: "Googleで続ける") { [weak self] in self?.startOAuth("google") }
+        [appleBtn, googleBtn].forEach { oauthStack.addArrangedSubview($0) }
+
+        let stack = UIStackView(arrangedSubviews: [titleLabel, emailField, passwordField, signUpButton, infoLabel, oauthInfoLabel, oauthStack])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -96,5 +109,33 @@ final class SignUpViewController: UIViewController {
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
-}
 
+    private func makeOAuthButton(title: String, action: @escaping () -> Void) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(title, for: .normal)
+        b.backgroundColor = .secondarySystemBackground
+        b.layer.cornerRadius = 8
+        b.contentEdgeInsets = UIEdgeInsets(top: 10, left: 14, bottom: 10, right: 14)
+        b.addAction(UIAction(handler: { _ in action() }), for: .touchUpInside)
+        return b
+    }
+
+    private func startOAuth(_ provider: String) {
+        Task { @MainActor in
+            guard let auth = AuthClient() else {
+                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL / SupabaseAnonKey を設定してください。")
+                return
+            }
+            do {
+                let token = try await auth.signInWithOAuth(provider: provider, presentationAnchor: view.window)
+                api.setAuthToken(token)
+                // サインアップ画面からのOAuthは新規/既存の区別が難しいため、オンボーディングを促す
+                UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
+                let main = MainViewController()
+                navigationController?.setViewControllers([main], animated: true)
+            } catch {
+                showAlert("サインイン失敗", error.localizedDescription)
+            }
+        }
+    }
+}
