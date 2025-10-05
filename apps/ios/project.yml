@@ -58,6 +58,9 @@ targets:
   KokoSOS:
     type: application
     platform: iOS
+    dependencies:
+      - sdk: Contacts.framework
+      - sdk: ContactsUI.framework
     configFiles:
       Debug-Dev: Configs/Dev.xcconfig
       Debug-Stage: Configs/Stage.xcconfig
