@@ -8,8 +8,10 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private let table = UITableView(frame: .zero, style: .insetGrouped)
     private let searchBar = UISearchBar()
     private let client = ContactsClient()
-    private var verified: [Contact] = []
-    private var pending: [Contact] = []
+    private var verifiedAll: [Contact] = []
+    private var pendingAll: [Contact] = []
+    private var verifiedDisplay: [Contact] = []
+    private var pendingDisplay: [Contact] = []
     private var deviceEmails: [DeviceEntry] = []
     private var filteredDeviceEmails: [DeviceEntry] = []
     private var selectedEmails = Set<String>()
@@ -88,14 +90,23 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
 
     private func applyFilter(_ q: String?) {
         let query = (q ?? "").lowercased()
-        if query.isEmpty {
-            // no-op; keep original ordering
+        let lcq = query
+        let locale = Locale(identifier: "ja_JP")
+        func displayName(_ c: Contact) -> String { (c.name?.isEmpty == false ? c.name! : c.email) }
+        if lcq.isEmpty {
+            verifiedDisplay = verifiedAll
+            pendingDisplay  = pendingAll
+            filteredDeviceEmails = deviceEmails
         } else {
-            verified = verified.filter { ( ($0.name ?? "").lowercased().contains(query) ) || $0.email.lowercased().contains(query) }
-            pending = pending.filter { ( ($0.name ?? "").lowercased().contains(query) ) || $0.email.lowercased().contains(query) }
+            verifiedDisplay = verifiedAll.filter { displayName($0).lowercased().contains(lcq) || $0.email.lowercased().contains(lcq) }
+            pendingDisplay  = pendingAll.filter  { displayName($0).lowercased().contains(lcq) || $0.email.lowercased().contains(lcq) }
             filteredDeviceEmails = deviceEmails.filter { pair in
-                pair.name.lowercased().contains(query) || pair.email.lowercased().contains(query)
+                pair.name.lowercased().contains(lcq) || pair.email.lowercased().contains(lcq)
             }
+            // sort filtered as well
+            verifiedDisplay.sort { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
+            pendingDisplay.sort  { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
+            filteredDeviceEmails.sort { ( $0.name as NSString).localizedStandardCompare($1.name) == .orderedAscending }
         }
         table.reloadData()
     }
@@ -133,16 +144,11 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         do {
             let items = try await client.list(status: "all")
             await MainActor.run {
-                let locale = Locale(identifier: "ja_JP")
                 func displayName(_ c: Contact) -> String { (c.name?.isEmpty == false ? c.name! : c.email) }
-                self.verified = items.filter { $0.verified_at != nil }
-                    .sorted { a, b in
-                        displayName(a).compare(displayName(b), options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
-                    }
-                self.pending = items.filter { $0.verified_at == nil }
-                    .sorted { a, b in
-                        displayName(a).compare(displayName(b), options: [.caseInsensitive], range: nil, locale: locale) == .orderedAscending
-                    }
+                self.verifiedAll = items.filter { $0.verified_at != nil }
+                    .sorted { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
+                self.pendingAll  = items.filter { $0.verified_at == nil }
+                    .sorted { (displayName($0) as NSString).localizedStandardCompare(displayName($1)) == .orderedAscending }
                 self.filteredDeviceEmails = self.deviceEmails
                 self.applyFilter(self.searchBar.text)
             }
@@ -232,8 +238,8 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
         case 0: return contactsAuthDenied ? 1 : filteredDeviceEmails.count
-        case 1: return verified.count
-        default: return pending.count
+        case 1: return verifiedDisplay.count
+        default: return pendingDisplay.count
         }
     }
 
@@ -255,7 +261,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             return cell
         } else if indexPath.section == 1 || indexPath.section == 2 {
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
-            let c = (indexPath.section == 1 ? verified[indexPath.row] : pending[indexPath.row])
+            let c = (indexPath.section == 1 ? verifiedDisplay[indexPath.row] : pendingDisplay[indexPath.row])
             cell.textLabel?.text = c.name?.isEmpty == false ? c.name : c.email
             var detail = c.email
             if c.verified_at == nil { detail += " ・未検証" } else { detail += " ・検証済み" }
@@ -298,10 +304,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     }
 
     // MARK: Input rows
-    @objc private func tapAddField() {
-        emailInputs.append("")
-        rebuildInputRows()
-    }
+    @objc private func tapAddField() { emailInputs.append(""); rebuildInputRows() }
 
     @objc private func onInputEditingChanged(_ tf: UITextField) {
         let idx = tf.tag
