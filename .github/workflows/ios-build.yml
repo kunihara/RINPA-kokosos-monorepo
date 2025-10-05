@@ -66,6 +66,21 @@ jobs:
             -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
             -showdestinations || true
 
+      - name: Prepare Simulator (create/boot iPhone 15)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          # Pick the latest available iOS runtime
+          RUNTIME_ID=$(xcrun simctl list runtimes | awk '/iOS [0-9]/{print $NF}' | head -n1)
+          echo "Using runtime: ${RUNTIME_ID}"
+          # Create device if missing
+          if ! xcrun simctl list devices | grep -q "KokoSOS-CI"; then
+            xcrun simctl create "KokoSOS-CI" "iPhone 15" "$RUNTIME_ID" || true
+          fi
+          # Boot (ignore if already booted)
+          xcrun simctl boot "KokoSOS-CI" || true
+          xcrun simctl list devices | grep -A2 "KokoSOS-CI" || true
+
       - name: Build (Simulator, Debug-${{ matrix.cfg_suffix }})
         working-directory: apps/ios
         run: |
@@ -73,5 +88,5 @@ jobs:
           xcodebuild -project KokoSOS.xcodeproj \
             -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
             -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'platform=iOS Simulator,name=KokoSOS-CI' \
             build | xcpretty || exit ${PIPESTATUS[0]}
