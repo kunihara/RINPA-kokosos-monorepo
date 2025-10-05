@@ -34,12 +34,31 @@ final class MainViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        let key = "ShouldShowRecipientsOnboardingOnce"
-        if UserDefaults.standard.bool(forKey: key), presentedViewController == nil {
-            UserDefaults.standard.set(false, forKey: key)
+        // 1) サインアップ直後のワンショット誘導
+        let onceKey = "ShouldShowRecipientsOnboardingOnce"
+        if UserDefaults.standard.bool(forKey: onceKey), presentedViewController == nil {
+            UserDefaults.standard.set(false, forKey: onceKey)
             let vc = OnboardingRecipientsViewController()
             let nav = UINavigationController(rootViewController: vc)
             present(nav, animated: true)
+            return
+        }
+        // 2) 初回サインインで連絡先が空なら誘導（混乱回避のフォールバック）
+        let everKey = "HasShownRecipientsOnboardingEver"
+        if presentedViewController == nil && !UserDefaults.standard.bool(forKey: everKey) {
+            Task { @MainActor in
+                do {
+                    let items = try await ContactsClient().list(status: "all")
+                    if items.isEmpty {
+                        UserDefaults.standard.set(true, forKey: everKey)
+                        let vc = OnboardingRecipientsViewController()
+                        let nav = UINavigationController(rootViewController: vc)
+                        present(nav, animated: true)
+                    }
+                } catch {
+                    // 失敗時は誘導しない（次回以降に再評価）
+                }
+            }
         }
     }
 
