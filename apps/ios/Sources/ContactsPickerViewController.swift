@@ -29,7 +29,9 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         view.addSubview(searchBar)
         view.addSubview(table)
         table.register(AddEmailCell.self, forCellReuseIdentifier: "AddEmailCell")
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "連絡先から選ぶ", style: .plain, target: self, action: #selector(tapPickDeviceContacts))
+        let pickItem = UIBarButtonItem(title: "連絡先から選ぶ", style: .plain, target: self, action: #selector(tapPickDeviceContacts))
+        let doneItem = UIBarButtonItem(title: "決定", style: .done, target: self, action: #selector(tapDone))
+        navigationItem.rightBarButtonItems = [doneItem, pickItem]
         NSLayoutConstraint.activate([
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -238,19 +240,25 @@ extension ContactsPickerViewController: CNContactPickerDelegate {
     private func handlePickedEmails(_ emailsRaw: [String]) {
         let emails = Array(Set(emailsRaw.filter { !$0.isEmpty && isValidEmail($0) }))
         guard !emails.isEmpty else { return }
-        Task { @MainActor in
-            do {
-                _ = try await client.bulkUpsert(emails: emails, sendVerify: true)
-                let a = UIAlertController(title: "送信しました", message: "選択したメールに確認メールを送信しました。検証完了後に選択できるようになります。", preferredStyle: .alert)
-                a.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak self] _ in
-                    Task { await self?.load() }
-                }))
-                present(a, animated: true)
-            } catch {
-                let a = UIAlertController(title: "送信失敗", message: error.localizedDescription, preferredStyle: .alert)
-                a.addAction(UIAlertAction(title: "OK", style: .default))
-                present(a, animated: true)
+        // すぐには送信せず、下の入力セクションに追加して最後にまとめて送信
+        var existing = Set(emailInputs.map { norm($0) }.filter { !$0.isEmpty })
+        var added = 0
+        for e in emails {
+            if !existing.contains(e) {
+                if emailInputs.count == 1 && emailInputs[0].isEmpty {
+                    emailInputs[0] = e
+                } else {
+                    emailInputs.append(e)
+                }
+                existing.insert(e)
+                added += 1
             }
+        }
+        table.reloadSections(IndexSet(integer: 2), with: .automatic)
+        if added > 0 {
+            let a = UIAlertController(title: "追加しました", message: "\(added)件のメールを入力欄に追加しました。確認後に『決定』で送信します。", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
         }
     }
 }
