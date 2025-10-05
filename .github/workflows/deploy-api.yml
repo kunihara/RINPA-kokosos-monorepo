@@ -50,6 +50,10 @@ jobs:
           CORS_ALLOW_ORIGIN: ${{ secrets.CORS_ALLOW_ORIGIN }}
           WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          SES_REGION: ${{ secrets.SES_REGION }}
+          SES_ACCESS_KEY_ID: ${{ secrets.SES_ACCESS_KEY_ID }}
+          SES_SECRET_ACCESS_KEY: ${{ secrets.SES_SECRET_ACCESS_KEY }}
+          SES_SENDER_EMAIL: ${{ secrets.SES_SENDER_EMAIL }}
         run: |
           set -euo pipefail
           echo "CF_TOKEN_LEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)"
@@ -65,6 +69,10 @@ jobs:
           [ -n "${CORS_ALLOW_ORIGIN:-}" ] && printf "%s" "$CORS_ALLOW_ORIGIN" | wrangler secret put CORS_ALLOW_ORIGIN --env dev
           [ -n "${WEB_PUBLIC_BASE:-}" ] && printf "%s" "$WEB_PUBLIC_BASE" | wrangler secret put WEB_PUBLIC_BASE --env dev
           [ -n "${EMAIL_PROVIDER:-}" ] && printf "%s" "$EMAIL_PROVIDER" | wrangler secret put EMAIL_PROVIDER --env dev
+          [ -n "${SES_REGION:-}" ] && printf "%s" "$SES_REGION" | wrangler secret put SES_REGION --env dev
+          [ -n "${SES_ACCESS_KEY_ID:-}" ] && printf "%s" "$SES_ACCESS_KEY_ID" | wrangler secret put SES_ACCESS_KEY_ID --env dev
+          [ -n "${SES_SECRET_ACCESS_KEY:-}" ] && printf "%s" "$SES_SECRET_ACCESS_KEY" | wrangler secret put SES_SECRET_ACCESS_KEY --env dev
+          [ -n "${SES_SENDER_EMAIL:-}" ] && printf "%s" "$SES_SENDER_EMAIL" | wrangler secret put SES_SENDER_EMAIL --env dev
 
       - name: Deploy (stage/prod)
         if: ${{ github.ref_name == 'stage' || github.ref_name == 'main' }}
