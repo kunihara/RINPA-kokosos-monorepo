@@ -265,13 +265,24 @@ function isValidEmail(email: string): boolean {
 }
 
 async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  // Always require authenticated user; fall back to Supabase /auth/v1/user if needed
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  let userId: string | null = null
   const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  if (auth.ok && auth.userId) userId = auth.userId
+  else {
+    const m = authz.match(/^Bearer\s+(.+)$/i)
+    const token = m ? m[1] : ''
+    const supa = await fetchSupabaseUser(env, token)
+    if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
+    userId = supa.userId
+  }
   const url = new URL(req.url)
   const status = (url.searchParams.get('status') || 'all').toLowerCase()
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  let query = `user_id=eq.${encodeURIComponent(auth.userId!)}`
+  let query = `user_id=eq.${encodeURIComponent(userId!)}`
   if (status === 'verified') query += `&verified_at=not.is.null`
   else if (status === 'pending') query += `&verified_at=is.null`
   const res = await sb.select('contacts', 'id,name,email,role,capabilities,verified_at', query)
@@ -279,28 +290,38 @@ async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Pr
 }
 
 async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  let userId: string | null = null
   const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  if (auth.ok && auth.userId) userId = auth.userId
+  else {
+    const m = authz.match(/^Bearer\s+(.+)$/i)
+    const token = m ? m[1] : ''
+    const supa = await fetchSupabaseUser(env, token)
+    if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
+    userId = supa.userId
+  }
   const body = await req.json().catch(() => null)
   if (!body || !Array.isArray(body.contacts)) return json({ error: 'invalid_body' }, { status: 400 })
   const sendVerify = Boolean(body.send_verify)
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  await ensureUserExists(sb, auth.userId!)
+  await ensureUserExists(sb, userId!)
   const out: any[] = []
   for (const c of body.contacts as Array<{ email: string; name?: string }>) {
     const email = String((c.email || '').toLowerCase().trim())
     if (!isValidEmail(email)) continue
     // Try find by email
-    const found = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(auth.userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
+    const found = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
     if (found.ok && found.data.length > 0) {
       out.push(found.data[0])
     } else {
-      const ins = await sb.insert('contacts', { user_id: auth.userId, name: c.name || email, email })
+      const ins = await sb.insert('contacts', { user_id: userId, name: c.name || email, email })
       if (ins.ok && ins.data.length > 0) out.push(ins.data[0])
     }
     if (sendVerify) {
-      const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(auth.userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
+      const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
       if (list.ok && list.data.length > 0 && !(list.data[0] as any).verified_at) {
         await sendVerifyForContact(env, list.data[0] as any)
       }
@@ -310,8 +331,10 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
 }
 
 async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
   const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: auth.status })
   const m = req.url.match(/\/contacts\/([^/]+)\/send_verify/)
   if (!m) return notFound()
   const id = m[1]
