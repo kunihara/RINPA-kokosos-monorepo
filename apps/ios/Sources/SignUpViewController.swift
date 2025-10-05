@@ -1,6 +1,6 @@
 import UIKit
 
-final class SignUpViewController: UIViewController {
+final class SignUpViewController: UIViewController, UITextFieldDelegate {
     private let titleLabel = UILabel()
     private let emailField = UITextField()
     private let passwordField = UITextField()
@@ -27,10 +27,14 @@ final class SignUpViewController: UIViewController {
         emailField.autocapitalizationType = .none
         emailField.keyboardType = .emailAddress
         emailField.borderStyle = .roundedRect
+        emailField.returnKeyType = .next
+        emailField.delegate = self
 
         passwordField.placeholder = "パスワード（8文字以上）"
         passwordField.isSecureTextEntry = true
         passwordField.borderStyle = .roundedRect
+        passwordField.returnKeyType = .done
+        passwordField.delegate = self
 
         signUpButton.setTitle("登録する", for: .normal)
         signUpButton.addTarget(self, action: #selector(tapSignUp), for: .touchUpInside)
@@ -63,6 +67,14 @@ final class SignUpViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
+
+        // キーボードを閉じるアクセサリ & タップで閉じる
+        let kbToolbar = makeKeyboardAccessoryToolbar()
+        emailField.inputAccessoryView = kbToolbar
+        passwordField.inputAccessoryView = kbToolbar
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
     }
 
     @objc private func tapSignUp() {
@@ -109,6 +121,27 @@ final class SignUpViewController: UIViewController {
         let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+
+    private func makeKeyboardAccessoryToolbar() -> UIToolbar {
+        let toolbar = UIToolbar()
+        toolbar.sizeToFit()
+        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let close = UIBarButtonItem(title: "キーボードを閉じる", style: .plain, target: self, action: #selector(dismissKeyboard))
+        toolbar.items = [flex, close]
+        return toolbar
+    }
+
+    @objc private func dismissKeyboard() { view.endEditing(true) }
+
+    // MARK: UITextFieldDelegate
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === emailField {
+            passwordField.becomeFirstResponder()
+        } else {
+            textField.resignFirstResponder()
+        }
+        return true
     }
 
     private func makeOAuthButton(title: String, action: @escaping () -> Void) -> UIButton {

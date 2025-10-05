@@ -1,6 +1,6 @@
 import UIKit
 
-final class SignInViewController: UIViewController {
+final class SignInViewController: UIViewController, UITextFieldDelegate {
     private let titleLabel = UILabel()
     private let emailField = UITextField()
     private let passwordField = UITextField()
@@ -30,10 +30,14 @@ final class SignInViewController: UIViewController {
         emailField.autocapitalizationType = .none
         emailField.keyboardType = .emailAddress
         emailField.borderStyle = .roundedRect
+        emailField.returnKeyType = .next
+        emailField.delegate = self
 
         passwordField.placeholder = "パスワード"
         passwordField.isSecureTextEntry = true
         passwordField.borderStyle = .roundedRect
+        passwordField.returnKeyType = .done
+        passwordField.delegate = self
 
         signInButton.setTitle("サインイン", for: .normal)
         signInButton.addTarget(self, action: #selector(tapSignIn), for: .touchUpInside)
@@ -74,6 +78,37 @@ final class SignInViewController: UIViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
+
+        // キーボードを閉じるボタン（アクセサリ）
+        let kbToolbar = makeKeyboardAccessoryToolbar()
+        emailField.inputAccessoryView = kbToolbar
+        passwordField.inputAccessoryView = kbToolbar
+
+        // 画面タップでキーボードを閉じる
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+    }
+
+    private func makeKeyboardAccessoryToolbar() -> UIToolbar {
+        let toolbar = UIToolbar()
+        toolbar.sizeToFit()
+        let flex = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+        let close = UIBarButtonItem(title: "キーボードを閉じる", style: .plain, target: self, action: #selector(dismissKeyboard))
+        toolbar.items = [flex, close]
+        return toolbar
+    }
+
+    @objc private func dismissKeyboard() { view.endEditing(true) }
+
+    // MARK: UITextFieldDelegate
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        if textField === emailField {
+            passwordField.becomeFirstResponder()
+        } else {
+            textField.resignFirstResponder()
+        }
+        return true
     }
 
     @objc private func tapSignIn() {
