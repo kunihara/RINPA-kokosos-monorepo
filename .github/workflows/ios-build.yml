@@ -92,4 +92,31 @@ jobs:
             -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
             -sdk iphonesimulator \
             -destination "id=${SIM_UDID}" \
-            build | xcpretty || exit ${PIPESTATUS[0]}
+            -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult \
+            build | tee build/xcodebuild-${{ matrix.cfg_suffix }}.log | xcpretty || exit ${PIPESTATUS[0]}
+
+      - name: Show Build Settings (Debug-${{ matrix.cfg_suffix }})
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} -showBuildSettings | head -n 200 || true
+
+      - name: Extract xcresult issues (Debug-${{ matrix.cfg_suffix }})
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -d build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult ]; then
+            xcrun xcresulttool get --path build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult --format json > build/xcresult-${{ matrix.cfg_suffix }}.json || true
+            jq '.issues' build/xcresult-${{ matrix.cfg_suffix }}.json | head -n 200 || true
+          fi
+
+      - name: Upload build artifacts (logs/xcresult)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-artifacts-${{ matrix.cfg_suffix }}
+          path: |
+            apps/ios/build/xcodebuild-${{ matrix.cfg_suffix }}.log
+            apps/ios/build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult
