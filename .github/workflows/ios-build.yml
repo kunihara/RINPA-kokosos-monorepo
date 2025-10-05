@@ -70,8 +70,8 @@ jobs:
         working-directory: apps/ios
         run: |
           set -euo pipefail
-          # Pick the latest available iOS runtime
-          RUNTIME_ID=$(xcrun simctl list runtimes | awk '/iOS [0-9]/{print $NF}' | head -n1)
+          # Pick the latest available iOS runtime (last line tends to be the newest)
+          RUNTIME_ID=$(xcrun simctl list runtimes | awk '/iOS [0-9]/{print $NF}' | tail -n1)
           echo "Using runtime: ${RUNTIME_ID}"
           # Create device if missing
           if ! xcrun simctl list devices | grep -q "KokoSOS-CI"; then
@@ -80,6 +80,9 @@ jobs:
           # Boot (ignore if already booted)
           xcrun simctl boot "KokoSOS-CI" || true
           xcrun simctl list devices | grep -A2 "KokoSOS-CI" || true
+          # Export UDID for xcodebuild destination by id (avoids OS mismatch)
+          SIM_UDID=$(xcrun simctl list devices | awk -F'[()]' '/KokoSOS-CI/{print $2; exit}')
+          echo "SIM_UDID=${SIM_UDID}" >> "$GITHUB_ENV"
 
       - name: Build (Simulator, Debug-${{ matrix.cfg_suffix }})
         working-directory: apps/ios
@@ -88,5 +91,5 @@ jobs:
           xcodebuild -project KokoSOS.xcodeproj \
             -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=KokoSOS-CI' \
+            -destination "id=${SIM_UDID}" \
             build | xcpretty || exit ${PIPESTATUS[0]}
