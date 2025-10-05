@@ -9,9 +9,12 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     private let client = ContactsClient()
     private var verified: [Contact] = []
     private var pending: [Contact] = []
+    private var deviceEmails: [(name: String, email: String)] = []
+    private var filteredDeviceEmails: [(name: String, email: String)] = []
     private var selectedEmails = Set<String>()
     private var emailInputs: [String] = [""]
     private let contactStore = CNContactStore()
+    private var contactsAuthDenied = false
     private let confirmButton = UIButton(type: .system)
 
     override func viewDidLoad() {
@@ -55,7 +58,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             confirmButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             confirmButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
-        Task { await load() }
+        Task { await load(); await loadDeviceContacts() }
     }
 
     private func norm(_ s: String) -> String { s.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -68,6 +71,9 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         } else {
             verified = verified.filter { ( ($0.name ?? "").lowercased().contains(query) ) || $0.email.lowercased().contains(query) }
             pending = pending.filter { ( ($0.name ?? "").lowercased().contains(query) ) || $0.email.lowercased().contains(query) }
+            filteredDeviceEmails = deviceEmails.filter { pair in
+                pair.name.lowercased().contains(query) || pair.email.lowercased().contains(query)
+            }
         }
         table.reloadData()
     }
@@ -107,6 +113,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             await MainActor.run {
                 self.verified = items.filter { $0.verified_at != nil }
                 self.pending = items.filter { $0.verified_at == nil }
+                self.filteredDeviceEmails = self.deviceEmails
                 self.applyFilter(self.searchBar.text)
             }
         } catch {
@@ -118,21 +125,89 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         }
     }
 
+    private func loadDeviceContacts() async {
+        let status = CNContactStore.authorizationStatus(for: .contacts)
+        switch status {
+        case .notDetermined:
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                contactStore.requestAccess(for: .contacts) { [weak self] granted, _ in
+                    DispatchQueue.main.async {
+                        self?.contactsAuthDenied = !granted
+                        cont.resume()
+                    }
+                }
+            }
+            await fetchDeviceContactsIfAuthorized()
+        case .authorized:
+            await fetchDeviceContactsIfAuthorized()
+        case .denied, .restricted:
+            contactsAuthDenied = true
+        @unknown default:
+            contactsAuthDenied = true
+        }
+        await MainActor.run {
+            self.filteredDeviceEmails = self.deviceEmails
+            self.applyFilter(self.searchBar.text)
+        }
+    }
+
+    private func fetchDeviceContactsIfAuthorized() async {
+        var results: [(String, String)] = []
+        let keys: [CNKeyDescriptor] = [CNContactGivenNameKey as NSString, CNContactFamilyNameKey as NSString, CNContactEmailAddressesKey as NSString]
+        let req = CNContactFetchRequest(keysToFetch: keys)
+        do {
+            try contactStore.enumerateContacts(with: req) { contact, _ in
+                let name = (contact.familyName + " " + contact.givenName).trimmingCharacters(in: .whitespaces)
+                for emailValue in contact.emailAddresses {
+                    let em = self.norm(emailValue.value as String)
+                    if !em.isEmpty && self.isValidEmail(em) {
+                        results.append((name.isEmpty ? em : name, em))
+                    }
+                }
+            }
+        } catch {
+            contactsAuthDenied = true
+        }
+        // Unique by email
+        var seen = Set<String>()
+        var unique: [(String, String)] = []
+        for (n,e) in results {
+            if !seen.contains(e) { seen.insert(e); unique.append((n,e)) }
+        }
+        deviceEmails = unique
+    }
+
     // MARK: Table
-    func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    func numberOfSections(in tableView: UITableView) -> Int { 4 }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
-        case 0: return verified.count
-        case 1: return pending.count
+        case 0: return contactsAuthDenied ? 1 : filteredDeviceEmails.count
+        case 1: return verified.count
+        case 2: return pending.count
         default: return emailInputs.count
         }
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        if indexPath.section <= 1 {
+        if indexPath.section == 0 {
+            if contactsAuthDenied {
+                let cell = tableView.dequeueReusableCell(withIdentifier: "cell") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
+                cell.textLabel?.text = "連絡先へのアクセスが許可されていません"
+                cell.detailTextLabel?.text = "設定アプリで許可するか、下の入力欄にメールを追加してください"
+                cell.selectionStyle = .none
+                return cell
+            }
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
-            let c = (indexPath.section == 0 ? verified[indexPath.row] : pending[indexPath.row])
+            let pair = filteredDeviceEmails[indexPath.row]
+            cell.textLabel?.text = pair.name
+            cell.detailTextLabel?.text = pair.email
+            cell.selectionStyle = .none
+            cell.accessoryType = .none
+            return cell
+        } else if indexPath.section == 1 || indexPath.section == 2 {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cell") ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
+            let c = (indexPath.section == 1 ? verified[indexPath.row] : pending[indexPath.row])
             cell.textLabel?.text = c.name?.isEmpty == false ? c.name : c.email
             var detail = c.email
             if c.verified_at == nil { detail += " ・未検証" } else { detail += " ・検証済み" }
@@ -149,37 +224,46 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             cell.onChange = { [weak self] text in self?.emailInputs[indexPath.row] = text }
             cell.onRemove = { [weak self] in
                 guard let self else { return }
-                if self.emailInputs.count > 1 { self.emailInputs.remove(at: indexPath.row); self.table.reloadSections(IndexSet(integer: 2), with: .automatic) }
+                if self.emailInputs.count > 1 { self.emailInputs.remove(at: indexPath.row); self.table.reloadSections(IndexSet(integer: 3), with: .automatic) }
             }
             return cell
         }
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard indexPath.section == 0 else { return }
-        let c = verified[indexPath.row]
-        let email = norm(c.email)
-        let nowSelected = !selectedEmails.contains(email)
-        setSelected(email: email, selected: nowSelected)
-        table.reloadRows(at: [indexPath], with: .automatic)
+        if indexPath.section == 0 {
+            // Device contacts: add to input fields
+            guard !contactsAuthDenied else { return }
+            let email = filteredDeviceEmails[indexPath.row].email
+            handlePickedEmails([email])
+        } else if indexPath.section == 1 {
+            let c = verified[indexPath.row]
+            let email = norm(c.email)
+            let nowSelected = !selectedEmails.contains(email)
+            setSelected(email: email, selected: nowSelected)
+            table.reloadRows(at: [indexPath], with: .automatic)
+        } else {
+            return
+        }
     }
 
     // MARK: Headers
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch section {
-        case 0: return "連絡先（検証済み・選択可）"
-        case 1: return pending.isEmpty ? nil : "連絡先（未検証・選択不可）"
+        case 0: return "端末の連絡先（検索可・タップで下に追加）"
+        case 1: return "連絡先（検証済み・選択可）"
+        case 2: return pending.isEmpty ? nil : "連絡先（未検証・選択不可）"
         default: return "メールを直接入力（1行=1件、＋で追加）"
         }
     }
 
     // MARK: Footer for add button in inputs
     func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-        guard section == 2 else { return nil }
+        guard section == 3 else { return nil }
         let v = UIView()
         let btn = UIButton(type: .system)
         btn.setTitle("＋ フィールドを追加", for: .normal)
-        btn.addAction(UIAction(handler: { [weak self] _ in self?.emailInputs.append(""); self?.table.reloadSections(IndexSet(integer: 2), with: .automatic) }), for: .touchUpInside)
+        btn.addAction(UIAction(handler: { [weak self] _ in self?.emailInputs.append(""); self?.table.reloadSections(IndexSet(integer: 3), with: .automatic) }), for: .touchUpInside)
         btn.translatesAutoresizingMaskIntoConstraints = false
         v.addSubview(btn)
         NSLayoutConstraint.activate([
@@ -190,7 +274,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         return v
     }
 
-    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { section == 2 ? 48 : 0 }
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { section == 3 ? 48 : 0 }
 
     // MARK: Search
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) { applyFilter(searchText) }
@@ -265,7 +349,7 @@ extension ContactsPickerViewController: CNContactPickerDelegate {
                 added += 1
             }
         }
-        table.reloadSections(IndexSet(integer: 2), with: .automatic)
+        table.reloadSections(IndexSet(integer: 3), with: .automatic)
         if added > 0 {
             let a = UIAlertController(title: "追加しました", message: "\(added)件のメールを入力欄に追加しました。確認後に『決定』で送信します。", preferredStyle: .alert)
             a.addAction(UIAlertAction(title: "OK", style: .default))
