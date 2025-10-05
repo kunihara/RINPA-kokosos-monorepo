@@ -11,7 +11,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     if api.currentAuthToken() != nil {
       rootVC = MainViewController()
     } else {
-      rootVC = SignInViewController()
+      rootVC = AuthEntryViewController()
     }
     let root = UINavigationController(rootViewController: rootVC)
     window.rootViewController = root

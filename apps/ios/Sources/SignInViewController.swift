@@ -5,7 +5,7 @@ final class SignInViewController: UIViewController {
     private let emailField = UITextField()
     private let passwordField = UITextField()
     private let signInButton = UIButton(type: .system)
-    private let signUpButton = UIButton(type: .system)
+    // サインアップは別画面に分離
     private let resetButton = UIButton(type: .system)
     private let resendConfirmButton = UIButton(type: .system)
     private let stack = UIStackView()
@@ -38,8 +38,6 @@ final class SignInViewController: UIViewController {
         signInButton.setTitle("サインイン", for: .normal)
         signInButton.addTarget(self, action: #selector(tapSignIn), for: .touchUpInside)
 
-        signUpButton.setTitle("新規登録", for: .normal)
-        signUpButton.addTarget(self, action: #selector(tapSignUp), for: .touchUpInside)
 
         resetButton.setTitle("パスワードをお忘れですか？", for: .normal)
         resetButton.titleLabel?.font = .systemFont(ofSize: 13)
@@ -66,7 +64,9 @@ final class SignInViewController: UIViewController {
         let fbBtn = makeOAuthButton(title: "Facebookで続ける") { [weak self] in self?.startOAuth("facebook") }
         [appleBtn, googleBtn, fbBtn].forEach { oauthStack.addArrangedSubview($0) }
 
-        [titleLabel, emailField, passwordField, signInButton, signUpButton, resetButton, resendConfirmButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
+        [titleLabel, emailField, passwordField, signInButton, resetButton, resendConfirmButton, infoLabel, oauthStack].forEach { stack.addArrangedSubview($0) }
+        // 右上に「新規登録」導線（別画面）
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "新規登録", style: .plain, target: self, action: #selector(openSignUp))
         view.addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -106,45 +106,7 @@ final class SignInViewController: UIViewController {
         present(a, animated: true)
     }
 
-    @objc private func tapSignUp() {
-        guard let email = emailField.text, !email.isEmpty, let pass = passwordField.text, !pass.isEmpty else {
-            showAlert("入力エラー", "メールとパスワードを入力してください")
-            return
-        }
-        Task { @MainActor in
-            signUpButton.isEnabled = false
-            defer { signUpButton.isEnabled = true }
-            guard let auth = AuthClient() else {
-                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL/SupabaseAnonKey を設定してください。")
-                return
-            }
-            do {
-                let info = Bundle.main.infoDictionary
-                let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
-                let redirect: String
-                if let b = base, !b.isEmpty {
-                    redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback"
-                } else if let h = host, !h.isEmpty {
-                    redirect = "https://\(h)/auth/callback"
-                } else {
-                    redirect = "\(scheme)://oauth-callback"
-                }
-                if let token = try await auth.signUp(email: email, password: pass, redirectTo: redirect) {
-                    api.setAuthToken(token)
-                    // サインアップ直後は受信者オンボーディングへ誘導（Main表示後に1回だけ）
-                    UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
-                    let main = MainViewController()
-                    navigationController?.setViewControllers([main], animated: true)
-                } else {
-                    showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、サインインを行ってください。")
-                }
-            } catch {
-                showAlert("サインアップ失敗", error.localizedDescription)
-            }
-        }
-    }
+    @objc private func openSignUp() { navigationController?.pushViewController(SignUpViewController(), animated: true) }
 
     @objc private func tapReset() {
         guard let email = emailField.text, !email.isEmpty else {

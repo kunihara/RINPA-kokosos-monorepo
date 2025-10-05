@@ -348,8 +348,8 @@ final class MainViewController: UIViewController {
 
     @objc private func tapSignOut() {
         APIClient().setAuthToken(nil)
-        // ルートをサインインへ
-        let signin = SignInViewController()
-        navigationController?.setViewControllers([signin], animated: true)
+        // ルートを認証エントリへ
+        let entry = AuthEntryViewController()
+        navigationController?.setViewControllers([entry], animated: true)
     }
 }
