@@ -118,8 +118,21 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
             }
         } catch {
             await MainActor.run {
-                let alert = UIAlertController(title: "取得失敗", message: error.localizedDescription, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                var message = error.localizedDescription
+                var showReauth = false
+                if let apiErr = error as? APIError, case let .http(status, _) = apiErr, status == 401 {
+                    message = "サインインが期限切れ/無効です。サインインし直してください。"
+                    showReauth = true
+                }
+                let alert = UIAlertController(title: "取得失敗", message: message, preferredStyle: .alert)
+                if showReauth {
+                    alert.addAction(UIAlertAction(title: "サインイン", style: .default, handler: { [weak self] _ in
+                        guard let self else { return }
+                        let signin = UINavigationController(rootViewController: SignInViewController())
+                        self.present(signin, animated: true)
+                    }))
+                }
+                alert.addAction(UIAlertAction(title: "OK", style: .cancel))
                 self.present(alert, animated: true)
             }
         }

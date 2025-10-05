@@ -170,8 +170,14 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func openRecipients() {
-        let vc = ContactsPickerViewController()
-        let nav = UINavigationController(rootViewController: vc)
+        // サインイン必須（トークン無し時は先にサインイン）
+        if APIClient().currentAuthToken() == nil {
+            let nav = UINavigationController(rootViewController: SignInViewController())
+            present(nav, animated: true)
+            return
+        }
+        let picker = ContactsPickerViewController()
+        let nav = UINavigationController(rootViewController: picker)
         present(nav, animated: true)
     }
 
