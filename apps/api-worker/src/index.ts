@@ -108,6 +108,8 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'POST', pattern: /^\/contacts\/([^/]+)\/send_verify$/, handler: handleContactSendVerify },
   // Verify (public)
   { method: 'GET', pattern: /^\/public\/verify\/([^/]+)$/, handler: handleVerifyContact },
+  // Account deletion
+  { method: 'DELETE', pattern: /^\/account$/, handler: handleAccountDelete },
   { method: 'POST', pattern: /^\/alert\/start$/, handler: handleAlertStart },
   // accept UUIDs with hyphens or any non-slash segment
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/update$/, handler: handleAlertUpdate },
@@ -340,6 +342,43 @@ async function handleVerifyContact({ req, env }: Parameters<RouteHandler>[0]): P
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   await sb.update('contacts', { verified_at: new Date().toISOString() }, `id=eq.${contactId}`)
+  return json({ ok: true })
+}
+
+// ---------- Account deletion (caller = authenticated sender)
+async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok) return json({ error: auth.error }, { status: auth.status })
+  const userId = auth.userId!
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+
+  // Best effort: delete app data (alerts, contacts, users) before Auth user deletion
+  try {
+    // Delete alerts (will cascade locations, deliveries(alert), alert_recipients, reactions(alert), revocations)
+    await sb.delete('alerts', `user_id=eq.${encodeURIComponent(userId)}`)
+    // Delete contacts (deliveries(contact) will cascade if FK, reactions(alert) already gone)
+    await sb.delete('contacts', `user_id=eq.${encodeURIComponent(userId)}`)
+    // Delete app-side users row (in case CASCADE is not configured from auth.users)
+    await sb.delete('users', `id=eq.${encodeURIComponent(userId)}`)
+  } catch {}
+
+  // Delete Supabase Auth user via Admin API
+  try {
+    const adminUrl = `${env.SUPABASE_URL!.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`
+    const headers = {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY as string,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    }
+    const res = await fetch(adminUrl, { method: 'DELETE', headers })
+    if (!res.ok && res.status !== 404) {
+      const t = await res.text()
+      return json({ ok: false, error: 'auth_delete_failed', detail: `${res.status} ${t}` }, { status: 500 })
+    }
+  } catch (e) {
+    return json({ ok: false, error: 'auth_delete_failed' }, { status: 500 })
+  }
+
   return json({ ok: true })
 }
 
@@ -732,6 +771,11 @@ function supabase(env: Env) {
       const ok = res.ok
       const dataJson = ok ? await res.json() : null
       return { ok, data: (dataJson as any[]) || [], error: ok ? null : await res.text() }
+    },
+    async delete(table: string, query: string) {
+      const url = `${base}/${table}?${query}`
+      const res = await fetch(url, { method: 'DELETE', headers: headersBase })
+      return { ok: res.ok, error: res.ok ? null : await res.text() }
     },
   }
 }

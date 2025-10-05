@@ -15,6 +15,8 @@ final class SettingsViewController: UIViewController {
     private let apiGroupLabel = UILabel()
     private let apiTextField = UITextField()
     private let apiHelpLabel = UILabel()
+    private let dangerLabel = UILabel()
+    private let deleteAccountButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -86,6 +88,15 @@ final class SettingsViewController: UIViewController {
         view.addSubview(apiGroupLabel)
         view.addSubview(apiTextField)
         view.addSubview(apiHelpLabel)
+        dangerLabel.text = "アカウント"
+        dangerLabel.textColor = .secondaryLabel
+        dangerLabel.translatesAutoresizingMaskIntoConstraints = false
+        deleteAccountButton.setTitle("アカウント削除", for: .normal)
+        deleteAccountButton.setTitleColor(.systemRed, for: .normal)
+        deleteAccountButton.addTarget(self, action: #selector(tapDeleteAccount), for: .touchUpInside)
+        deleteAccountButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dangerLabel)
+        view.addSubview(deleteAccountButton)
 
         NSLayoutConstraint.activate([
             reminderLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
@@ -116,6 +127,13 @@ final class SettingsViewController: UIViewController {
             apiHelpLabel.topAnchor.constraint(equalTo: apiTextField.bottomAnchor, constant: 6),
             apiHelpLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             apiHelpLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            dangerLabel.topAnchor.constraint(equalTo: apiHelpLabel.bottomAnchor, constant: 32),
+            dangerLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            dangerLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            deleteAccountButton.topAnchor.constraint(equalTo: dangerLabel.bottomAnchor, constant: 12),
+            deleteAccountButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
     }
 
@@ -155,5 +173,28 @@ final class SettingsViewController: UIViewController {
         let vc = ContactsPickerViewController()
         let nav = UINavigationController(rootViewController: vc)
         present(nav, animated: true)
+    }
+
+    @objc private func tapDeleteAccount() {
+        let alert = UIAlertController(title: "アカウント削除", message: "この操作は元に戻せません。全てのデータが削除され、ログアウトします。実行しますか？", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "削除", style: .destructive, handler: { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                deleteAccountButton.isEnabled = false
+                defer { deleteAccountButton.isEnabled = true }
+                do {
+                    try await APIClient().deleteAccount()
+                    APIClient().setAuthToken(nil)
+                    let signin = SignInViewController()
+                    self.navigationController?.setViewControllers([signin], animated: true)
+                } catch {
+                    let a = UIAlertController(title: "削除に失敗", message: error.localizedDescription, preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(a, animated: true)
+                }
+            }
+        }))
+        present(alert, animated: true)
     }
 }

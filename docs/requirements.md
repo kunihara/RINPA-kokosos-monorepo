@@ -74,6 +74,36 @@ SSEイベント（例）
 
 ---
 
+## アカウント削除（追加）
+
+- 目的：ユーザーがアプリ内の「アカウント削除」操作で、本人の認証情報と関連データ（contacts/alerts/locations/deliveries…）を安全に削除できるようにする。
+
+- クライアント（iOS）
+  - 設定 > アカウント削除（確認ダイアログ）→ API `DELETE /account` を呼び出し。
+  - 成功後はトークンを破棄しサインイン画面へ遷移。
+
+- API（Workers）
+  - `DELETE /account`（Authorization 必須）
+    - 認証トークンから `user_id` を取得。
+    - Supabase REST（Service Role）でアプリ側データを削除（best-effort）
+      - `alerts`（→ locations/deliveries/alert_recipients/reactions/revocations は CASCADE で削除）
+      - `contacts`（→ deliveries(contact) は CASCADE）
+      - `users`（public.users）
+    - Supabase Auth Admin API で `auth.users/{id}` を削除。
+    - 200で `{ ok: true }` を返す。
+
+- スキーマ/制約（推奨）
+  - 連鎖削除を確実にするため、以下を整備：
+    - `contacts.user_id` / `alerts.user_id` → `users.id` は `ON DELETE CASCADE`（既定）
+    - `locations.alert_id` / `deliveries.alert_id` / `alert_recipients.alert_id` / `reactions.alert_id` → `alerts.id` は `ON DELETE CASCADE`（既定）
+    - （任意）`public.users.id` → `auth.users(id)` に `ON DELETE CASCADE` を付与しておくと、「Auth削除だけで全削除」が可能。
+
+- 運用メモ
+  - RLSはONにすることを推奨（WorkersはService Roleでバイパス）。
+  - 直接SQLの実行は不要。アプリの「アカウント削除」からAPI経由で処理可能。
+
+---
+
 ## フロントエンド (Web)
 - Route: `/s/[token]`
 - 初期表示：ローディングUI

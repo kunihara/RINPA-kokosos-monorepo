@@ -153,6 +153,16 @@ struct APIClient {
             throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
         }
     }
+
+    func deleteAccount() async throws {
+        var req = URLRequest(url: endpoint("account"))
+        req.httpMethod = "DELETE"
+        applyAuth(&req)
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
+        }
+    }
 }
 
 struct StartAlertResponse: Codable {
