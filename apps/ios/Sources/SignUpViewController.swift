@@ -50,7 +50,8 @@ final class SignUpViewController: UIViewController {
         oauthStack.spacing = 8
         let appleBtn = makeOAuthButton(title: "Appleで続ける") { [weak self] in self?.startOAuth("apple") }
         let googleBtn = makeOAuthButton(title: "Googleで続ける") { [weak self] in self?.startOAuth("google") }
-        [appleBtn, googleBtn].forEach { oauthStack.addArrangedSubview($0) }
+        let fbBtn = makeOAuthButton(title: "Facebookで続ける") { [weak self] in self?.startOAuth("facebook") }
+        [appleBtn, googleBtn, fbBtn].forEach { oauthStack.addArrangedSubview($0) }
 
         let stack = UIStackView(arrangedSubviews: [titleLabel, emailField, passwordField, signUpButton, infoLabel, oauthInfoLabel, oauthStack])
         stack.axis = .vertical
