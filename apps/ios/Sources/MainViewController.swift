@@ -39,7 +39,7 @@ final class MainViewController: UIViewController {
         let onceKey = "ShouldShowRecipientsOnboardingOnce"
         if UserDefaults.standard.bool(forKey: onceKey), presentedViewController == nil {
             UserDefaults.standard.set(false, forKey: onceKey)
-            let vc = OnboardingRecipientsViewController()
+            let vc = ContactsPickerViewController()
             let nav = UINavigationController(rootViewController: vc)
             present(nav, animated: true)
             return
@@ -51,7 +51,7 @@ final class MainViewController: UIViewController {
                     let items = try await ContactsClient().list(status: "verified")
                     if items.isEmpty {
                         didAutoShowOnboarding = true
-                        let vc = OnboardingRecipientsViewController()
+                        let vc = ContactsPickerViewController()
                         let nav = UINavigationController(rootViewController: vc)
                         present(nav, animated: true)
                     }

@@ -32,7 +32,7 @@ final class SettingsViewController: UIViewController {
                 do {
                     let items = try await ContactsClient().list(status: "verified")
                     if items.isEmpty {
-                        let vc = OnboardingRecipientsViewController()
+                        let vc = ContactsPickerViewController()
                         let nav = UINavigationController(rootViewController: vc)
                         present(nav, animated: true)
                     }
@@ -152,7 +152,7 @@ final class SettingsViewController: UIViewController {
     }
 
     @objc private func openRecipients() {
-        let vc = OnboardingRecipientsViewController()
+        let vc = ContactsPickerViewController()
         let nav = UINavigationController(rootViewController: vc)
         present(nav, animated: true)
     }
