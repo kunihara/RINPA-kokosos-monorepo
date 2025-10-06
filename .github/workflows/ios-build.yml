@@ -173,7 +173,9 @@ jobs:
           name: ios-build-artifacts-Dev
           path: |
             apps/ios/build/xcodebuild-Dev.log
+            apps/ios/build/xcodebuild-Dev-raw.log
             apps/ios/build/KokoSOS-Dev.xcresult
+            apps/ios/build/KokoSOS-Dev-raw.xcresult
 
   build-ios-matrix:
     name: iOS Build (Dev/Stage/Prod - matrix)
@@ -327,4 +329,6 @@ jobs:
           name: ios-build-artifacts-${{ matrix.cfg_suffix }}
           path: |
             apps/ios/build/xcodebuild-${{ matrix.cfg_suffix }}.log
+            apps/ios/build/xcodebuild-${{ matrix.cfg_suffix }}-raw.log
             apps/ios/build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult
+            apps/ios/build/KokoSOS-${{ matrix.cfg_suffix }}-raw.xcresult
