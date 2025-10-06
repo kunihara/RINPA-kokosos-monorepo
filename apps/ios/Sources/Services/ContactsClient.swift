@@ -16,8 +16,9 @@ final class ContactsClient {
     private func execute(_ build: () -> URLRequest) async throws -> (Data, HTTPURLResponse) {
         var req = build()
         var (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, http.statusCode == 401, api.currentRefreshToken() != nil {
-            if await AuthClient.performRefreshAndStore() {
+        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
+            let refreshed = await SupabaseAuthAdapter.shared.refresh()
+            if refreshed {
                 req = build()
                 (data, resp) = try await URLSession.shared.data(for: req)
             }
@@ -65,8 +66,8 @@ final class ContactsClient {
     }
 
     private func apiApplyAuth(_ req: inout URLRequest) {
-        if let t = UserDefaults.standard.string(forKey: APIClient.authTokenUserDefaultsKey), !t.isEmpty {
-            req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        if let sdkToken = SupabaseAuthAdapter.shared.accessToken, !sdkToken.isEmpty {
+            req.setValue("Bearer \(sdkToken)", forHTTPHeaderField: "Authorization")
         }
     }
 }

@@ -15,15 +15,8 @@ enum DeepLinkHandler {
                 params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1]
             }
         }
-        guard let access = params["access_token"], !access.isEmpty else { return false }
-        // Save token for APIClient
-        APIClient().setAuthToken(access)
-        // Navigate to Main
-        if let nav = navigation {
-            let main = MainViewController()
-            nav.setViewControllers([main], animated: true)
-        }
+        // SDKのOAuthは signInWithOAuth の完了でセッションが確立される想定。
+        // ここではトークンを直接扱わず、ハンドル済みとしてtrueを返すのみ。
         return true
     }
 }
-
