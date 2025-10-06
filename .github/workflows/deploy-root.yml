@@ -47,9 +47,9 @@ jobs:
           wrangler whoami
           PROJECT="kokosos-root"
           BRANCH="${{ github.ref_name }}"
-          # Create project if missing
+          # Create project if missing (production branch is ALWAYS 'main')
           wrangler pages project list || true
-          wrangler pages project create "$PROJECT" --production-branch="$BRANCH" || true
+          wrangler pages project create "$PROJECT" --production-branch=main || true
           # Deploy static folder (sites/root)
           wrangler pages deploy . --project-name="$PROJECT" --branch="$BRANCH" --commit-dirty=true --commit-message="GitHub_Actions_Deploy"
           if [ "$BRANCH" = "main" ]; then
