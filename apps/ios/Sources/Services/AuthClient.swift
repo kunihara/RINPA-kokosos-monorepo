@@ -31,8 +31,28 @@ struct AuthClient {
         self.config = Config(supabaseURL: finalBase, anonKey: anon)
     }
 
-    // Refresh access token using stored refresh_token. Returns true if refreshed.
+    // Serialize refresh to a single in-flight task to avoid token reuse/rotation競合
+    actor RefreshCoordinator {
+        static let shared = RefreshCoordinator()
+        private var inFlight: Task<Bool, Never>? = nil
+        func run(_ block: @escaping () async -> Bool) async -> Bool {
+            if let t = inFlight { return await t.value }
+            let task = Task { await block() }
+            inFlight = task
+            let result = await task.value
+            inFlight = nil
+            return result
+        }
+    }
+
     static func performRefreshAndStore() async -> Bool {
+        return await RefreshCoordinator.shared.run {
+            await _performRefreshAndStore()
+        }
+    }
+
+    // Actual refresh implementation (do not call directly; use performRefreshAndStore)
+    private static func _performRefreshAndStore() async -> Bool {
         let api = APIClient()
         guard let refresh = api.currentRefreshToken() else { return false }
         guard let client = AuthClient() else { return false }
@@ -72,9 +92,9 @@ struct AuthClient {
             #endif
             return true
         } catch {
-            #if DEBUG
+#if DEBUG
             print("[Auth] refresh exception=\(error.localizedDescription)")
-            #endif
+#endif
             return false
         }
     }
