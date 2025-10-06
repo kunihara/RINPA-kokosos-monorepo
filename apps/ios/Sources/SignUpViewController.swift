@@ -155,8 +155,18 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
     private func startOAuth(_ provider: String) {
         Task { @MainActor in
             do {
-                guard let legacy = AuthClient() else { throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Auth設定が見つかりません"]) }
-                let _ = try await legacy.signInWithOAuth(provider: provider, presentationAnchor: view.window)
+                let info = Bundle.main.infoDictionary
+                let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
+                let redirectURI = "\(scheme)://oauth-callback"
+                let client = SupabaseAuthAdapter.shared.client
+                let prov: OAuthProvider
+                switch provider.lowercased() {
+                case "apple": prov = .apple
+                case "google": prov = .google
+                case "facebook": prov = .facebook
+                default: prov = .google
+                }
+                try await client.auth.signInWithOAuth(provider: prov, options: .init(redirectTo: redirectURI, scopes: "email profile offline_access"))
                 // サインアップ画面からのOAuthは新規/既存の区別が難しいため、オンボーディングを促す
                 UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                 let main = MainViewController()

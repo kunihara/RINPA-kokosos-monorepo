@@ -183,10 +183,18 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
     private func startOAuth(_ provider: String) {
         Task { @MainActor in
             do {
-                // ひとまず既存フローを維持（SDK OAuthは後続で置換予定）
-                guard let legacy = AuthClient() else { throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Auth設定が見つかりません"]) }
-                let _ = try await legacy.signInWithOAuth(provider: provider, presentationAnchor: view.window)
-                // Mainへ遷移
+                let info = Bundle.main.infoDictionary
+                let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
+                let redirectURI = "\(scheme)://oauth-callback"
+                let client = SupabaseAuthAdapter.shared.client
+                let prov: OAuthProvider
+                switch provider.lowercased() {
+                case "apple": prov = .apple
+                case "google": prov = .google
+                case "facebook": prov = .facebook
+                default: prov = .google
+                }
+                try await client.auth.signInWithOAuth(provider: prov, options: .init(redirectTo: redirectURI, scopes: "email profile offline_access"))
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
             } catch {
