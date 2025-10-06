@@ -308,6 +308,154 @@ OAuth（Apple/Google/Facebook）
     - SES 連携: `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_SENDER_EMAIL`
   - `deploy-api.yml` が `wrangler secret put` で各環境に注入。
 
+### Cloudflare Pages/Workers 構成（方式B: プロジェクト分割）
+
+- 目的
+  - Pages（Web）は dev/stage/prod でプロジェクトを分割し、各環境に独立したカスタムドメインを割り当てる。
+  - Workers（API）は env ごとにルートを張り、環境別のカスタムドメインを使用する。
+
+- 構成（推奨例）
+  - Pages（Web）
+    - dev: プロジェクト `kokosos-web-dev` → `app-dev.kokosos.com`
+    - stage: プロジェクト `kokosos-web-stage` → `app-stage.kokosos.com`
+    - prod: プロジェクト `kokosos-web` → `app.kokosos.com`
+  - Workers（API）
+    - dev: スクリプト `kokosos-api-dev` → ルート `api-dev.kokosos.com/*`
+    - stage: スクリプト `kokosos-api-stage` → ルート `api-stage.kokosos.com/*`
+    - prod: スクリプト `kokosos-api` → ルート `api.kokosos.com/*`
+
+- DNS（Cloudflare DNS）
+  - Pages 用（CNAME / Proxied 有効）
+    - `app-dev.kokosos.com` → `kokosos-web-dev.pages.dev`
+    - `app-stage.kokosos.com` → `kokosos-web-stage.pages.dev`
+    - `app.kokosos.com` → `kokosos-web.pages.dev`
+  - Workers 用（Custom Domain / Proxied 有効）
+    - ルートを Workers に張る前提で、ダミー A `192.0.2.1`（または CNAME）でも可（最終的に Workers で終端）
+
+- 割り当て手順（Pages）
+  - 各 Pages プロジェクト > Custom domains > Add で上記ドメインを追加し、`Active` になるまで待機（証明書発行）。
+  - 同一ホスト名を複数プロジェクト/環境に重複割当しない（混在の原因）。
+
+- 割り当て手順（Workers）
+  - `wrangler.toml` の対象 env に `route = "api-<env>.kokosos.com/*"` を設定。
+  - `wrangler deploy --env <env>` で反映。
+  - API トークン権限（最小）: Account→Workers Scripts: Edit、Zone→Zone: Read / Workers Routes: Edit。
+
+- アプリ設定（整合）
+  - Workers Secrets（環境別）
+    - `CORS_ALLOW_ORIGIN`: `https://app-dev.kokosos.com` / `https://app-stage.kokosos.com` / `https://app.kokosos.com`
+    - `WEB_PUBLIC_BASE`: 上記 Web ドメイン
+  - iOS Info-*.plist（環境別）
+    - `APIBaseURL`（または `APIBaseHost`/`APIBaseScheme`）を API ドメインに合わせる
+    - `EmailRedirectBase`/`EmailRedirectHost` を Web ドメインに合わせる
+
+- トラブルシュート
+  - 期待と違うページが出る: Pages の Custom domains の紐付け先を確認し、不要なプロジェクトから Remove → 正しいプロジェクトに再割当。
+  - `Active` にならない: DNS の CNAME（Proxied）と証明書の発行待ちを確認（数分〜十数分）。
+  - pages.dev では表示できるが独自ドメインで不可: Redirect Rules / Bulk Redirect の干渉を確認。
+
+#### API ドメイン設定手順（dev/stage/prod）
+
+目的
+- 環境ごとに `api-<env>.kokosos.com` を Cloudflare Workers へルーティングし、環境変数（Secrets）とCORS/WEB_PUBLIC_BASEを一致させる。
+
+共通前提
+- DNS は Cloudflare 管理（ネームサーバー移行済み）
+- API トークン権限（最小）
+  - Account → Workers Scripts: Edit
+  - Zone(kokosos.com) → Zone: Read / Workers Routes: Edit
+
+dev（api-dev.kokosos.com）
+- DNS（Cloudflare DNS）
+  - 方式A（推奨・Origin不要）: Type=A, Name=`api-dev`, Content=`192.0.2.1`, Proxy=ON
+  - 方式B（CNAMEでも可）: Name=`api-dev`, Content=`任意ターゲット`, Proxy=ON
+- Workers（wrangler.toml）
+  - `[env.dev]` セクションに `route = "api-dev.kokosos.com/*"`
+  - デプロイ: `cd apps/api-worker && npx wrangler deploy --env dev`
+- Secrets（dev環境に投入）
+  - 必須: `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+  - 推奨: `CORS_ALLOW_ORIGIN=https://app-dev.kokosos.com`, `WEB_PUBLIC_BASE=https://app-dev.kokosos.com`
+- 動作確認
+  - `https://api-dev.kokosos.com/_health` が `{ ok: true }` を返す
+  - ダッシュボード > Workers > 対象スクリプト > Triggers > Custom domains に `api-dev.kokosos.com` が表示
+
+stage（api-stage.kokosos.com）
+- DNS（Cloudflare DNS）
+  - Type=A, Name=`api-stage`, Content=`192.0.2.1`, Proxy=ON（またはCNAME, Proxy=ON）
+- Workers（wrangler.toml）
+  - `[env.stage]` セクションに `route = "api-stage.kokosos.com/*"`
+  - デプロイ: `cd apps/api-worker && npx wrangler deploy --env stage`
+- Secrets（stage環境に投入）
+  - 必須: `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`（stage用のSupabase）
+  - 推奨: `CORS_ALLOW_ORIGIN=https://app-stage.kokosos.com`, `WEB_PUBLIC_BASE=https://app-stage.kokosos.com`
+- 動作確認
+  - `https://api-stage.kokosos.com/_health` で確認
+
+prod（api.kokosos.com）
+- DNS（Cloudflare DNS）
+  - Type=A, Name=`api`, Content=`192.0.2.1`, Proxy=ON（またはCNAME, Proxy=ON）
+- Workers（wrangler.toml）
+  - `[env.prod]` セクションに `route = "api.kokosos.com/*"`
+  - デプロイ: `cd apps/api-worker && npx wrangler deploy --env prod`
+- Secrets（prod環境に投入）
+  - 必須: `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`（本番Supabase）
+  - 推奨: `CORS_ALLOW_ORIGIN=https://app.kokosos.com`, `WEB_PUBLIC_BASE=https://app.kokosos.com`
+- 動作確認
+- `https://api.kokosos.com/_health` で確認
+
+補足
+- `workers_dev = true` を使えば、カスタムドメイン設定前に `*.workers.dev` で先に動作確認ができる（本番運用はルート方式を推奨）。
+- 同じホスト名を複数の Worker や env に重複割当しない。
+
+#### GitHub Actions（API デプロイ）環境・Secrets（dev/stage/prod）
+
+ブランチ→Environment のマッピング（deploy-api.yml）
+- dev ブランチ → Environment: `dev` → `wrangler deploy --env dev`
+- stage ブランチ → Environment: `stage` → `wrangler deploy --env stage`
+- main ブランチ → Environment: `prod` → `wrangler deploy --env prod`
+
+GitHub Environments を 3 つ用意（dev / stage / prod）し、各 Environment に以下の Secrets を登録する。
+
+必須（環境ごとに値を分ける）
+- `CLOUDFLARE_API_TOKEN`: Account→Workers Scripts: Edit、Zone→Zone: Read / Workers Routes: Edit を付与したAPIトークン
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare Account ID
+- `JWT_SECRET`: API 署名用シークレット
+- `SUPABASE_URL`: 環境の Supabase プロジェクト URL
+- `SUPABASE_SERVICE_ROLE_KEY`: 環境の Supabase Service Role Key（Workers のみで使用）
+
+推奨（環境整合のため）
+- `CORS_ALLOW_ORIGIN`
+  - dev: `https://app-dev.kokosos.com`
+  - stage: `https://app-stage.kokosos.com`
+  - prod: `https://app.kokosos.com`
+- `WEB_PUBLIC_BASE`
+  - dev: `https://app-dev.kokosos.com`
+  - stage: `https://app-stage.kokosos.com`
+  - prod: `https://app.kokosos.com`
+- メール送信（SES を使う場合）
+  - `EMAIL_PROVIDER=ses`
+  - `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_SENDER_EMAIL`
+
+デプロイの流れ（CI 内）
+1) `wrangler deploy --env <env>` でスクリプト公開＆Routes作成
+2) `wrangler secret put ... --env <env>` で Secrets をWorkersに注入
+3) `/ _health` 応答とダッシュボードの Triggers（Custom domains）で反映確認
+
+CI トラブルシュート
+- 10000 Authentication error（Routes作成に失敗）
+  - `CLOUDFLARE_API_TOKEN` に Zone→Workers Routes: Edit / Zone: Read の権限が不足
+- タイムアウト/522（`/_health` 到達不可）
+  - DNS が Proxied（オレンジ雲）か、`wrangler.toml` の `route` が環境に入っているか確認
+- `/_health` で `has.JWT_SECRET=false` 等
+  - 対応する Secrets が未注入（ジョブ内の `wrangler secret put` が走っているか / 値が設定されているか）
+
+チェックリスト（各環境）
+- DNS: `api-<env>.kokosos.com` が Proxied で存在
+- Workers: `[env.<env>].route = "api-<env>.kokosos.com/*"`
+- Secrets: `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` が注入済み
+- CORS/WEB_PUBLIC_BASE: `https://app-<env>.kokosos.com` に一致
+- `/ _health` が `{ ok: true }` を返す
+
 ### API 公開とセキュリティ注意
 
 - 公開ポリシー
