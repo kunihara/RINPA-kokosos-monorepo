@@ -201,13 +201,33 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
                 let alert = UIAlertController(title: "取得失敗", message: message, preferredStyle: .alert)
                 if showReauth {
                     alert.addAction(UIAlertAction(title: "サインイン", style: .default, handler: { [weak self] _ in
-                        guard let self else { return }
-                        let signin = UINavigationController(rootViewController: SignInViewController())
-                        self.present(signin, animated: true)
+                        self?.navigateToSignInRoot()
                     }))
                 }
                 alert.addAction(UIAlertAction(title: "OK", style: .cancel))
                 self.present(alert, animated: true)
+            }
+        }
+    }
+
+    private func navigateToSignInRoot() {
+        APIClient().setAuthToken(nil)
+        let complete: (UINavigationController) -> Void = { nav in
+            nav.setViewControllers([SignInViewController()], animated: true)
+        }
+        if let rootNav = (view.window?.rootViewController as? UINavigationController) {
+            if rootNav.presentedViewController != nil {
+                rootNav.dismiss(animated: true) { complete(rootNav) }
+            } else if let _ = self.presentingViewController {
+                self.dismiss(animated: true) { complete(rootNav) }
+            } else {
+                complete(rootNav)
+            }
+        } else {
+            // Fallback: try dismiss self, then attempt again
+            self.dismiss(animated: true) { [weak self] in
+                guard let self, let nav = (self.view.window?.rootViewController as? UINavigationController) else { return }
+                complete(nav)
             }
         }
     }

@@ -172,13 +172,33 @@ final class SettingsViewController: UIViewController {
     @objc private func openRecipients() {
         // サインイン必須（トークン無し時は先にサインイン）
         if APIClient().currentAuthToken() == nil {
-            let nav = UINavigationController(rootViewController: SignInViewController())
-            present(nav, animated: true)
+            navigateToSignInRoot()
             return
         }
         let picker = ContactsPickerViewController()
         let nav = UINavigationController(rootViewController: picker)
         present(nav, animated: true)
+    }
+
+    private func navigateToSignInRoot() {
+        APIClient().setAuthToken(nil)
+        let complete: (UINavigationController) -> Void = { nav in
+            nav.setViewControllers([SignInViewController()], animated: true)
+        }
+        if let rootNav = (view.window?.rootViewController as? UINavigationController) {
+            if rootNav.presentedViewController != nil {
+                rootNav.dismiss(animated: true) { complete(rootNav) }
+            } else if let _ = self.presentingViewController {
+                self.dismiss(animated: true) { complete(rootNav) }
+            } else {
+                complete(rootNav)
+            }
+        } else {
+            self.dismiss(animated: true) { [weak self] in
+                guard let self, let nav = (self.view.window?.rootViewController as? UINavigationController) else { return }
+                complete(nav)
+            }
+        }
     }
 
     @objc private func tapDeleteAccount() {
