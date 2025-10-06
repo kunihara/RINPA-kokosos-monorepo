@@ -57,6 +57,7 @@ jobs:
           set -euo pipefail
           CFG=Dev
           FILE="Configs/Secrets-${CFG}.xcconfig"
+          COMMON_FILE="Configs/Secrets-Common.xcconfig"
           : "${SUPABASE_URL:?Missing SUPABASE_URL secret for environment ${{ matrix.env_name }}}"
           : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY secret for environment ${{ matrix.env_name }}}"
           : "${APP_BUNDLE_ID:?Missing APP_BUNDLE_ID secret for environment ${{ matrix.env_name }}}"
@@ -78,6 +79,13 @@ jobs:
             if [ -n "$EMAIL_REDIRECT_BASE" ]; then printf 'EMAIL_REDIRECT_BASE = %s\n' "$EMAIL_REDIRECT_BASE"; fi
             if [ -n "$EMAIL_REDIRECT_HOST" ]; then printf 'EMAIL_REDIRECT_HOST = %s\n' "$EMAIL_REDIRECT_HOST"; fi
           } > "$FILE"
+          # Ensure Secrets-Common.xcconfig exists (not committed by design)
+          if [ ! -f "$COMMON_FILE" ]; then
+            echo "Creating $COMMON_FILE"
+            {
+              printf 'DEVELOPMENT_TEAM =\n'
+            } > "$COMMON_FILE"
+          fi
 
       - name: Generate Xcode project
         working-directory: apps/ios
@@ -217,6 +225,7 @@ jobs:
           set -euo pipefail
           CFG=${{ matrix.cfg_suffix }}
           FILE="Configs/Secrets-${CFG}.xcconfig"
+          COMMON_FILE="Configs/Secrets-Common.xcconfig"
           : "${SUPABASE_URL:?Missing SUPABASE_URL secret for environment ${{ matrix.env_name }}}"
           : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY secret for environment ${{ matrix.env_name }}}"
           : "${APP_BUNDLE_ID:?Missing APP_BUNDLE_ID secret for environment ${{ matrix.env_name }}}"
@@ -236,6 +245,12 @@ jobs:
             if [ -n "$EMAIL_REDIRECT_BASE" ]; then printf 'EMAIL_REDIRECT_BASE = %s\n' "$EMAIL_REDIRECT_BASE"; fi
             if [ -n "$EMAIL_REDIRECT_HOST" ]; then printf 'EMAIL_REDIRECT_HOST = %s\n' "$EMAIL_REDIRECT_HOST"; fi
           } > "$FILE"
+          if [ ! -f "$COMMON_FILE" ]; then
+            echo "Creating $COMMON_FILE"
+            {
+              printf 'DEVELOPMENT_TEAM =\n'
+            } > "$COMMON_FILE"
+          fi
 
       - name: Generate Xcode project
         working-directory: apps/ios
