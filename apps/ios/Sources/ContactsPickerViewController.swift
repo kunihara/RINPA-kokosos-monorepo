@@ -211,23 +211,28 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     }
 
     private func navigateToSignInRoot() {
-        try? await SupabaseAuthAdapter.shared.client.auth.signOut()
-        let complete: (UINavigationController) -> Void = { nav in
-            nav.setViewControllers([SignInViewController()], animated: true)
-        }
-        if let rootNav = (view.window?.rootViewController as? UINavigationController) {
-            if rootNav.presentedViewController != nil {
-                rootNav.dismiss(animated: true) { complete(rootNav) }
-            } else if let _ = self.presentingViewController {
-                self.dismiss(animated: true) { complete(rootNav) }
-            } else {
-                complete(rootNav)
-            }
-        } else {
-            // Fallback: try dismiss self, then attempt again
-            self.dismiss(animated: true) { [weak self] in
-                guard let self, let nav = (self.view.window?.rootViewController as? UINavigationController) else { return }
-                complete(nav)
+        Task {
+            // サインアウトは非同期。完了を待ってからUI遷移。
+            try? await SupabaseAuthAdapter.shared.client.auth.signOut()
+            await MainActor.run {
+                let complete: (UINavigationController) -> Void = { nav in
+                    nav.setViewControllers([SignInViewController()], animated: true)
+                }
+                if let rootNav = (self.view.window?.rootViewController as? UINavigationController) {
+                    if rootNav.presentedViewController != nil {
+                        rootNav.dismiss(animated: true) { complete(rootNav) }
+                    } else if let _ = self.presentingViewController {
+                        self.dismiss(animated: true) { complete(rootNav) }
+                    } else {
+                        complete(rootNav)
+                    }
+                } else {
+                    // Fallback: try dismiss self, then attempt again
+                    self.dismiss(animated: true) { [weak self] in
+                        guard let self, let nav = (self.view.window?.rootViewController as? UINavigationController) else { return }
+                        complete(nav)
+                    }
+                }
             }
         }
     }
