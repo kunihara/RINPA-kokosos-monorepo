@@ -166,7 +166,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                 case "facebook": prov = .facebook
                 default: prov = .google
                 }
-                try await client.auth.signInWithOAuth(provider: prov, options: .init(redirectTo: redirectURI, scopes: "email profile offline_access"))
+                try await client.auth.signInWithOAuth(provider: prov, redirectTo: redirectURI, scopes: "email profile offline_access")
                 // サインアップ画面からのOAuthは新規/既存の区別が難しいため、オンボーディングを促す
                 UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                 let main = MainViewController()

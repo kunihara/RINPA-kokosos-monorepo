@@ -122,7 +122,8 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
             defer { signInButton.isEnabled = true }
             do {
                 let client = SupabaseAuthAdapter.shared.client
-                try await client.auth.signInWithPassword(email: email, password: pass)
+                // Supabase Swift v2 uses signIn(email:password:)
+                try await client.auth.signIn(email: email, password: pass)
                 // ルートをMainへ切替
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
@@ -159,8 +160,11 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 else if let h = host, !h.isEmpty { redirect = "https://\(h)/auth/callback" }
                 else { redirect = nil }
                 let client = SupabaseAuthAdapter.shared.client
-                if let redirect { try await client.auth.resetPasswordForEmail(email, redirectTo: redirect) }
-                else { try await client.auth.resetPasswordForEmail(email) }
+                if let redirect, let url = URL(string: redirect) {
+                    try await client.auth.resetPasswordForEmail(email, redirectTo: url)
+                } else {
+                    try await client.auth.resetPasswordForEmail(email)
+                }
                 showAlert("送信しました", "パスワード再設定メールを送信しました。メール内の手順に従ってください。")
             } catch {
                 showAlert("送信失敗", error.localizedDescription)
@@ -194,7 +198,7 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 case "facebook": prov = .facebook
                 default: prov = .google
                 }
-                try await client.auth.signInWithOAuth(provider: prov, options: .init(redirectTo: redirectURI, scopes: "email profile offline_access"))
+                try await client.auth.signInWithOAuth(provider: prov, redirectTo: redirectURI, scopes: "email profile offline_access")
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
             } catch {
