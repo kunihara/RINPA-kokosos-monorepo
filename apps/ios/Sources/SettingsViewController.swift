@@ -157,7 +157,7 @@ final class SettingsViewController: UIViewController {
 
     @objc private func openRecipients() {
         // サインイン必須（トークン無し時は先にサインイン）
-        if APIClient().currentAuthToken() == nil {
+        if SupabaseAuthAdapter.shared.accessToken == nil {
             navigateToSignInRoot()
             return
         }
@@ -167,6 +167,8 @@ final class SettingsViewController: UIViewController {
     }
 
     private func navigateToSignInRoot() {
+        // SDKセッションをサインアウト（best-effort）
+        try? await SupabaseAuthAdapter.shared.client.auth.signOut()
         APIClient().setAuthToken(nil)
         let complete: (UINavigationController) -> Void = { nav in
             nav.setViewControllers([SignInViewController()], animated: true)
@@ -193,7 +195,7 @@ final class SettingsViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "削除", style: .destructive, handler: { [weak self] _ in
             guard let self = self else { return }
             // 要トークン（サインイン）チェック
-            if APIClient().currentAuthToken() == nil {
+            if SupabaseAuthAdapter.shared.accessToken == nil {
                 let a = UIAlertController(title: "サインインが必要です", message: "アカウント削除にはサインインが必要です。サインインし直してから実行してください。", preferredStyle: .alert)
                 a.addAction(UIAlertAction(title: "OK", style: .default))
                 self.present(a, animated: true)

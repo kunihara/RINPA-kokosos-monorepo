@@ -8,7 +8,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     let window = UIWindow(windowScene: windowScene)
     let rootVC: UIViewController
     let api = APIClient()
-    if api.currentAuthToken() != nil {
+    if SupabaseAuthAdapter.shared.accessToken != nil || api.currentAuthToken() != nil {
       rootVC = MainViewController()
     } else {
       // 初回はサインイン画面を表示
@@ -35,11 +35,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   func sceneDidBecomeActive(_ scene: UIScene) {
     // アプリ復帰時にトークンが間もなく失効なら静かに更新
     Task { @MainActor in
-      let api = APIClient()
-      if api.currentRefreshToken() != nil {
-        // しきい値は 2 分前
-        _ = await AuthClient.performRefreshAndStore()
-      }
+      _ = await SupabaseAuthAdapter.shared.refresh()
     }
   }
 }

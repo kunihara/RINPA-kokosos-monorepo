@@ -366,9 +366,18 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapSignOut() {
+        // SDKサインアウト
+        try? awaitTask {
+            try await SupabaseAuthAdapter.shared.client.auth.signOut()
+        }
         APIClient().setAuthToken(nil)
         // ルートをサインイン画面へ
         let signin = SignInViewController()
         navigationController?.setViewControllers([signin], animated: true)
     }
+}
+
+// Helper to await inside @objc
+fileprivate func awaitTask(_ block: @escaping () async throws -> Void) {
+    Task { try? await block() }
 }

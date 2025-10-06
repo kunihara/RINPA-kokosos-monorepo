@@ -1,4 +1,5 @@
 import UIKit
+import Supabase
 
 final class SignUpViewController: UIViewController, UITextFieldDelegate {
     private let titleLabel = UILabel()
@@ -85,10 +86,6 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
         Task { @MainActor in
             signUpButton.isEnabled = false
             defer { signUpButton.isEnabled = true }
-            guard let auth = AuthClient() else {
-                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL/SupabaseAnonKey を設定してください。")
-                return
-            }
             do {
                 // email_redirect_to を構築
                 let info = Bundle.main.infoDictionary
@@ -103,8 +100,9 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                 } else {
                     redirect = "\(scheme)://oauth-callback"
                 }
-                if let token = try await auth.signUp(email: email, password: pass, redirectTo: redirect) {
-                    api.setAuthToken(token)
+                let client = SupabaseAuthAdapter.shared.client
+                let res = try await client.auth.signUp(email: email, password: pass, options: .init(emailRedirectTo: redirect))
+                if res.session != nil {
                     UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
@@ -156,13 +154,9 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
 
     private func startOAuth(_ provider: String) {
         Task { @MainActor in
-            guard let auth = AuthClient() else {
-                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL / SupabaseAnonKey を設定してください。")
-                return
-            }
             do {
-                let token = try await auth.signInWithOAuth(provider: provider, presentationAnchor: view.window)
-                api.setAuthToken(token)
+                guard let legacy = AuthClient() else { throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Auth設定が見つかりません"]) }
+                let _ = try await legacy.signInWithOAuth(provider: provider, presentationAnchor: view.window)
                 // サインアップ画面からのOAuthは新規/既存の区別が難しいため、オンボーディングを促す
                 UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                 let main = MainViewController()

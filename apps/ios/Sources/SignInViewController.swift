@@ -1,4 +1,5 @@
 import UIKit
+import Supabase
 
 final class SignInViewController: UIViewController, UITextFieldDelegate {
     private let titleLabel = UILabel()
@@ -119,13 +120,9 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
         Task { @MainActor in
             signInButton.isEnabled = false
             defer { signInButton.isEnabled = true }
-            guard let auth = AuthClient() else {
-                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL / SupabaseAnonKey を設定してください。")
-                return
-            }
             do {
-                let token = try await auth.signIn(email: email, password: pass)
-                api.setAuthToken(token)
+                let client = SupabaseAuthAdapter.shared.client
+                _ = try await client.auth.signInWithPassword(email: email, password: pass)
                 // ルートをMainへ切替
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
@@ -151,12 +148,19 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
         Task { @MainActor in
             resetButton.isEnabled = false
             defer { resetButton.isEnabled = true }
-            guard let auth = AuthClient() else {
-                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL/SupabaseAnonKey を設定してください。")
-                return
-            }
             do {
-                try await auth.sendPasswordReset(email: email)
+                // redirect_to は Info から導出（存在しなければ省略）
+                let info = Bundle.main.infoDictionary
+                let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
+                let redirect: String?
+                if let b = base, !b.isEmpty { redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback" }
+                else if let h = host, !h.isEmpty { redirect = "https://\(h)/auth/callback" }
+                else { redirect = nil }
+                let client = SupabaseAuthAdapter.shared.client
+                if let redirect { try await client.auth.resetPasswordForEmail(email, redirectTo: redirect) }
+                else { try await client.auth.resetPasswordForEmail(email) }
                 showAlert("送信しました", "パスワード再設定メールを送信しました。メール内の手順に従ってください。")
             } catch {
                 showAlert("送信失敗", error.localizedDescription)
@@ -178,13 +182,10 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
 
     private func startOAuth(_ provider: String) {
         Task { @MainActor in
-            guard let auth = AuthClient() else {
-                showAlert("設定エラー", "Supabaseの設定が見つかりません。Info.plistの SupabaseURL / SupabaseAnonKey を設定してください。")
-                return
-            }
             do {
-                let token = try await auth.signInWithOAuth(provider: provider, presentationAnchor: view.window)
-                api.setAuthToken(token)
+                // ひとまず既存フローを維持（SDK OAuthは後続で置換予定）
+                guard let legacy = AuthClient() else { throw NSError(domain: "auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Auth設定が見つかりません"]) }
+                let _ = try await legacy.signInWithOAuth(provider: provider, presentationAnchor: view.window)
                 // Mainへ遷移
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
