@@ -20,9 +20,9 @@
       html, body { height: 100%; }
       body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; -webkit-font-smoothing: antialiased; }
       /* 全セクションの左右余白（モバイルで十分/PCでゆったり、セーフエリアも考慮） */
-      :root { --gutter: clamp(32px, 7.5vw, 64px); }
-      .container { max-width: 1040px; margin: 0 auto; padding-left: calc(env(safe-area-inset-left) + var(--gutter)); padding-right: calc(env(safe-area-inset-right) + var(--gutter)); }
-      @media (min-width: 1024px) { :root { --gutter: 48px; } }
+      /* 一律の横ガター（全レイアウトで共通）: パディングではなく "可視幅" を縮めてズレを防止 */
+      :root { --edge: clamp(20px, 6vw, 48px); }
+      .wrap { width: min(1040px, calc(100% - 2 * var(--edge))); margin-left: auto; margin-right: auto; }
       header.site { border-bottom: 1px solid var(--line); }
       .brand { display: flex; align-items: center; gap: 10px; padding: 20px 0; font-weight: 700; letter-spacing: .2px; }
       .hero { padding: 56px 0 24px; text-align: left; }
@@ -45,19 +45,19 @@
   </head>
   <body>
     <header class="site">
-      <div class="container">
+      <div class="wrap">
         <div class="brand"><span>KokoSOS</span></div>
       </div>
     </header>
 
     <main>
-      <section class="container hero">
+      <section class="wrap hero">
         <span class="badge pill">いつでも、つながる安心</span>
         <h1><span class="hl">緊急時の「いま」</span>を、<br/>信頼できる相手だけに。</h1>
         <p>KokoSOS は、危険を感じたときに最小の操作で位置情報を共有できる安心アプリです。</p>
       </section>
 
-      <section class="container section">
+      <section class="wrap section">
         <div class="grid">
           <article class="card">
             <h3>ワンタップで共有開始</h3>
@@ -74,7 +74,7 @@
         </div>
       </section>
 
-      <section class="container section how">
+      <section class="wrap section how">
         <h2 style="margin:0 0 8px; font-size:20px">使い方</h2>
         <ol>
           <li>受信者（家族・友人）をメールで招待</li>
@@ -85,7 +85,7 @@
     </main>
 
     <footer class="site">
-      <div class="container inner">
+      <div class="wrap inner">
         <span>© <span id="y"></span> KokoSOS</span>
         <span style="color:var(--muted)">Made for peace of mind</span>
       </div>
