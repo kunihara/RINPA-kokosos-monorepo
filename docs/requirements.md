@@ -74,6 +74,29 @@ SSEイベント（例）
 
 ---
 
+## iOS 認証（仕様更新: supabase-swiftへ移行）
+
+- 概要
+  - iOSの認証は `supabase-swift` を採用し、セッション保持・リフレッシュ・イベントをSDKに委譲。
+  - 旧自前Auth（UserDefaultsでのtoken保存）は廃止。Authorizationは常にSDKセッションの`accessToken`を使用。
+
+- フロー
+  - サインイン: `auth.signInWithPassword(email, password)`
+  - サインアップ: `auth.signUp(options: .init(emailRedirectTo: <redirect>))`
+  - パスワード再設定: `auth.resetPasswordForEmail(email, redirectTo: <redirect>)`
+  - OAuth(Apple/Google/Facebook): `auth.signInWithOAuth(provider, options: .init(redirectTo: "<scheme>://oauth-callback", scopes: "email profile offline_access"))`
+  - `OAuthRedirectScheme` は Info.plist に設定（例: `kokosos`）。
+
+- セッション・リフレッシュ
+  - アプリ起動/復帰時に `refreshSession()` を静かに実行。
+  - API 呼出時に401なら `refreshSession()` → 再試行（SDK側で直列化/Keychain保存）。
+  - サインアウト: `auth.signOut()` → 画面をサインインへ遷移。
+
+- 開発用診断
+  - Workers: `GET /_diag/whoami` で Authorization の検証結果（JWKS/フォールバック）を返却。401切り分けに使用。
+
+---
+
 ## アカウント削除（追加）
 
 - 目的：ユーザーがアプリ内の「アカウント削除」操作で、本人の認証情報と関連データ（contacts/alerts/locations/deliveries…）を安全に削除できるようにする。
