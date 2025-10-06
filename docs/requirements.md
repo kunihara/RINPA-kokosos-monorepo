@@ -247,6 +247,45 @@ OAuth（Apple/Google/Facebook）
 
 ---
 
+### GitHub Actions（iOS ビルド運用方針）
+
+- 実行条件（軽量運用）
+  - push / pull_request 時は iOS 関連変更のみで実行（paths: `apps/ios/**`, `.github/workflows/ios-build.yml`）。
+  - 同一ブランチの重複実行は `concurrency` でキャンセル。
+  - 通常は Debug-Dev（Simulator）のみビルドする「軽量ジョブ」を実行。
+  - Dev/Stage/Prod 全環境のマトリクスビルドは週次スケジュールまたは手動実行時のみ。
+
+- ビルド安定化
+  - コードサイン無効化: `CODE_SIGNING_ALLOWED=NO`, `CODE_SIGNING_REQUIRED=NO`。
+  - アーキ最小化: `ONLY_ACTIVE_ARCH=YES`（Simulator向け）。
+  - シミュレータ端末は `xcodebuild -showdestinations` を解析し動的に解決（端末名/OSに依存しない）。
+
+- Secrets/設定の扱い
+  - iOS ビルドに必要な Secrets（環境ごと: dev/stage/prod）
+    - `APP_BUNDLE_ID`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OAUTH_REDIRECT_SCHEME`（未設定時 `kokosos`）、任意で `WEB_PUBLIC_BASE`。
+  - CI 開始時に `Configs/Secrets-<Env>.xcconfig` を生成し、`SUPABASE_HOST` や `EMAIL_REDIRECT_*` を自動導出。
+  - 署名チームなど共通値の include 先 `Configs/Secrets-Common.xcconfig` は CI で自動生成（空の `DEVELOPMENT_TEAM`）。
+  - `apps/ios/Configs/Secrets-*.xcconfig` は Git 管理対象外（.gitignore）。
+
+- 失敗時の診断／成果物
+  - 失敗した場合のみ、整形ログ（`xcodebuild-*.log`）、生ログ（`xcodebuild-*-raw.log`）、`*.xcresult` をアーティファクトとして保存。
+  - ログ抽出は日本語/英語のエラーパターンを拾って先頭50行＋末尾200行を表示。
+  - ローカルで検証する場合、アーティファクトは `artifacts/` 以下に展開するが Git 管理外（.gitignore に登録）。
+
+- コスト最適化の方針
+  - iOS 変更がない限り CI を起動しない。
+  - 週次マトリクスは必要に応じて停止し、手動実行のみに切替可能。
+  - それでも不安定・高コストが続く場合は iOS CI を停止（削除）し、手元ビルド＋タグ/リリースの自動化のみを残す。
+
+### Cloud 環境（dev/stage/prod）と SES
+
+- Workers（API）デプロイ時は GitHub Environments の Secrets を Cloudflare Secrets に反映。
+  - dev/stage/prod 共通（devにも適用）
+    - `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CORS_ALLOW_ORIGIN`, `WEB_PUBLIC_BASE`, `EMAIL_PROVIDER`（`ses` 推奨）
+    - SES 連携: `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_SENDER_EMAIL`
+  - `deploy-api.yml` が `wrangler secret put` で各環境に注入。
+
+
 ## 受信者選定・検証（追加仕様）
 
 目的
