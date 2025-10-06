@@ -305,6 +305,73 @@ OAuth（Apple/Google/Facebook）
   - TLS/セキュリティヘッダは維持（HSTS, CSP, X-Frame-Options など既定値を変更しない）。
   - 検索避け: 公開リンクのクロール抑止が必要な場合は `X-Robots-Tag: noindex` を適用（必要性に応じて運用で判断）。
 
+---
+
+### ドメイン運用（PRプレビューなし方針）
+
+- 命名と役割（Custom Domain; PRプレビューは使わない）
+  - ルートサイト（紹介用）
+    - 本番: `https://kokosos.com`
+    - ステージ: `https://site-stage.kokosos.com`
+    - 開発: `https://site-dev.kokosos.com`
+  - Webアプリ（受信者向けApp）
+    - 本番: `https://app.kokosos.com`
+    - ステージ: `https://app-stage.kokosos.com`
+    - 開発: `https://app-dev.kokosos.com`
+  - API（Workers）
+    - 本番: `https://api.kokosos.com`
+    - ステージ: `https://api-stage.kokosos.com`
+    - 開発: `https://api-dev.kokosos.com`
+  - 共有リンク短縮（任意）
+    - 本番: `https://s.kokosos.com`
+    - ステージ: `https://s-stage.kokosos.com`
+    - 開発: `https://s-dev.kokosos.com`
+
+- 運用ルール
+  - ルートサイト（apex `kokosos.com`）は紹介専用。アプリは常に `app.*` に配置（混同防止）。
+  - dev/stage は `-dev / -stage` のサブドメインで Pages / Workers に割当。
+  - CORS / `WEB_PUBLIC_BASE` は環境ごとに一致させる（例: dev は `app-dev.kokosos.com`）。
+  - PRプレビューは使用しない（dev/stage のブランチ反映で確認）。
+
+### デプロイ運用（CI）
+
+- ルートサイト（kokosos-root; sites/root）
+  - `.github/workflows/deploy-root.yml`
+  - push: `dev` → プレビュー（Custom Domain: `site-dev.kokosos.com`）
+  - push: `stage` → プレビュー（Custom Domain: `site-stage.kokosos.com`）
+  - push: `main` → 本番（Custom Domain: `kokosos.com`）
+  - pull_request トリガーは無効（PRではデプロイしない）
+
+- Web（Pages） / API（Workers）
+  - 各ワークフローは差分検知で必要時のみ実行。dev/stage/main の各ブランチで該当環境へ反映。
+
+### Cloudflare Pages の Custom Domain 割当手順（ルートサイト例）
+
+前提: `kokosos.com` の DNS が Cloudflare 管理（ネームサーバー移管済み）。
+
+1) プロジェクトを用意
+  - Pages > Projects > `kokosos-root`（既存がなければ作成; Production Branch は `main`）。
+
+2) 本番ドメイン（apex）を割当
+  - `kokosos-root` > Custom domains > Add: `kokosos.com` を追加。
+  - 案内に従って DNS レコード（CNAME フラットニング）が自動追加され、SSL 証明書が有効化されるまで待機（Active になるまで数分〜数十分）。
+  - （任意）`www.kokosos.com` から apex へのリダイレクトを構成（Pages Redirects または Cloudflare Bulk Redirects）。
+
+3) プレビュー用サブドメインを割当
+  - 同画面の Preview deployments で「Add」→ `site-dev.kokosos.com` を追加し、Branch に `dev` を指定。
+  - 同様に `site-stage.kokosos.com` を追加し、Branch に `stage` を指定。
+  - いずれも Cloudflare が CNAME を自動追加し、Active 状態で利用可能に。
+
+4) 動作確認
+  - `dev` ブランチに push → `https://site-dev.kokosos.com` が更新される（CI が自動デプロイ）。
+  - `stage` ブランチに push → `https://site-stage.kokosos.com` が更新される。
+  - `main` ブランチに push → `https://kokosos.com` が本番更新される。
+
+（参考）アプリ / API の Custom Domain 設定
+  - Web（Pages）: それぞれの Pages プロジェクトに `app-dev.* / app-stage.* / app.*` を Custom Domain 追加。
+  - API（Workers）: 対象 Worker の Triggers > Custom Domains で `api-dev.* / api-stage.* / api.*` を追加。
+  - Secrets / CORS / `WEB_PUBLIC_BASE` をドメインに合わせて更新し、`/_health` で反映確認。
+
 
 ## 受信者選定・検証（追加仕様）
 
