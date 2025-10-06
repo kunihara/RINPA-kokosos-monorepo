@@ -50,15 +50,31 @@ struct AuthClient {
             req.setValue("Bearer \(client.config.anonKey)", forHTTPHeaderField: "Authorization")
             let body: [String: Any] = ["refresh_token": refresh]
             req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+            #if DEBUG
+            print("[Auth] refresh start rt=\(refresh.prefix(6))… host=\(client.config.supabaseURL.host ?? "")")
+            #endif
             let (data, resp) = try await URLSession.shared.data(for: req)
-            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return false }
+            guard let http = resp as? HTTPURLResponse else { return false }
+            if !(200..<300).contains(http.statusCode) {
+                #if DEBUG
+                let body = String(data: data, encoding: .utf8) ?? "(binary)"
+                print("[Auth] refresh failed status=\(http.statusCode) body=\(body.prefix(200))")
+                #endif
+                return false
+            }
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             guard let newAccess = json?["access_token"] as? String else { return false }
             let newRefresh = json?["refresh_token"] as? String
             api.setAuthToken(newAccess)
             if let rt = newRefresh { api.setRefreshToken(rt) }
+            #if DEBUG
+            print("[Auth] refresh ok at=\(newAccess.prefix(10)) rt=\((newRefresh ?? "nil").prefix(6))…")
+            #endif
             return true
         } catch {
+            #if DEBUG
+            print("[Auth] refresh exception=\(error.localizedDescription)")
+            #endif
             return false
         }
     }
