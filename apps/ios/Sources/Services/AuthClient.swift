@@ -127,6 +127,8 @@ struct AuthClient {
         let api = APIClient()
         api.setAuthToken(token)
         api.setRefreshToken(refresh)
+        // Try import into supabase-swift session (best-effort)
+        _ = await SupabaseAuthAdapter.shared.refresh()
         return token
     }
 

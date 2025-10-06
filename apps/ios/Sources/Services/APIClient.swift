@@ -80,6 +80,12 @@ struct APIClient {
     }
 
     private func applyAuth(_ req: inout URLRequest) {
+        // Prefer supabase-swift session if available
+        if let sdkToken = SupabaseAuthAdapter.shared.accessToken, !sdkToken.isEmpty {
+            req.setValue("Bearer \(sdkToken)", forHTTPHeaderField: "Authorization")
+            return
+        }
+        // Fallback: legacy storage (until完全移行)
         if let t = UserDefaults.standard.string(forKey: APIClient.authTokenUserDefaultsKey), !t.isEmpty {
             req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
         }
@@ -118,6 +124,10 @@ struct APIClient {
         var didProactiveRefresh = false
         if currentRefreshToken() != nil && isAccessTokenStale(threshold: 120) {
             didProactiveRefresh = await AuthClient.performRefreshAndStore()
+            if didProactiveRefresh == false {
+                // Try SDK-based refresh as fallback
+                didProactiveRefresh = await SupabaseAuthAdapter.shared.refresh()
+            }
         }
         var req = build()
         #if DEBUG
@@ -125,8 +135,14 @@ struct APIClient {
         print("[API] -> \(req.httpMethod ?? "GET") \(req.url?.path ?? "") auth=\(tokenPrefix) proactiveRefresh=\(didProactiveRefresh)")
         #endif
         var (data, resp) = try await URLSession.shared.data(for: req)
-        if let http = resp as? HTTPURLResponse, http.statusCode == 401, currentRefreshToken() != nil {
-            let refreshed = await AuthClient.performRefreshAndStore()
+        if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
+            var refreshed = false
+            if currentRefreshToken() != nil {
+                refreshed = await AuthClient.performRefreshAndStore()
+            }
+            if !refreshed {
+                refreshed = await SupabaseAuthAdapter.shared.refresh()
+            }
             #if DEBUG
             print("[API] 401 -> refresh=\(refreshed) retry \(req.url?.path ?? "")")
             #endif
