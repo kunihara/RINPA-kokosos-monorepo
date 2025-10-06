@@ -3,10 +3,29 @@ name: Deploy API (Cloudflare Workers)
 on:
   push:
     branches: [dev, stage, main]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
+  changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'apps/api-worker/**'
+              - '.github/workflows/deploy-api.yml'
+
   deploy:
     name: Deploy Workers
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.api == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
     steps:

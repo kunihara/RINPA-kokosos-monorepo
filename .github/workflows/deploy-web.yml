@@ -3,10 +3,29 @@ name: Deploy Web (Cloudflare Pages)
 on:
   push:
     branches: [dev, stage, main]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
+  changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+              - '.github/workflows/deploy-web.yml'
+
   deploy:
     name: Build & Deploy Pages
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
     steps:

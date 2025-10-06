@@ -3,13 +3,7 @@ name: iOS Build (lite/matrix)
 on:
   push:
     branches: [dev, stage, main]
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-build.yml'
   pull_request:
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-build.yml'
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * 1' # Weekly Monday 03:00 UTC
@@ -19,9 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'apps/ios/**'
+              - '.github/workflows/ios-build.yml'
+
   build-ios-dev:
     name: iOS Build (Dev - lightweight)
-    if: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'schedule' }}
+    needs: changes
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') || needs.changes.outputs.ios == 'true' }}
     runs-on: macos-latest
     timeout-minutes: 20
     environment: dev
