@@ -4,45 +4,91 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KokoSOS | いつでも、つながる安心</title>
-    <meta name="description" content="KokoSOS はあなたの居場所を信頼できる相手へ安全に共有するシンプルなアプリです。" />
+    <meta name="description" content="KokoSOS は緊急時に信頼できる相手へ位置情報を素早く共有できるミニマルなアプリです。" />
+    <meta name="theme-color" content="#ffffff" />
     <style>
-      :root { color-scheme: light dark; }
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; padding: 0; }
-      header { padding: 48px 16px 16px; text-align: center; }
-      h1 { margin: 0 0 8px; font-size: 32px; }
-      p.lead { margin: 0; color: #666; }
-      main { max-width: 880px; margin: 32px auto; padding: 0 16px; line-height: 1.75; }
-      .cta { margin-top: 16px; display: inline-block; background: #2563eb; color: #fff; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
-      footer { padding: 24px 16px; text-align: center; color: #777; border-top: 1px solid rgba(0,0,0,0.08); }
-      code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; }
+      :root {
+        --bg: #ffffff;
+        --fg: #0f172a; /* slate-900 */
+        --muted: #566074; /* slate-500 */
+        --line: rgba(15, 23, 42, 0.08);
+        --card: #ffffff;
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+        --accent: #0ea5e9; /* sky-500 */
+      }
+      html, body { height: 100%; }
+      body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; -webkit-font-smoothing: antialiased; }
+      .container { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+      header.site { border-bottom: 1px solid var(--line); }
+      .brand { display: flex; align-items: center; gap: 10px; padding: 20px 0; font-weight: 700; }
+      .brand .logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #38bdf8, #2563eb); display: inline-block; }
+      .brand span { letter-spacing: .2px; }
+      .hero { padding: 56px 0 24px; text-align: left; }
+      .hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+      .hero p { margin: 0; color: var(--muted); font-size: clamp(14px, 2.4vw, 18px); }
+      .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-top: 32px; }
+      .card { grid-column: span 12; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+      @media (min-width: 720px) { .card { grid-column: span 4; } }
+      .card h3 { margin: 0 0 8px; font-size: 18px; }
+      .card p { margin: 0; color: var(--muted); line-height: 1.7; }
+      .section { padding: 28px 0; }
+      .how { border-top: 1px solid var(--line); }
+      .how ol { margin: 12px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }
+      footer.site { margin-top: 48px; border-top: 1px solid var(--line); }
+      footer.site .inner { padding: 18px 0; color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: #f1f5f9; border: 1px solid var(--line); color: #0f172a; border-radius: 999px; font-size: 12px; }
+      .pill { color: #0369a1; background: #e0f2fe; border-color: #bae6fd; }
     </style>
   </head>
   <body>
-    <header>
-      <h1>KokoSOS</h1>
-      <p class="lead">いつでも、つながる安心</p>
-      <p><a class="cta" href="https://app.kokosos.com" rel="noopener">アプリの紹介ページへ</a></p>
+    <header class="site">
+      <div class="container">
+        <div class="brand">
+          <i class="logo"></i><span>KokoSOS</span>
+        </div>
+      </div>
     </header>
+
     <main>
-      <h2>KokoSOS とは</h2>
-      <p>
-        危険を感じたときに最小の操作で、信頼できる相手に位置情報を共有し続けられるシンプルなアプリです。
-        緊急時の「いま」を、素早く確実に届けます。
-      </p>
-      <h3>主な機能</h3>
-      <ul>
-        <li>緊急モード（位置を共有、到着で停止）</li>
-        <li>帰るモード（出発と到着のみ通知）</li>
-        <li>メールによる安全な共有リンク</li>
-      </ul>
-      <p>
-        開発中の機能や最新情報は、アプリの公開ページ（<code>app.kokosos.com</code>）をご覧ください。
-      </p>
+      <section class="container hero">
+        <span class="badge pill">いつでも、つながる安心</span>
+        <h1>緊急時の「いま」を、<br/>信頼できる相手だけに。</h1>
+        <p>KokoSOS は、危険を感じたときに最小の操作で位置情報を共有できる、ミニマルでモダンな安心アプリです。</p>
+      </section>
+
+      <section class="container section">
+        <div class="grid">
+          <article class="card">
+            <h3>ワンタップで共有開始</h3>
+            <p>アプリを起動してタップするだけ。状況説明よりも先に位置を伝えられます。</p>
+          </article>
+          <article class="card">
+            <h3>メールで安全に招待</h3>
+            <p>受信者はメールの確認だけでOK。共有リンクは時間で失効し、いつでも取り消せます。</p>
+          </article>
+          <article class="card">
+            <h3>シンプル設計</h3>
+            <p>必要な機能だけを厳選。迷わず使える UI と、安心のセキュリティ設計。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="container section how">
+        <h2 style="margin:0 0 8px; font-size:20px">使い方</h2>
+        <ol>
+          <li>受信者（家族・友人）をメールで招待</li>
+          <li>必要なときに共有を開始（停止・延長も簡単）</li>
+          <li>受信者はブラウザだけで現在地を確認</li>
+        </ol>
+      </section>
     </main>
-    <footer>
-      © <span id="y"></span> KokoSOS
+
+    <footer class="site">
+      <div class="container inner">
+        <span>© <span id="y"></span> KokoSOS</span>
+        <span style="color:var(--muted)">Made for peace of mind</span>
+      </div>
     </footer>
     <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
   </body>
   </html>
-
