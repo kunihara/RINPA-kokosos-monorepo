@@ -114,6 +114,10 @@ struct APIClient {
 
     // Execute a request and if 401 occurs, attempt a one-time refresh and retry
     private func execute(_ build: () -> URLRequest) async throws -> (Data, HTTPURLResponse) {
+        // Proactive refresh across all requests (access token expiring soon)
+        if currentRefreshToken() != nil && isAccessTokenStale(threshold: 120) {
+            _ = await AuthClient.performRefreshAndStore()
+        }
         var req = build()
         var (data, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode == 401, currentRefreshToken() != nil {

@@ -31,4 +31,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       if DeepLinkHandler.handle(url: context.url, in: nav) { return }
     }
   }
+
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    // アプリ復帰時にトークンが間もなく失効なら静かに更新
+    Task { @MainActor in
+      let api = APIClient()
+      if api.currentRefreshToken() != nil {
+        // しきい値は 2 分前
+        _ = await AuthClient.performRefreshAndStore()
+      }
+    }
+  }
 }
