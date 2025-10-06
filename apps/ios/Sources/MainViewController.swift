@@ -370,7 +370,6 @@ final class MainViewController: UIViewController {
         try? awaitTask {
             try await SupabaseAuthAdapter.shared.client.auth.signOut()
         }
-        APIClient().setAuthToken(nil)
         // ルートをサインイン画面へ
         let signin = SignInViewController()
         navigationController?.setViewControllers([signin], animated: true)

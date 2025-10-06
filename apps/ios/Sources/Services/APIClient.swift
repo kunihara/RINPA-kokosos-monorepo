@@ -2,8 +2,8 @@ import Foundation
 
 struct APIClient {
     let baseURL: URL
-    static let authTokenUserDefaultsKey = "APIAuthToken"
-    static let refreshTokenUserDefaultsKey = "APIRefreshToken"
+    static let authTokenUserDefaultsKey = "APIAuthToken" // deprecated
+    static let refreshTokenUserDefaultsKey = "APIRefreshToken" // deprecated
     static let baseURLOverrideKey = "APIBaseURLOverride"
 
     init() {
@@ -62,22 +62,9 @@ struct APIClient {
         return segments.reduce(baseURL) { url, seg in url.appendingPathComponent(seg) }
     }
 
-    // 簡易的なトークン保存（将来Supabase Authのaccess_tokenを格納）
-    func setAuthToken(_ token: String?) {
-        if let t = token, !t.isEmpty {
-            UserDefaults.standard.set(t, forKey: APIClient.authTokenUserDefaultsKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: APIClient.authTokenUserDefaultsKey)
-        }
-    }
-
-    func setRefreshToken(_ token: String?) {
-        if let t = token, !t.isEmpty {
-            UserDefaults.standard.set(t, forKey: APIClient.refreshTokenUserDefaultsKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: APIClient.refreshTokenUserDefaultsKey)
-        }
-    }
+    // 旧トークン保存APIは廃止（SDKセッションに統一）
+    func setAuthToken(_ token: String?) { /* no-op (deprecated) */ }
+    func setRefreshToken(_ token: String?) { /* no-op (deprecated) */ }
 
     private func applyAuth(_ req: inout URLRequest) {
         // Prefer supabase-swift session if available
@@ -91,58 +78,23 @@ struct APIClient {
         }
     }
 
-    func currentAuthToken() -> String? {
-        let t = UserDefaults.standard.string(forKey: APIClient.authTokenUserDefaultsKey)
-        return (t?.isEmpty == false) ? t : nil
-    }
-
-    func currentRefreshToken() -> String? {
-        let t = UserDefaults.standard.string(forKey: APIClient.refreshTokenUserDefaultsKey)
-        return (t?.isEmpty == false) ? t : nil
-    }
-
-    // Decode JWT exp and check if token is expired or near expiry (within 60s)
-    private func isAccessTokenStale(threshold: TimeInterval = 60) -> Bool {
-        guard let token = currentAuthToken() else { return true }
-        let parts = token.split(separator: "."); guard parts.count == 3 else { return true }
-        let payloadB64 = String(parts[1])
-        func b64urlToData(_ s: String) -> Data? {
-            var s = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-            let pad = 4 - (s.count % 4); if pad < 4 { s.append(String(repeating: "=", count: pad)) }
-            return Data(base64Encoded: s)
-        }
-        guard let data = b64urlToData(payloadB64),
-              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else { return true }
-        let now = Date().timeIntervalSince1970
-        return (exp - now) < threshold
-    }
+    // 旧セッション参照は廃止（SDKに統一）
+    func currentAuthToken() -> String? { SupabaseAuthAdapter.shared.accessToken }
+    func currentRefreshToken() -> String? { nil }
 
     // Execute a request and if 401 occurs, attempt a one-time refresh and retry
     private func execute(_ build: () -> URLRequest) async throws -> (Data, HTTPURLResponse) {
         // Proactive refresh across all requests (access token expiring soon)
         var didProactiveRefresh = false
-        if currentRefreshToken() != nil && isAccessTokenStale(threshold: 120) {
-            didProactiveRefresh = await AuthClient.performRefreshAndStore()
-            if didProactiveRefresh == false {
-                // Try SDK-based refresh as fallback
-                didProactiveRefresh = await SupabaseAuthAdapter.shared.refresh()
-            }
-        }
+        didProactiveRefresh = await SupabaseAuthAdapter.shared.refresh()
         var req = build()
         #if DEBUG
-        let tokenPrefix = currentAuthToken()?.prefix(10) ?? "nil"
+        let tokenPrefix = (SupabaseAuthAdapter.shared.accessToken ?? "nil").prefix(10)
         print("[API] -> \(req.httpMethod ?? "GET") \(req.url?.path ?? "") auth=\(tokenPrefix) proactiveRefresh=\(didProactiveRefresh)")
         #endif
         var (data, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode == 401 {
-            var refreshed = false
-            if currentRefreshToken() != nil {
-                refreshed = await AuthClient.performRefreshAndStore()
-            }
-            if !refreshed {
-                refreshed = await SupabaseAuthAdapter.shared.refresh()
-            }
+            let refreshed = await SupabaseAuthAdapter.shared.refresh()
             #if DEBUG
             print("[API] 401 -> refresh=\(refreshed) retry \(req.url?.path ?? "")")
             #endif
@@ -247,10 +199,7 @@ struct APIClient {
     }
 
     func deleteAccount() async throws {
-        // Proactively refresh if the current access token is near expiry
-        if currentRefreshToken() != nil && isAccessTokenStale() {
-            _ = await AuthClient.performRefreshAndStore()
-        }
+        _ = await SupabaseAuthAdapter.shared.refresh()
         let (data, http) = try await execute {
             var req = URLRequest(url: endpoint("account"))
             req.httpMethod = "DELETE"

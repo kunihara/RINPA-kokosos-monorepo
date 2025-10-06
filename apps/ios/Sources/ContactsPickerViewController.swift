@@ -211,7 +211,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
     }
 
     private func navigateToSignInRoot() {
-        APIClient().setAuthToken(nil)
+        try? await SupabaseAuthAdapter.shared.client.auth.signOut()
         let complete: (UINavigationController) -> Void = { nav in
             nav.setViewControllers([SignInViewController()], animated: true)
         }
