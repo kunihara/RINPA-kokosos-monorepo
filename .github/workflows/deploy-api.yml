@@ -3,10 +3,19 @@ name: Deploy API (Cloudflare Workers)
 on:
   push:
     branches: [dev, stage, main]
+    paths:
+      - 'apps/api-worker/**'
+      - '.github/workflows/deploy-api.yml'
   pull_request:
+    paths:
+      - 'apps/api-worker/**'
+      - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
 jobs:
+  concurrency:
+    group: api-${{ github.ref }}
+    cancel-in-progress: true
   changes:
     name: Detect changed scopes
     runs-on: ubuntu-latest

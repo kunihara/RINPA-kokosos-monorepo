@@ -3,10 +3,19 @@ name: Deploy Web (Cloudflare Pages)
 on:
   push:
     branches: [dev, stage, main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/deploy-web.yml'
   pull_request:
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
 
 jobs:
+  concurrency:
+    group: web-${{ github.ref }}
+    cancel-in-progress: true
   changes:
     name: Detect changed scopes
     runs-on: ubuntu-latest

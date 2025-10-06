@@ -3,7 +3,13 @@ name: iOS Build (lite/matrix)
 on:
   push:
     branches: [dev, stage, main]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-build.yml'
   pull_request:
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-build.yml'
   workflow_dispatch:
   schedule:
     - cron: '0 3 * * 1' # Weekly Monday 03:00 UTC
