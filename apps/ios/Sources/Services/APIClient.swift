@@ -115,18 +115,35 @@ struct APIClient {
     // Execute a request and if 401 occurs, attempt a one-time refresh and retry
     private func execute(_ build: () -> URLRequest) async throws -> (Data, HTTPURLResponse) {
         // Proactive refresh across all requests (access token expiring soon)
+        var didProactiveRefresh = false
         if currentRefreshToken() != nil && isAccessTokenStale(threshold: 120) {
-            _ = await AuthClient.performRefreshAndStore()
+            didProactiveRefresh = await AuthClient.performRefreshAndStore()
         }
         var req = build()
+        #if DEBUG
+        let tokenPrefix = currentAuthToken()?.prefix(10) ?? "nil"
+        print("[API] -> \(req.httpMethod ?? "GET") \(req.url?.path ?? "") auth=\(tokenPrefix) proactiveRefresh=\(didProactiveRefresh)")
+        #endif
         var (data, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode == 401, currentRefreshToken() != nil {
-            if await AuthClient.performRefreshAndStore() {
+            let refreshed = await AuthClient.performRefreshAndStore()
+            #if DEBUG
+            print("[API] 401 -> refresh=\(refreshed) retry \(req.url?.path ?? "")")
+            #endif
+            if refreshed {
                 req = build()
                 (data, resp) = try await URLSession.shared.data(for: req)
             }
         }
         guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        #if DEBUG
+        if !(200..<300).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? "(binary)"
+            print("[API] <- \(http.statusCode) \(req.url?.path ?? "") body=\(body.prefix(300))")
+        } else {
+            print("[API] <- \(http.statusCode) \(req.url?.path ?? "")")
+        }
+        #endif
         return (data, http)
     }
 

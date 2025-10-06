@@ -208,6 +208,9 @@ final class SettingsViewController: UIViewController {
                     let signin = SignInViewController()
                     self.navigationController?.setViewControllers([signin], animated: true)
                 } catch {
+                    #if DEBUG
+                    print("[DeleteAccount] error=\(error)")
+                    #endif
                     let msg: String
                     if let apiErr = error as? APIError, case let .http(status, _) = apiErr, status == 401 {
                         msg = "サインインが期限切れ/不正です。サインインし直してから実行してください。"

@@ -102,6 +102,7 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
   { method: 'GET', pattern: /^\/_diag\/alert\/([^/]+)$/, handler: handleDiag },
   { method: 'POST', pattern: /^\/_diag\/alert\/([^/]+)\/publish$/, handler: handleDiagPublish },
+  { method: 'GET', pattern: /^\/_diag\/whoami$/, handler: handleWhoAmI },
   // Contacts (sender auth required)
   { method: 'GET', pattern: /^\/contacts$/, handler: handleContactsList },
   { method: 'POST', pattern: /^\/contacts\/bulk_upsert$/, handler: handleContactsBulkUpsert },
@@ -163,6 +164,21 @@ async function handleDiagPublish({ req, env }: Parameters<RouteHandler>[0]): Pro
   const payload = body || JSON.stringify({ type: 'diagnostic', ts: Date.now() })
   const res = await stub.fetch('https://do/publish', { method: 'POST', body: payload })
   return new Response(JSON.stringify({ ok: res.ok }), { headers: { 'content-type': 'application/json' } })
+}
+
+// Quick diagnostic: who am I according to Authorization header?
+async function handleWhoAmI({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  const m = authz.match(/^Bearer\s+(.+)$/i)
+  const token = m ? m[1] : ''
+  const primary = await getSenderFromAuth(req, env)
+  const out: any = { ok: primary.ok, via: primary.ok ? 'jwks' : 'jwks_failed', status: (primary as any).status || 200 }
+  if (primary.ok) out.userId = (primary as any).userId
+  if (!primary.ok && token) {
+    const fb = await fetchSupabaseUser(env, token)
+    out.fallback = { ok: fb.ok, userId: fb.userId || null }
+  }
+  return json(out)
 }
 
 async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
