@@ -38,6 +38,13 @@ jobs:
           brew update
           brew install xcodegen jq
 
+      - name: Xcode environment (versions/sdks)
+        run: |
+          set -euo pipefail
+          xcodebuild -version || true
+          xcodebuild -showsdks || true
+          swiftc --version || true
+
       - name: Write iOS Secrets xcconfig (Dev)
         working-directory: apps/ios
         env:
@@ -76,6 +83,12 @@ jobs:
         working-directory: apps/ios
         run: xcodegen generate
 
+      - name: Verify project/schemes
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -list -project KokoSOS.xcodeproj || true
+
       - name: Resolve Simulator Destination (Dev)
         working-directory: apps/ios
         run: |
@@ -106,8 +119,23 @@ jobs:
             -sdk iphonesimulator \
             -destination "$DEST_SPEC" \
             -resultBundlePath build/KokoSOS-Dev.xcresult \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
             build | tee build/xcodebuild-Dev.log | xcpretty || exit ${PIPESTATUS[0]}
+
+      - name: Re-run build without xcpretty (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::Re-run xcodebuild (raw output)"
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-Dev \
+            -sdk iphonesimulator \
+            -destination "$DEST_SPEC" \
+            -resultBundlePath build/KokoSOS-Dev-raw.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
+            clean build | tee build/xcodebuild-Dev-raw.log || true
+          echo "::endgroup::"
 
       - name: Print first errors from xcodebuild log (on failure)
         if: failure()
@@ -211,6 +239,12 @@ jobs:
         working-directory: apps/ios
         run: xcodegen generate
 
+      - name: Verify project/schemes (matrix)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -list -project KokoSOS.xcodeproj || true
+
       - name: Resolve Simulator Destination (matrix=${{ matrix.cfg_suffix }})
         working-directory: apps/ios
         run: |
@@ -239,8 +273,23 @@ jobs:
             -sdk iphonesimulator \
             -destination "$DEST_SPEC" \
             -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
             build | tee build/xcodebuild-${{ matrix.cfg_suffix }}.log | xcpretty || exit ${PIPESTATUS[0]}
+
+      - name: Re-run build without xcpretty (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::Re-run xcodebuild (raw output)"
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
+            -sdk iphonesimulator \
+            -destination "$DEST_SPEC" \
+            -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}-raw.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
+            clean build | tee build/xcodebuild-${{ matrix.cfg_suffix }}-raw.log || true
+          echo "::endgroup::"
 
       - name: Print first errors from xcodebuild log (on failure)
         if: failure()
