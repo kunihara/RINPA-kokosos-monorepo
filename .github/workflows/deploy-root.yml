@@ -2,11 +2,7 @@ name: Deploy Root Site (Cloudflare Pages)
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'sites/root/**'
-      - '.github/workflows/deploy-root.yml'
-  pull_request:
+    branches: [dev, stage, main]
     paths:
       - 'sites/root/**'
       - '.github/workflows/deploy-root.yml'
@@ -50,11 +46,16 @@ jobs:
           set -euo pipefail
           wrangler whoami
           PROJECT="kokosos-root"
-          BRANCH="main"
+          BRANCH="${{ github.ref_name }}"
           # Create project if missing
           wrangler pages project list || true
           wrangler pages project create "$PROJECT" --production-branch="$BRANCH" || true
           # Deploy static folder (sites/root)
           wrangler pages deploy . --project-name="$PROJECT" --branch="$BRANCH" --commit-dirty=true --commit-message="GitHub_Actions_Deploy"
-          echo "::notice title=Custom Domain::Add 'kokosos.com' as Custom Domain in Cloudflare Pages project settings for $PROJECT if not yet configured."
-
+          if [ "$BRANCH" = "main" ]; then
+            echo "::notice title=Custom Domain (Production)::Add 'kokosos.com' as Custom Domain in Cloudflare Pages project '$PROJECT' if not configured."
+          elif [ "$BRANCH" = "dev" ]; then
+            echo "::notice title=Custom Domain (Preview-DEV)::Add 'site-dev.kokosos.com' as Preview Domain (branch=dev) in Pages project '$PROJECT'."
+          elif [ "$BRANCH" = "stage" ]; then
+            echo "::notice title=Custom Domain (Preview-STAGE)::Add 'site-stage.kokosos.com' as Preview Domain (branch=stage) in Pages project '$PROJECT'."
+          fi
