@@ -34,8 +34,42 @@
   <string>緊急時の現在地共有のため位置情報を使用します。</string>
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
   <string>緊急共有の継続のためバックグラウンドで位置情報を使用します。</string>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>location</string>
+  </array>
 
   <key>APIBaseURL</key>
   <string>$(API_BASE_URL)</string>
+  <key>APIBaseHost</key>
+  <string>$(API_BASE_HOST)</string>
+  <key>APIBaseScheme</key>
+  <string>$(API_BASE_SCHEME)</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.kokosos.oauth</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>$(OAUTH_REDIRECT_SCHEME)</string>
+      </array>
+    </dict>
+  </array>
+  <!-- Supabase Auth (Stage) -->
+  <key>SupabaseURL</key>
+  <string>$(SUPABASE_URL)</string>
+  <key>SupabaseHost</key>
+  <string>$(SUPABASE_HOST)</string>
+  <key>SupabaseAnonKey</key>
+  <string>$(SUPABASE_ANON_KEY)</string>
+  <key>NSContactsUsageDescription</key>
+  <string>受信者を連絡先から選ぶために連絡先へのアクセスを使用します。</string>
+  <key>OAuthRedirectScheme</key>
+  <string>$(OAUTH_REDIRECT_SCHEME)</string>
+  <key>EmailRedirectBase</key>
+  <string>$(EMAIL_REDIRECT_BASE)</string>
+  <key>EmailRedirectHost</key>
+  <string>$(EMAIL_REDIRECT_HOST)</string>
 </dict>
 </plist>

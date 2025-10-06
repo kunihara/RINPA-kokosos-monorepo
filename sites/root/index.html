@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KokoSOS | いつでも、つながる安心</title>
+    <meta name="description" content="KokoSOS は緊急時に信頼できる相手へ位置情報を素早く共有できるミニマルなアプリです。" />
+    <meta name="theme-color" content="#ffffff" />
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #0f172a; /* slate-900 */
+        --muted: #566074; /* slate-500 */
+        --line: rgba(15, 23, 42, 0.08);
+        --card: #ffffff;
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+        --accent: #0ea5e9; /* sky-500 */
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; -webkit-font-smoothing: antialiased; }
+      /* 全セクションの左右余白（モバイルで十分/PCでゆったり、セーフエリアも考慮） */
+      /* 一律の横ガター（全レイアウトで共通）: パディングではなく "可視幅" を縮めてズレを防止 */
+      :root { --edge: clamp(20px, 6vw, 48px); }
+      .wrap { width: min(1040px, calc(100% - 2 * var(--edge))); margin-left: auto; margin-right: auto; }
+      header.site { border-bottom: 1px solid var(--line); }
+      .brand { display: flex; align-items: center; gap: 10px; padding: 20px 0; font-weight: 700; letter-spacing: .2px; }
+      .hero { padding: 56px 0 24px; text-align: left; }
+      .hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.15; margin: 0 0 12px; }
+      .hero h1 .hl { box-shadow: inset 0 -0.5em 0 #e0f2fe; }
+      .hero p { margin: 0; color: var(--muted); font-size: clamp(14px, 2.4vw, 18px); }
+      .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; margin-top: 32px; }
+      .card { grid-column: span 12; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+      @media (min-width: 720px) { .card { grid-column: span 4; } }
+      .card h3 { margin: 0 0 8px; font-size: 18px; }
+      .card p { margin: 0; color: var(--muted); line-height: 1.7; }
+      .section { padding: 28px 0; }
+      .how { border-top: 1px solid var(--line); }
+      .how ol { margin: 12px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }
+      footer.site { margin-top: 48px; border-top: 1px solid var(--line); }
+      footer.site .inner { padding: 18px 0; color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: #f1f5f9; border: 1px solid var(--line); color: #0f172a; border-radius: 999px; font-size: 12px; }
+      .pill { color: #0369a1; background: #e0f2fe; border-color: #bae6fd; }
+    </style>
+  </head>
+  <body>
+    <header class="site">
+      <div class="wrap">
+        <div class="brand"><span>KokoSOS</span></div>
+      </div>
+    </header>
+
+    <main>
+      <section class="wrap hero">
+        <span class="badge pill">いつでも、つながる安心</span>
+        <h1><span class="hl">緊急時の「いま」</span>を、<br/>信頼できる相手だけに。</h1>
+        <p>KokoSOS は、危険を感じたときに最小の操作で位置情報を共有できる安心アプリです。</p>
+      </section>
+
+      <section class="wrap section">
+        <div class="grid">
+          <article class="card">
+            <h3>ワンタップで共有開始</h3>
+            <p>アプリを起動してタップするだけ。状況説明よりも先に位置を伝えられます。</p>
+          </article>
+          <article class="card">
+            <h3>メールで安全に招待</h3>
+            <p>受信者はメールの確認だけでOK。共有リンクは時間で失効し、いつでも取り消せます。</p>
+          </article>
+          <article class="card">
+            <h3>シンプル設計</h3>
+            <p>必要な機能だけを厳選。迷わず使える UI と、安心のセキュリティ設計。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="wrap section how">
+        <h2 style="margin:0 0 8px; font-size:20px">使い方</h2>
+        <ol>
+          <li>受信者（家族・友人）をメールで招待</li>
+          <li>必要なときに共有を開始（停止・延長も簡単）</li>
+          <li>受信者はブラウザだけで現在地を確認</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap inner">
+        <span>© <span id="y"></span> KokoSOS</span>
+        <span style="color:var(--muted)">Made for peace of mind</span>
+      </div>
+    </footer>
+    <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+  </body>
+  </html>

@@ -1,2 +1,9 @@
 #include "Base.xcconfig"
 API_BASE_URL = https://kokosos-api-stage.YOUR_WORKERS_DOMAIN
+// Prefer setting API_BASE_HOST in Secrets-Stage.xcconfig to avoid '//' comment pitfalls in xcconfig
+API_BASE_HOST = 
+API_BASE_SCHEME = https
+// Common secrets (local, DO NOT COMMIT): DEVELOPMENT_TEAM などを定義
+#include "Secrets-Common.xcconfig"
+// Env secrets (local, DO NOT COMMIT)
+#include "Secrets-Stage.xcconfig"

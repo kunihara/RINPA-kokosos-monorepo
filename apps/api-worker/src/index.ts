@@ -2,6 +2,8 @@ export interface Env {
   JWT_SECRET: string
   SUPABASE_URL?: string
   SUPABASE_SERVICE_ROLE_KEY?: string
+  SUPABASE_JWKS_URL?: string
+  REQUIRE_AUTH_SENDER?: string
   SES_REGION?: string
   SES_ACCESS_KEY_ID?: string
   SES_SECRET_ACCESS_KEY?: string
@@ -100,10 +102,20 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
   { method: 'GET', pattern: /^\/_diag\/alert\/([^/]+)$/, handler: handleDiag },
   { method: 'POST', pattern: /^\/_diag\/alert\/([^/]+)\/publish$/, handler: handleDiagPublish },
+  { method: 'GET', pattern: /^\/_diag\/whoami$/, handler: handleWhoAmI },
+  // Contacts (sender auth required)
+  { method: 'GET', pattern: /^\/contacts$/, handler: handleContactsList },
+  { method: 'POST', pattern: /^\/contacts\/bulk_upsert$/, handler: handleContactsBulkUpsert },
+  { method: 'POST', pattern: /^\/contacts\/([^/]+)\/send_verify$/, handler: handleContactSendVerify },
+  // Verify (public)
+  { method: 'GET', pattern: /^\/public\/verify\/([^/]+)$/, handler: handleVerifyContact },
+  // Account deletion
+  { method: 'DELETE', pattern: /^\/account$/, handler: handleAccountDelete },
   { method: 'POST', pattern: /^\/alert\/start$/, handler: handleAlertStart },
   // accept UUIDs with hyphens or any non-slash segment
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/update$/, handler: handleAlertUpdate },
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/stop$/, handler: handleAlertStop },
+  { method: 'POST', pattern: /^\/alert\/([^/]+)\/extend$/, handler: handleAlertExtend },
   { method: 'POST', pattern: /^\/alert\/([^/]+)\/revoke$/, handler: handleAlertRevoke },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)$/, handler: handlePublicAlert },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/stream$/, handler: handlePublicAlertStream },
@@ -127,6 +139,8 @@ async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Respo
       DEFAULT_USER_EMAIL: env.DEFAULT_USER_EMAIL || null,
       SUPABASE_URL_preview: env.SUPABASE_URL || null,
       SUPABASE_SERVICE_ROLE_KEY_preview: env.SUPABASE_SERVICE_ROLE_KEY ? `${(env.SUPABASE_SERVICE_ROLE_KEY as string).slice(0,4)}…` : null,
+      SUPABASE_JWKS_URL: env.SUPABASE_JWKS_URL || (env.SUPABASE_URL ? `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json` : null),
+      REQUIRE_AUTH_SENDER: env.REQUIRE_AUTH_SENDER || 'false',
     },
   }
   return json(body)
@@ -152,7 +166,24 @@ async function handleDiagPublish({ req, env }: Parameters<RouteHandler>[0]): Pro
   return new Response(JSON.stringify({ ok: res.ok }), { headers: { 'content-type': 'application/json' } })
 }
 
+// Quick diagnostic: who am I according to Authorization header?
+async function handleWhoAmI({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  const m = authz.match(/^Bearer\s+(.+)$/i)
+  const token = m ? m[1] : ''
+  const primary = await getSenderFromAuth(req, env)
+  const out: any = { ok: primary.ok, via: primary.ok ? 'jwks' : 'jwks_failed', status: (primary as any).status || 200 }
+  if (primary.ok) out.userId = (primary as any).userId
+  if (!primary.ok && token) {
+    const fb = await fetchSupabaseUser(env, token)
+    out.fallback = { ok: fb.ok, userId: fb.userId || null }
+  }
+  return json(out)
+}
+
 async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
   const initial = {
@@ -165,15 +196,20 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     recipients: (Array.isArray(body.recipients) ? (body.recipients as string[]) : [])
   }
   if (typeof initial.lat !== 'number' || typeof initial.lng !== 'number') return json({ error: 'invalid_location' }, { status: 400 })
+  // Require explicit recipients (privacy-by-default)
+  if (!initial.recipients || initial.recipients.length === 0) return json({ error: 'no_recipients' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  // Create alert row
-  const userId = await ensureDefaultUserId(sb, env)
+  // Ensure user row exists and get id
+  const userId = user.userId ?? (await ensureDefaultUserId(sb, env))
+  await ensureUserExists(sb, userId)
+  // Sanitize max duration (server-side clamp). Allow 5 minutes to 6 hours.
+  const clampedMax = Math.min(6 * 3600, Math.max(5 * 60, initial.max_duration_sec))
   const alertRes = await sb.insert('alerts', {
     user_id: userId,
     type: initial.type,
     status: 'active',
-    max_duration_sec: initial.max_duration_sec,
+    max_duration_sec: clampedMax,
   })
   if (!alertRes.ok) return json({ error: 'db_error', detail: alertRes.error }, { status: 500 })
   const alert = alertRes.data[0]
@@ -189,17 +225,40 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     captured_at: startedAt,
   })
   const shareToken = await signJwtHs256({ alert_id: alertId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
-  // Send emails if recipients provided
-  if (initial.recipients.length > 0 && env.WEB_PUBLIC_BASE) {
+  // Resolve recipients strictly (verified only)
+  const norm = (s: string) => s.trim().toLowerCase()
+  const requested = initial.recipients.map(norm).filter((e: string) => /.+@.+\..+/.test(e))
+  if (requested.length === 0) return json({ error: 'no_recipients' }, { status: 400 })
+  const list2 = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId)}&email=in.(${requested.map(encodeURIComponent).join(',')})`)
+  const rows = (list2.ok ? (list2.data as any[]) : [])
+  const byEmail = new Map<string, any>(rows.map((r) => [norm(String(r.email)), r]))
+  const invalid: string[] = []
+  const recipients: { contact_id: string; email: string }[] = []
+  for (const e of requested) {
+    const row = byEmail.get(e)
+    if (!row || !row.verified_at) invalid.push(e)
+    else recipients.push({ contact_id: String(row.id), email: e })
+  }
+  if (invalid.length > 0) return json({ error: 'invalid_recipients', pending: invalid }, { status: 400 })
+  // Send emails and store deliveries; record alert_recipients(start)
+  if (recipients.length > 0 && env.WEB_PUBLIC_BASE) {
     const emailer = makeEmailProvider(env)
-    for (const to of initial.recipients) {
-      const contactId = crypto.randomUUID()
-      const token = await signJwtHs256({ alert_id: alertId, contact_id: contactId, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
+    for (const r of recipients) {
+      const token = await signJwtHs256({ alert_id: alertId, contact_id: r.contact_id, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
       const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/s/${encodeURIComponent(token)}`
-      ctx.waitUntil(emailer.send({ to, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) }))
+      ctx.waitUntil((async () => {
+        try {
+          await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) })
+          await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
+          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: r.contact_id, email: r.email, purpose: 'start' })
+        } catch (e) {
+          await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'error' })
+        }
+      })())
     }
   }
   const state = {
+    type: initial.type as 'emergency' | 'going_home',
     id: alertId,
     status: 'active',
     started_at: startedAt,
@@ -216,7 +275,187 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   return json(state)
 }
 
+// ---------- Contacts API
+function isValidEmail(email: string): boolean {
+  return /.+@.+\..+/.test(email)
+}
+
+async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  // Always require authenticated user; fall back to Supabase /auth/v1/user if needed
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  let userId: string | null = null
+  const auth = await getSenderFromAuth(req, env)
+  if (auth.ok && auth.userId) userId = auth.userId
+  else {
+    const m = authz.match(/^Bearer\s+(.+)$/i)
+    const token = m ? m[1] : ''
+    const supa = await fetchSupabaseUser(env, token)
+    if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
+    userId = supa.userId
+  }
+  const url = new URL(req.url)
+  const status = (url.searchParams.get('status') || 'all').toLowerCase()
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  let query = `user_id=eq.${encodeURIComponent(userId!)}`
+  if (status === 'verified') query += `&verified_at=not.is.null`
+  else if (status === 'pending') query += `&verified_at=is.null`
+  const res = await sb.select('contacts', 'id,name,email,role,capabilities,verified_at', query)
+  return json({ items: res.ok ? res.data : [] })
+}
+
+async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  let userId: string | null = null
+  const auth = await getSenderFromAuth(req, env)
+  if (auth.ok && auth.userId) userId = auth.userId
+  else {
+    const m = authz.match(/^Bearer\s+(.+)$/i)
+    const token = m ? m[1] : ''
+    const supa = await fetchSupabaseUser(env, token)
+    if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
+    userId = supa.userId
+  }
+  const body = await req.json().catch(() => null)
+  if (!body || !Array.isArray(body.contacts)) return json({ error: 'invalid_body' }, { status: 400 })
+  const sendVerify = Boolean(body.send_verify)
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  await ensureUserExists(sb, userId!)
+  const out: any[] = []
+  for (const c of body.contacts as Array<{ email: string; name?: string }>) {
+    const email = String((c.email || '').toLowerCase().trim())
+    if (!isValidEmail(email)) continue
+    // Try find by email
+    const found = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
+    if (found.ok && found.data.length > 0) {
+      out.push(found.data[0])
+    } else {
+      const ins = await sb.insert('contacts', { user_id: userId, name: c.name || email, email })
+      if (ins.ok && ins.data.length > 0) out.push(ins.data[0])
+    }
+    if (sendVerify) {
+      const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
+      if (list.ok && list.data.length > 0 && !(list.data[0] as any).verified_at) {
+        await sendVerifyForContact(env, list.data[0] as any)
+      }
+    }
+  }
+  return json({ ok: true, items: out })
+}
+
+async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: auth.status })
+  const m = req.url.match(/\/contacts\/([^/]+)\/send_verify/)
+  if (!m) return notFound()
+  const id = m[1]
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const found = await sb.select('contacts', 'id,email,verified_at', `id=eq.${id}`, 1)
+  if (!found.ok || found.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
+  const c = found.data[0] as any
+  await sendVerifyForContact(env, c)
+  return json({ ok: true })
+}
+
+async function sendVerifyForContact(env: Env, contact: { id: string; email: string }) {
+  if (!env.WEB_PUBLIC_BASE) return
+  const token = await signJwtHs256({ action: 'verify', contact_id: contact.id, exp: nowSec() + 7 * 24 * 3600 }, env.JWT_SECRET)
+  const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/verify/${encodeURIComponent(token)}`
+  const emailer = makeEmailProvider(env)
+  await emailer.send({ to: String(contact.email), subject: 'KokoSOS 受信許可の確認', html: emailVerifyHtml(link) })
+}
+
+async function handleVerifyContact({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const token = decodeURIComponent(req.url.split('/public/verify/')[1] || '')
+  const payload = await verifyJwtHs256(token, env.JWT_SECRET)
+  if (!payload) return json({ ok: false, error: 'invalid_token' }, { status: 400 })
+  if ((payload as any).action !== 'verify') return json({ ok: false, error: 'invalid_action' }, { status: 400 })
+  const contactId = String((payload as any).contact_id || '')
+  if (!contactId) return json({ ok: false, error: 'invalid_contact' }, { status: 400 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  await sb.update('contacts', { verified_at: new Date().toISOString() }, `id=eq.${contactId}`)
+  return json({ ok: true })
+}
+
+// ---------- Account deletion (caller = authenticated sender)
+async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  // 強制的に本人認証を要求（REQUIRE_AUTH_SENDER に依存しない）
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
+  let userId: string | null = null
+  // 1) まず既存のJWT検証（JWKS）を試す
+  const auth = await getSenderFromAuth(req, env)
+  if (auth.ok && auth.userId) {
+    userId = auth.userId
+  } else {
+    // 2) フォールバック: Supabase Authの /auth/v1/user を呼んで検証
+    try {
+      const token = (authz.match(/^Bearer\s+(.+)$/i) || [])[1]
+      if (!token) return json({ error: 'unauthorized', detail: 'invalid_authorization_header' }, { status: 401 })
+      const u = await fetchSupabaseUser(env, token)
+      if (!u.ok || !u.userId) return json({ error: 'unauthorized', detail: 'invalid_token_via_supabase' }, { status: 401 })
+      userId = u.userId
+    } catch {
+      return json({ error: 'unauthorized', detail: 'verify_failed' }, { status: 401 })
+    }
+  }
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+
+  // Best effort: delete app data (alerts, contacts, users) before Auth user deletion
+  try {
+    // Delete alerts (will cascade locations, deliveries(alert), alert_recipients, reactions(alert), revocations)
+    await sb.delete('alerts', `user_id=eq.${encodeURIComponent(userId)}`)
+    // Delete contacts (deliveries(contact) will cascade if FK, reactions(alert) already gone)
+    await sb.delete('contacts', `user_id=eq.${encodeURIComponent(userId)}`)
+    // Delete app-side users row (in case CASCADE is not configured from auth.users)
+    await sb.delete('users', `id=eq.${encodeURIComponent(userId)}`)
+  } catch {}
+
+  // Delete Supabase Auth user via Admin API
+  try {
+    const adminUrl = `${env.SUPABASE_URL!.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`
+    const headers = {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY as string,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    }
+    const res = await fetch(adminUrl, { method: 'DELETE', headers })
+    if (!res.ok && res.status !== 404) {
+      const t = await res.text()
+      return json({ ok: false, error: 'auth_delete_failed', detail: `${res.status} ${t}` }, { status: 500 })
+    }
+  } catch (e) {
+    return json({ ok: false, error: 'auth_delete_failed' }, { status: 500 })
+  }
+
+  return json({ ok: true })
+}
+
+async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: boolean; userId?: string }> {
+  const base = env.SUPABASE_URL?.replace(/\/$/, '')
+  if (!base) return { ok: false }
+  const url = `${base}/auth/v1/user`
+  const res = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY as string, // or anon key if preferred
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+  if (!res.ok) return { ok: false }
+  const j = (await res.json()) as { id?: string }
+  return { ok: true, userId: j.id || undefined }
+}
+
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
   const m = req.url.match(/\/alert\/([^/]+)\/update/)
@@ -226,6 +465,13 @@ async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Pro
   if (typeof lat !== 'number' || typeof lng !== 'number') return json({ error: 'invalid_location' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // If this alert is "going_home", do not store or broadcast live locations (privacy-friendly mode)
+  const typeRes = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+  if (!typeRes.ok) return json({ error: 'db_error', detail: typeRes.error }, { status: 500 })
+  const aType = typeRes.data[0]?.type as string | undefined
+  if (aType === 'going_home') {
+    return json({ ok: true, ignored: true })
+  }
   const captured_at = new Date().toISOString()
   await sb.insert('locations', { alert_id: alertId, lat, lng, accuracy_m: accuracy_m ?? null, battery_pct: battery_pct ?? null, captured_at })
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
@@ -234,6 +480,8 @@ async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Pro
 }
 
 async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const m = req.url.match(/\/alert\/([^/]+)\/stop/)
   if (!m) return notFound()
   const alertId = m[1]
@@ -243,10 +491,61 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   await sb.update('alerts', { status: 'ended', ended_at }, `id=eq.${alertId}`)
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
   await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
+  // If going_home, send arrival emails to start recipients
+  try {
+    const a = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+    const aType = (a.ok && a.data.length > 0) ? String((a.data[0] as any).type) : ''
+    if (aType === 'going_home' && env.WEB_PUBLIC_BASE) {
+      const list = await sb.select('alert_recipients', 'contact_id,email', `alert_id=eq.${alertId}&purpose=eq.start`)
+      const emailer = makeEmailProvider(env)
+      for (const r of (list.ok ? (list.data as any[]) : [])) {
+        try {
+          await emailer.send({ to: String(r.email), subject: 'KokoSOS 到着のお知らせ', html: emailArrivalHtml() })
+          await sb.insert('deliveries', { alert_id: alertId, contact_id: String(r.contact_id), channel: 'email', status: 'sent' })
+          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: String(r.contact_id), email: String(r.email), purpose: 'arrival' })
+        } catch {}
+      }
+    }
+  } catch {}
   return json({ status: 'ended' })
 }
 
+async function handleAlertExtend({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
+  const m = req.url.match(/\/alert\/([^/]+)\/extend/)
+  if (!m) return notFound()
+  const alertId = m[1]
+  const body = await req.json().catch(() => null)
+  if (!body) return json({ error: 'invalid_json' }, { status: 400 })
+  const extend_sec_raw = (body.extend_sec as number | undefined) ?? ((body.extend_min as number | undefined) ? (body.extend_min as number) * 60 : undefined)
+  if (typeof extend_sec_raw !== 'number' || !Number.isFinite(extend_sec_raw)) return json({ error: 'invalid_body' }, { status: 400 })
+  const extendSec = Math.max(60, Math.min(6 * 3600, Math.floor(extend_sec_raw)))
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  const a = await sb.select('alerts', 'id,status,max_duration_sec,started_at,ended_at', `id=eq.${alertId}`, 1)
+  if (!a.ok || a.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
+  const alert = a.data[0] as any
+  if (alert.status !== 'active') return json({ error: 'not_active' }, { status: 400 })
+  const current = Number(alert.max_duration_sec) || 3600
+  const nextMax = Math.min(6 * 3600, current + extendSec)
+  await sb.update('alerts', { max_duration_sec: nextMax }, `id=eq.${alertId}`)
+  // Optional: nudge receivers
+  try {
+    const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+    const remaining = computeRemaining(alert.started_at as string, nextMax, alert.ended_at as string | null)
+    const added = nextMax - current
+    await stub.fetch('https://do/publish', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'extended', max_duration_sec: nextMax, remaining_sec: remaining, added_sec: added }),
+    })
+  } catch {}
+  return json({ ok: true, max_duration_sec: nextMax })
+}
+
 async function handleAlertRevoke({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok) return json({ error: user.error }, { status: user.status })
   const m = req.url.match(/\/alert\/([^/]+)\/revoke/)
   if (!m) return notFound()
   const alertId = m[1]
@@ -275,16 +574,25 @@ async function handlePublicAlert({ req, env }: Parameters<RouteHandler>[0]): Pro
   const alertRes = await sb.select('alerts', '*', `id=eq.${alertId}`, 1)
   if (!alertRes.ok || alertRes.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
   const alert = alertRes.data[0]
-  const latestRes = await sb.select('locations', '*', `alert_id=eq.${alertId}&order=captured_at.desc&limit=1`, 1)
-  const latest = latestRes.ok && latestRes.data.length > 0 ? latestRes.data[0] : null
+  // In "going_home" mode, do not expose latest location to public API
+  let latest: any = null
+  if (alert.type !== 'going_home') {
+    const latestRes = await sb.select('locations', '*', `alert_id=eq.${alertId}&order=captured_at.desc&limit=1`, 1)
+    latest = latestRes.ok && latestRes.data.length > 0 ? latestRes.data[0] : null
+  }
   const remaining = computeRemaining(alert.started_at, alert.max_duration_sec, alert.ended_at)
   const resp = {
+    type: (alert.type as 'emergency' | 'going_home') ?? 'emergency',
     status: (alert.status as 'active' | 'ended' | 'timeout') ?? 'active',
     remaining_sec: remaining,
     latest: latest
       ? { lat: latest.lat, lng: latest.lng, accuracy_m: latest.accuracy_m ?? null, battery_pct: latest.battery_pct ?? null, captured_at: latest.captured_at }
       : null,
-    permissions: { can_call: true, can_reply: true, can_call_police: true },
+    permissions: { 
+      can_call: true, 
+      can_reply: !!(payload as any).contact_id, 
+      can_call_police: true 
+    },
   }
   return json(resp)
 }
@@ -357,6 +665,11 @@ async function handlePublicAlertLocations({ req, env }: Parameters<RouteHandler>
   // Revocation check
   const revoked = await sb.select('revocations', '*', `alert_id=eq.${alertId}`, 1)
   if (revoked.ok && revoked.data.length > 0) return json({ error: 'revoked' }, { status: 401 })
+  // In "going_home" mode, do not return location history
+  const alertRes = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+  if (!alertRes.ok) return json({ error: 'db_error', detail: alertRes.error }, { status: 500 })
+  const aType = alertRes.data[0]?.type as string | undefined
+  if (aType === 'going_home') return json({ items: [] })
   const limit = clampInt(url.searchParams.get('limit'), 1, 500, 100)
   const order = (url.searchParams.get('order') || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc'
   const q = `alert_id=eq.${alertId}&order=captured_at.${order}&limit=${limit}`
@@ -371,6 +684,21 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
   if (!payload) return json({ error: 'invalid_token' }, { status: 401 })
   const body = await req.json().catch(() => null)
   if (!body || typeof body.preset !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
+  const preset: string = String(body.preset)
+  // only allow simple short tokens like 'ok', 'help', 'call_police'
+  if (!/^[a-z0-9_-]{1,32}$/i.test(preset)) return json({ error: 'invalid_preset' }, { status: 400 })
+  const alertId = String((payload as any).alert_id)
+  const contactId = (payload as any).contact_id as string | undefined
+  if (!contactId) return json({ error: 'forbidden' }, { status: 403 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // Save
+  await sb.insert('reactions', { alert_id: alertId, contact_id: contactId, preset })
+  // Broadcast
+  try {
+    const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+    await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'reaction', preset, ts: Date.now() }) })
+  } catch {}
   return json({ ok: true })
 }
 
@@ -515,7 +843,69 @@ function supabase(env: Env) {
       const dataJson = ok ? await res.json() : null
       return { ok, data: (dataJson as any[]) || [], error: ok ? null : await res.text() }
     },
+    async delete(table: string, query: string) {
+      const url = `${base}/${table}?${query}`
+      const res = await fetch(url, { method: 'DELETE', headers: headersBase })
+      return { ok: res.ok, error: res.ok ? null : await res.text() }
+    },
   }
+}
+
+// -------- Supabase Auth (JWT RS256) verification and sender extraction
+type AuthCheck = { ok: true; userId: string | null } | { ok: false; error: string; status: number }
+
+async function getSenderFromAuth(req: Request, env: Env): Promise<AuthCheck> {
+  const requireAuth = (env.REQUIRE_AUTH_SENDER || 'false').toLowerCase() === 'true'
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return requireAuth ? { ok: false, error: 'unauthorized', status: 401 } : { ok: true, userId: null }
+  const m = authz.match(/^Bearer\s+(.+)$/i)
+  if (!m) return requireAuth ? { ok: false, error: 'unauthorized', status: 401 } : { ok: true, userId: null }
+  const token = m[1]
+  const verified = await verifySupabaseJwt(token, env).catch(() => null)
+  if (!verified) return requireAuth ? { ok: false, error: 'invalid_token', status: 401 } : { ok: true, userId: null }
+  const sub = typeof verified.sub === 'string' ? verified.sub : null
+  if (!sub) return requireAuth ? { ok: false, error: 'invalid_token', status: 401 } : { ok: true, userId: null }
+  return { ok: true, userId: sub }
+}
+
+type Jwk = { kid: string; kty: string; alg: string; use?: string; n?: string; e?: string }
+let jwksCache: { keys: Jwk[]; fetchedAt: number } | null = null
+
+async function verifySupabaseJwt(token: string, env: Env): Promise<Record<string, unknown> | null> {
+  const [hB64, pB64, sB64] = token.split('.')
+  if (!hB64 || !pB64 || !sB64) return null
+  const header = JSON.parse(new TextDecoder().decode(base64urlToUint8Array(hB64))) as { alg: string; kid?: string }
+  if (header.alg !== 'RS256') return null
+  const kid = header.kid
+  const jwksUrl = env.SUPABASE_JWKS_URL || (env.SUPABASE_URL ? `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json` : '')
+  if (!jwksUrl) return null
+  // Fetch/cached JWKS
+  const now = Date.now()
+  if (!jwksCache || now - jwksCache.fetchedAt > 15 * 60 * 1000) {
+    const res = await fetch(jwksUrl)
+    if (!res.ok) return null
+    const { keys } = (await res.json()) as { keys: Jwk[] }
+    jwksCache = { keys, fetchedAt: now }
+  }
+  const jwk = jwksCache.keys.find((k) => !kid || k.kid === kid)
+  if (!jwk || jwk.kty !== 'RSA' || !jwk.n || !jwk.e) return null
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true } as JsonWebKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify']
+  )
+  const data = new TextEncoder().encode(`${hB64}.${pB64}`)
+  const sig = base64urlToUint8Array(sB64)
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, sig, data)
+  if (!ok) return null
+  const payload = JSON.parse(new TextDecoder().decode(base64urlToUint8Array(pB64))) as Record<string, unknown>
+  // Basic claim checks
+  const issOk = typeof payload.iss === 'string' && env.SUPABASE_URL && (payload.iss as string).startsWith(env.SUPABASE_URL.replace(/\/$/, '') + '/auth/v1')
+  const expOk = typeof payload.exp === 'number' ? nowSec() < (payload.exp as number) : true
+  if (!issOk || !expOk) return null
+  return payload
 }
 
 // (replaced by Durable Object: AlertHub)
@@ -631,6 +1021,21 @@ function emailInviteHtml(link: string): string {
 </div>`
 }
 
+function emailVerifyHtml(link: string): string {
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
+  <p>KokoSOS からの受信許可の確認です。</p>
+  <p>以下のボタンから受信許可を完了してください。</p>
+  <p><a href="${link}">受信許可を確認する</a></p>
+  <p>誤って登録された場合は、このメールを無視してください。</p>
+</div>`
+}
+
+function emailArrivalHtml(): string {
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
+  <p>到着を確認しました。ご安心ください。</p>
+</div>`
+}
+
 // -------- Ensure a default dev user exists and return its id
 async function ensureDefaultUserId(sb: ReturnType<typeof supabase>, env: Env): Promise<string> {
   const email = env.DEFAULT_USER_EMAIL || 'dev@kokosos.local'
@@ -642,4 +1047,13 @@ async function ensureDefaultUserId(sb: ReturnType<typeof supabase>, env: Env): P
   const re = await sb.select('users', 'id', `email=eq.${encodeURIComponent(email)}`, 1)
   if (re.ok && re.data.length > 0) return re.data[0].id as string
   throw new Error('failed_to_ensure_default_user')
+}
+
+// Ensure a users row exists with given id (Supabase Auth user id)
+async function ensureUserExists(sb: ReturnType<typeof supabase>, userId: string): Promise<void> {
+  // Try select by id
+  const found = await sb.select('users', 'id', `id=eq.${encodeURIComponent(userId)}`, 1)
+  if (found.ok && found.data.length > 0) return
+  // Insert with explicit id; emailは不明な場合はnull
+  await sb.insert('users', { id: userId as any }).catch(() => undefined)
 }

@@ -1,8 +1,10 @@
 KokoSOS Monorepo (MVP skeleton)
 
 Overview
+- Requirements spec: docs/requirements.md
 - iOS app triggers alerts; this repo provides the API, web receiver, and DB schema.
-- Stack: Cloudflare Workers (API), Next.js 14 (receiver web), Supabase Postgres (DB), AWS SES (email placeholder).
+- Stack: Cloudflare Workers (API), Next.js 14 (receiver web), Supabase Postgres (DB), AWS SES (email).
+ - Auth (sender): Supabase Auth (Email/Password, Apple, Google, Facebook)
 
 Structure
 - apps/api-worker: Cloudflare Workers API with JWT and SSE skeleton.
@@ -19,7 +21,11 @@ Quickstart
 - DB: apply `db/schema.sql` to Supabase（クラウド or Supabase CLIでローカル起動）。
 
 Environment
-- Copy `.env.example` to `.env` in each app as needed. Register secrets in your platform (Wrangler, Vercel/Pages, Supabase, GitHub Actions).
+- Copy `.env.example` to `.env` in each app as needed. Register secrets in your platform (Wrangler, Cloudflare Pages, Supabase, GitHub Actions).
+ - API auth (optional → recommended):
+   - `SUPABASE_URL=https://<project-ref>.supabase.co`
+   - `SUPABASE_JWKS_URL=https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json` (省略時は自動導出)
+   - `REQUIRE_AUTH_SENDER=true` を有効にすると `/alert/*` は Authorization: Bearer <Supabase access_token> を必須に
 
 Docker notes
 - `docker-compose` は API(8787) と Web(3000) を起動。ブラウザは `http://localhost:3000` へアクセスし、クライアントJSが `http://localhost:8787` に直接アクセスします。
@@ -36,6 +42,12 @@ GitHub デプロイ（Cloudflare dev/stage/prod）
   - API用: `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SES_*`, `CORS_ALLOW_ORIGIN`
   - Web用（必要に応じて）: `NEXT_PUBLIC_API_BASE` 等はPagesの「環境変数」側で設定推奨
 
+iOS CI（任意）
+- Workflow: `.github/workflows/ios-build.yml` が Dev/Stage/Prod をマトリクスでビルド
+- 環境ごと（Environments: dev/stage/prod）に以下のSecretsを登録:
+  - `SUPABASE_URL`, `SUPABASE_ANON_KEY`（`OAUTH_REDIRECT_SCHEME`は未設定時 `kokosos`）
+- CIは `apps/ios/Configs/Secrets-<Env>.xcconfig` を生成し、`xcodegen generate` → `xcodebuild` を実行
+
 Cloudflare 側準備
 - Workers: wrangler は環境ごとに `name` を分離（`apps/api-worker/wrangler.toml:1`）。
 - Pages: `kokosos-web-dev`, `kokosos-web-stage`, `kokosos-web-prod` の3プロジェクトを作成（同一リポ参照でも可）。
@@ -45,21 +57,53 @@ Endpoints (API)
 - POST `/alert/start`: Start sharing, returns `shareToken` and alert metadata.
 - POST `/alert/:id/update`: Periodic location update.
 - POST `/alert/:id/stop`: Stop or arrived.
+- POST `/alert/:id/extend`: Extend max_duration (server clamps within 5m–6h).
 - POST `/alert/:id/revoke`: Revoke link immediately.
 - GET `/public/alert/:token`: Initial state for receiver.
 - GET `/public/alert/:token/stream`: SSE stream for live updates.
 - POST `/public/alert/:token/react`: Preset reaction from receiver.
+
+Auth (sender)
+- Use Supabase Auth on clients (iOS/Android/Web) to obtain `access_token`, then call `/alert/*` with `Authorization: Bearer <token>`.
+- Workers verifies the token via Supabase JWKS (RS256) and uses `sub` as `user_id`.
 
 Security
 - JWT HS256 with `alert_id`, `contact_id`, `scope`, `exp` (≤24h).
 - Revocations checked to immediately invalidate tokens.
 - Security headers set: HSTS, Referrer-Policy, X-Frame-Options, CSP (nonce-based skeleton).
 
-Notes
-- Email sending is a placeholder; integrate AWS SES in production.
+- Email sending uses AWS SES (local dev may use MailHog).
 - SSE broadcasting is stubbed; connect to storage/pubsub as you wire Supabase/Workers Durable Objects.
 - iOS（UIKit / XcodeGen）
 - 生成: `brew install xcodegen` 後、`cd apps/ios && xcodegen generate && open KokoSOS.xcodeproj`
 - ビルド構成: Debug/Release × Dev/Stage/Prod（6構成）。`apps/ios/Configs/*.xcconfig`で `API_BASE_URL` を環境ごとに設定。
 - 実行に必要な権限: 位置情報（フォアグラウンド/常時）
 - 起動フロー: アプリ起動 → 3秒カウントダウン → `/alert/start` へ初回位置とバッテリーを送信 → shareToken表示
+- 実機テスト時のAPI接続: デバイスから`localhost`は使えません。アプリ内「設定 > APIベースURL」に `http://<MacのIP>:8787`（ローカル開発）または公開APIのURLを入力してください（未設定時はInfo.plistの`APIBaseURL`/`APIBaseHost`を使用）。
+- xcconfigの`//`コメント問題の回避: `API_BASE_URL`に`https://...`を書くと`//`以降がコメントとして無視される場合があります。Secrets-*.xcconfig では `API_BASE_HOST=kokosos-api-<env>.<your>.workers.dev` とし、`API_BASE_SCHEME=https` を併用してください。コード側で `APIBaseHost` として解決します。
+
+**iOS 接続設定/仕様（追記）**
+- 呼び出すAPI（Cloudflare Workers）
+  - 送信者用: `POST /alert/start|:id/update|:id/stop|:id/extend|:id/revoke`
+  - 公開用: `GET /public/alert/:token`, `GET /public/alert/:token/stream`, `POST /public/alert/:token/react`
+  - 認証: `Authorization: Bearer <Supabase access_token>`（`REQUIRE_AUTH_SENDER=true`時必須）
+- iOSの接続先の決定優先度（APIClient）
+  1) アプリ内「設定 > APIベースURL」の上書き値（http/https かつ host 必須のときのみ有効）
+  2) Info.plistの`APIBaseURL`（有効URLのとき）
+  3) Info.plistの`APIBaseHost` + `APIBaseScheme`（有効hostのとき）
+  4) フォールバック: `http://localhost:8787`（Dev向け）
+- Info/xcconfigキー（Stage/Prodはhttps推奨）
+  - Info.plist: `APIBaseURL`, `APIBaseHost`, `APIBaseScheme`
+  - xcconfig: `API_BASE_URL`, `API_BASE_HOST`, `API_BASE_SCHEME`（Secrets-*.xcconfigで上書き可）
+- 既知の注意点と対処
+  - 実機は`localhost`不可。公開ドメインまたはLAN IPを指定。
+  - `API_BASE_URL`に`https://...`を直書きすると`//`以降がコメント扱いになるケースあり → `API_BASE_HOST`/`API_BASE_SCHEME`を使用。
+  - エンドポイントURLはパスセグメントで結合（先頭`/`は付けない）。`/alert/start`を`appendingPathComponent("/alert/start")`に渡すと`%2Falert%2Fstart`になり404になるため修正済み。
+- エラーハンドリング（アプリ表示）
+  - ホスト解決失敗: 「設定>APIベースURL」を促すメッセージ（現在のURLを併記）
+  - サーバー非2xx: `サーバーエラー(ステータス)` とレスポンスJSONの`error/detail`を整形表示（切り分け容易）
+- トラブルシュート
+  - APIヘルス: `GET https://<APIホスト>/_health`（`REQUIRE_AUTH_SENDER`, `SUPABASE_URL_preview` 等を確認）
+  - 401 invalid_token: Workersの`SUPABASE_URL`がiOSのプロジェクトと不一致/`REQUIRE_AUTH_SENDER`設定の確認
+  - 500 server_misconfig: Workersの`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`未設定
+  - 400 invalid_location: `lat/lng`未送信（通常は位置取得完了後に送信）

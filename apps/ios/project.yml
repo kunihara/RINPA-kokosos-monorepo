@@ -4,6 +4,10 @@ options:
   deploymentTarget:
     iOS: '15.0'
   developmentLanguage: ja
+packages:
+  Supabase:
+    url: https://github.com/supabase-community/supabase-swift
+    from: 2.2.0
 configs:
   Debug-Dev: debug
   Debug-Stage: debug
@@ -14,7 +18,7 @@ configs:
 settings:
   base:
     PRODUCT_NAME: KokoSOS
-    PRODUCT_BUNDLE_IDENTIFIER: com.kokosos.app
+    PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
     TARGETED_DEVICE_FAMILY: 1
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
@@ -58,11 +62,27 @@ targets:
   KokoSOS:
     type: application
     platform: iOS
+    dependencies:
+      - sdk: Contacts.framework
+      - sdk: ContactsUI.framework
+      - package: Supabase
+        product: Supabase
+    configFiles:
+      Debug-Dev: Configs/Dev.xcconfig
+      Debug-Stage: Configs/Stage.xcconfig
+      Debug-Prod: Configs/Prod.xcconfig
+      Release-Dev: Configs/Dev.xcconfig
+      Release-Stage: Configs/Stage.xcconfig
+      Release-Prod: Configs/Prod.xcconfig
     sources:
       - path: Sources
       - path: Resources
         excludes:
           - "**/*.xcassets/**"
+          - "Info.plist"
+          - "Info-Dev.plist"
+          - "Info-Stage.plist"
+          - "Info-Prod.plist"
     resources:
       - path: Resources/Assets.xcassets
     scheme:
@@ -71,22 +91,21 @@ targets:
     settings:
       base:
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
         SUPPORTED_PLATFORMS: iphonesimulator iphoneos
         OTHER_LDFLAGS: ""
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+      configs:
+        Debug-Dev:
+          INFOPLIST_FILE: Resources/Info-Dev.plist
+        Debug-Stage:
+          INFOPLIST_FILE: Resources/Info-Stage.plist
+        Debug-Prod:
+          INFOPLIST_FILE: Resources/Info-Prod.plist
+        Release-Dev:
+          INFOPLIST_FILE: Resources/Info-Dev.plist
+        Release-Stage:
+          INFOPLIST_FILE: Resources/Info-Stage.plist
+        Release-Prod:
+          INFOPLIST_FILE: Resources/Info-Prod.plist
     info:
       path: Resources/Info.plist
-      properties:
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
-          UISceneConfigurations:
-            UIApplicationSceneManifest:
-              UISceneConfigurationName: Default Configuration
-        UILaunchScreen:
-          UIColorName: LaunchBackground
-        UIRequiresPersistentWiFi: false
-        UIRequiresFullScreen: true
-        UIStatusBarStyle: UIStatusBarStyleDefault
-        UIUserInterfaceStyle: Light
-        LSApplicationCategoryType: public.app-category.navigation
-        CFBundleURLTypes: []

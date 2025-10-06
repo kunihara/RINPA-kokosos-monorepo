@@ -7,6 +7,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 export const runtime = 'edge'
 
 type AlertState = {
+  type: 'emergency' | 'going_home'
   status: 'active' | 'ended' | 'timeout'
   remaining_sec: number
   latest: null | { lat: number; lng: number; accuracy_m: number | null; battery_pct: number | null; captured_at: string }
@@ -27,6 +28,9 @@ export default function ReceiverPage({ params }: any) {
   const routeCoordsRef = useRef<[number, number][]>([])
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
   const lastEventAtRef = useRef<number>(0)
+  const [remainingLocal, setRemainingLocal] = useState<number>(0)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let closed = false
@@ -36,14 +40,16 @@ export default function ReceiverPage({ params }: any) {
         if (!res.ok) throw new Error('failed to load')
         const data = (await res.json()) as AlertState
         if (!closed) setState(data)
-        // Load initial history (route)
+        // Load initial history (route) only for emergency mode
         try {
-          const r = await fetch(`${apiBase}/public/alert/${encodeURIComponent(token)}/locations?limit=200&order=asc`)
-          if (r.ok) {
-            const j = (await r.json()) as { items: { lat: number; lng: number }[] }
-            routeCoordsRef.current = j.items.map((x) => [x.lng, x.lat])
-            // If map is ready, reflect immediately
-            if (mapInstance.current) updateRoute(mapInstance.current)
+          if (data.type !== 'going_home') {
+            const r = await fetch(`${apiBase}/public/alert/${encodeURIComponent(token)}/locations?limit=200&order=asc`)
+            if (r.ok) {
+              const j = (await r.json()) as { items: { lat: number; lng: number }[] }
+              routeCoordsRef.current = j.items.map((x) => [x.lng, x.lat])
+              // If map is ready, reflect immediately
+              if (mapInstance.current) updateRoute(mapInstance.current)
+            }
           }
         } catch {}
       } catch (e) {
@@ -67,8 +73,21 @@ export default function ReceiverPage({ params }: any) {
         try {
           const evt = JSON.parse(ev.data)
           lastEventAtRef.current = Date.now()
-          if (evt.type === 'location') setState((s) => (s ? { ...s, latest: evt.latest } : s))
+          if (evt.type === 'location') setState((s) => (s && s.type !== 'going_home' ? { ...s, latest: evt.latest } : s))
           if (evt.type === 'status') setState((s) => (s ? { ...s, status: evt.status } : s))
+          if (evt.type === 'extended') {
+            setState((s) => (s ? { ...s, remaining_sec: typeof evt.remaining_sec === 'number' ? evt.remaining_sec : s.remaining_sec } : s))
+            try { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) } catch {}
+            const addedMin = typeof evt.added_sec === 'number' ? Math.max(1, Math.round(evt.added_sec / 60)) : null
+            setToast(addedMin ? `+${addedMin}分延長されました` : '共有時間が延長されました')
+            toastTimerRef.current = setTimeout(() => setToast(null), 3000)
+          }
+          if (evt.type === 'reaction') {
+            try { if (toastTimerRef.current) clearTimeout(toastTimerRef.current) } catch {}
+            const label = labelForPreset(String(evt.preset || 'reply'))
+            setToast(`返信: ${label}`)
+            toastTimerRef.current = setTimeout(() => setToast(null), 2500)
+          }
           // reset backoff on successful message
           retryMs = 1000
         } catch {}
@@ -119,10 +138,23 @@ export default function ReceiverPage({ params }: any) {
 
   const remaining = useMemo(() => (state ? Math.max(0, state.remaining_sec) : 0), [state])
 
-  // Initialize Mapbox map when token and container are ready
+  // Drive a 1-second ticking countdown locally; resync when server value changes
+  useEffect(() => {
+    setRemainingLocal(remaining)
+    if (remaining <= 0) return
+    let val = remaining
+    const id = setInterval(() => {
+      val -= 1
+      setRemainingLocal(Math.max(0, val))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [remaining])
+
+  // Initialize Mapbox map when token and container are ready (skip for going_home)
   useEffect(() => {
     if (!mapRef.current) return
     if (!mapboxToken) return
+    if (state?.type === 'going_home') return
     if (mapInstance.current) return
     mapboxgl.accessToken = mapboxToken
     const map = new mapboxgl.Map({
@@ -300,29 +332,42 @@ export default function ReceiverPage({ params }: any) {
       {state && (
         <section style={{ display: 'grid', gap: 8 }}>
           <div>ステータス: {labelStatus(state.status)}</div>
-          <div>残り時間: {formatDuration(remaining)}</div>
+          <div>残り時間: {formatDuration(remainingLocal)}</div>
           <div>
             最終更新: {state.latest ? new Date(state.latest.captured_at).toLocaleString() : '—'} / バッテリー:{' '}
             {state.latest?.battery_pct ?? '—'}%
           </div>
-          <div style={{ height: 320, borderRadius: 8, overflow: 'hidden', position: 'relative', background: '#e5e7eb' }}>
-            {!mapboxToken && (
-              <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, background: 'rgba(255,255,255,0.8)' }}>
-                <div style={{ color: '#111827' }}>地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）</div>
-              </div>
-            )}
-            <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          {state.type === 'going_home' ? (
+            <div style={{ padding: 12, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, color: '#7c2d12' }}>
+              帰るモード: 出発と到着のみ通知します（位置のライブ共有はありません）
+            </div>
+          ) : (
+            <div style={{ height: 320, borderRadius: 8, overflow: 'hidden', position: 'relative', background: '#e5e7eb' }}>
+              {!mapboxToken && (
+                <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, background: 'rgba(255,255,255,0.8)' }}>
+                  <div style={{ color: '#111827' }}>地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）</div>
+                </div>
+              )}
+              <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <a href="tel:0000000000" style={btn()}>電話</a>
-            <button style={btn()} onClick={() => react('ok')} disabled={!state.permissions.can_reply}>
-              プリセット返信
-            </button>
-            <a href="tel:110" style={btn({ variant: 'danger' })}>
-              110へ電話
-            </a>
+            {/* プリセット返信（複数） */}
+            <button style={btn()} onClick={() => react('ok')} disabled={!state.permissions.can_reply}>OK</button>
+            <button style={btn()} onClick={() => react('on_my_way')} disabled={!state.permissions.can_reply}>向かっています</button>
+            <button style={btn()} onClick={() => react('will_call')} disabled={!state.permissions.can_reply}>今すぐ連絡します</button>
+            <button style={btn({ variant: 'danger' })} onClick={() => react('call_police')} disabled={!state.permissions.can_reply}>通報しました</button>
+            <a href="tel:110" style={btn({ variant: 'danger' })}>110へ電話</a>
           </div>
         </section>
+      )}
+      {toast && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 16, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
+          <div style={{ background: 'rgba(17,24,39,0.95)', color: 'white', padding: '10px 14px', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }}>
+            {toast}
+          </div>
+        </div>
       )}
     </main>
   )
@@ -335,6 +380,16 @@ export default function ReceiverPage({ params }: any) {
         body: JSON.stringify({ preset }),
       })
     } catch {}
+  }
+
+  function labelForPreset(preset: string): string {
+    const map: Record<string, string> = {
+      ok: 'OK',
+      on_my_way: '向かっています',
+      will_call: '今すぐ連絡します',
+      call_police: '通報しました',
+    }
+    return map[preset] || preset
   }
 }
 
