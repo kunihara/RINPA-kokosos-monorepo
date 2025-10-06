@@ -114,8 +114,8 @@ jobs:
         working-directory: apps/ios
         run: |
           set -euo pipefail
-          echo "::group::First 20 error lines"
-          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture)" build/xcodebuild-Dev.log | head -n 20 || true
+          echo "::group::First 50 error lines (JP/EN)"
+          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture|エラー|失敗|Undefined symbols)" build/xcodebuild-Dev.log | head -n 50 || true
           echo "::endgroup::"
           echo "::group::Last 200 lines"
           tail -n 200 build/xcodebuild-Dev.log || true
@@ -247,8 +247,8 @@ jobs:
         working-directory: apps/ios
         run: |
           set -euo pipefail
-          echo "::group::First 20 error lines"
-          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture)" build/xcodebuild-${{ matrix.cfg_suffix }}.log | head -n 20 || true
+          echo "::group::First 50 error lines (JP/EN)"
+          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture|エラー|失敗|Undefined symbols)" build/xcodebuild-${{ matrix.cfg_suffix }}.log | head -n 50 || true
           echo "::endgroup::"
           echo "::group::Last 200 lines"
           tail -n 200 build/xcodebuild-${{ matrix.cfg_suffix }}.log || true
