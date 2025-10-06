@@ -101,7 +101,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                     redirect = "\(scheme)://oauth-callback"
                 }
                 let client = SupabaseAuthAdapter.shared.client
-                let res = try await client.auth.signUp(email: email, password: pass, options: .init(emailRedirectTo: redirect))
+                let res = try await client.auth.signUp(email: email, password: pass)
                 if res.session != nil {
                     UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                     let main = MainViewController()
@@ -157,9 +157,9 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
             do {
                 let info = Bundle.main.infoDictionary
                 let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
-                let redirectURI = "\(scheme)://oauth-callback"
+                let redirectURI = URL(string: "\(scheme)://oauth-callback")!
                 let client = SupabaseAuthAdapter.shared.client
-                let prov: OAuthProvider
+                let prov: Provider
                 switch provider.lowercased() {
                 case "apple": prov = .apple
                 case "google": prov = .google

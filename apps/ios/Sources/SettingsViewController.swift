@@ -167,8 +167,8 @@ final class SettingsViewController: UIViewController {
     }
 
     private func navigateToSignInRoot() {
-        // SDKセッションをサインアウト
-        try? await SupabaseAuthAdapter.shared.client.auth.signOut()
+        // SDKセッションをサインアウト（非同期で発火）
+        Task { try? await SupabaseAuthAdapter.shared.client.auth.signOut() }
         let complete: (UINavigationController) -> Void = { nav in
             nav.setViewControllers([SignInViewController()], animated: true)
         }

@@ -122,7 +122,7 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
             defer { signInButton.isEnabled = true }
             do {
                 let client = SupabaseAuthAdapter.shared.client
-                _ = try await client.auth.signInWithPassword(email: email, password: pass)
+                try await client.auth.signInWithPassword(email: email, password: pass)
                 // ルートをMainへ切替
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
@@ -185,9 +185,9 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
             do {
                 let info = Bundle.main.infoDictionary
                 let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
-                let redirectURI = "\(scheme)://oauth-callback"
+                let redirectURI = URL(string: "\(scheme)://oauth-callback")!
                 let client = SupabaseAuthAdapter.shared.client
-                let prov: OAuthProvider
+                let prov: Provider
                 switch provider.lowercased() {
                 case "apple": prov = .apple
                 case "google": prov = .google
