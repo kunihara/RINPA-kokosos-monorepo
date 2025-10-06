@@ -9,7 +9,6 @@ new_sqlite_classes = ["AlertHub"]
 
 [env.dev]
 name = "kokosos-api-dev"
-[env.dev]
 route = "api-dev.kokosos.com/*"
 [env.dev.durable_objects]
 bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
