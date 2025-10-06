@@ -76,6 +76,26 @@ jobs:
         working-directory: apps/ios
         run: xcodegen generate
 
+      - name: Resolve Simulator Destination (Dev)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          # Query destinations available for this scheme/config
+          OUT=$(xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-Dev -showdestinations || true)
+          echo "$OUT" | sed -n '1,200p'
+          # Prefer iPhone entries, else fallback to any iOS Simulator entry
+          DEST=$(printf '%s' "$OUT" | awk -F'[{},]' '/platform:iOS Simulator/ {
+            name=""; os="";
+            for (i=1;i<=NF;i++) { if ($i ~ /name:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); name=$i } if ($i ~ /OS:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); os=$i } }
+            if (name != "" && os != "") { print (index(name, "iPhone") ? "1" : (index(name, "iPad") ? "2" : "9")) ":platform=iOS Simulator,name=" name ",OS=" os }
+          }' | sort | head -n1 | cut -d: -f2-)
+          if [ -z "$DEST" ]; then
+            echo "::warning ::No specific iOS Simulator destination parsed; using generic placeholder"
+            DEST="platform=iOS Simulator,name=iPhone SE (3rd generation),OS=latest"
+          fi
+          echo "Using destination: $DEST"
+          echo "DEST_SPEC=$DEST" >> "$GITHUB_ENV"
+
       - name: Build (Simulator, Debug-Dev)
         working-directory: apps/ios
         run: |
@@ -84,7 +104,7 @@ jobs:
           xcodebuild -project KokoSOS.xcodeproj \
             -scheme KokoSOS -configuration Debug-Dev \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -destination "$DEST_SPEC" \
             -resultBundlePath build/KokoSOS-Dev.xcresult \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             build | tee build/xcodebuild-Dev.log | xcpretty || exit ${PIPESTATUS[0]}
@@ -191,6 +211,24 @@ jobs:
         working-directory: apps/ios
         run: xcodegen generate
 
+      - name: Resolve Simulator Destination (matrix=${{ matrix.cfg_suffix }})
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          OUT=$(xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} -showdestinations || true)
+          echo "$OUT" | sed -n '1,200p'
+          DEST=$(printf '%s' "$OUT" | awk -F'[{},]' '/platform:iOS Simulator/ {
+            name=""; os="";
+            for (i=1;i<=NF;i++) { if ($i ~ /name:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); name=$i } if ($i ~ /OS:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); os=$i } }
+            if (name != "" && os != "") { print (index(name, "iPhone") ? "1" : (index(name, "iPad") ? "2" : "9")) ":platform=iOS Simulator,name=" name ",OS=" os }
+          }' | sort | head -n1 | cut -d: -f2-)
+          if [ -z "$DEST" ]; then
+            echo "::warning ::No specific iOS Simulator destination parsed; using generic placeholder"
+            DEST="platform=iOS Simulator,name=iPhone SE (3rd generation),OS=latest"
+          fi
+          echo "Using destination: $DEST"
+          echo "DEST_SPEC=$DEST" >> "$GITHUB_ENV"
+
       - name: Build (Simulator, Debug-${{ matrix.cfg_suffix }})
         working-directory: apps/ios
         run: |
@@ -199,7 +237,7 @@ jobs:
           xcodebuild -project KokoSOS.xcodeproj \
             -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -destination "$DEST_SPEC" \
             -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             build | tee build/xcodebuild-${{ matrix.cfg_suffix }}.log | xcpretty || exit ${PIPESTATUS[0]}
