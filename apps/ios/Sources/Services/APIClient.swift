@@ -95,6 +95,23 @@ struct APIClient {
         return (t?.isEmpty == false) ? t : nil
     }
 
+    // Decode JWT exp and check if token is expired or near expiry (within 60s)
+    private func isAccessTokenStale(threshold: TimeInterval = 60) -> Bool {
+        guard let token = currentAuthToken() else { return true }
+        let parts = token.split(separator: "."); guard parts.count == 3 else { return true }
+        let payloadB64 = String(parts[1])
+        func b64urlToData(_ s: String) -> Data? {
+            var s = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+            let pad = 4 - (s.count % 4); if pad < 4 { s.append(String(repeating: "=", count: pad)) }
+            return Data(base64Encoded: s)
+        }
+        guard let data = b64urlToData(payloadB64),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let exp = json["exp"] as? TimeInterval else { return true }
+        let now = Date().timeIntervalSince1970
+        return (exp - now) < threshold
+    }
+
     // Execute a request and if 401 occurs, attempt a one-time refresh and retry
     private func execute(_ build: () -> URLRequest) async throws -> (Data, HTTPURLResponse) {
         var req = build()
@@ -193,6 +210,10 @@ struct APIClient {
     }
 
     func deleteAccount() async throws {
+        // Proactively refresh if the current access token is near expiry
+        if currentRefreshToken() != nil && isAccessTokenStale() {
+            _ = await AuthClient.performRefreshAndStore()
+        }
         let (data, http) = try await execute {
             var req = URLRequest(url: endpoint("account"))
             req.httpMethod = "DELETE"
