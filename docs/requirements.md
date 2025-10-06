@@ -285,6 +285,26 @@ OAuth（Apple/Google/Facebook）
     - SES 連携: `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_SENDER_EMAIL`
   - `deploy-api.yml` が `wrangler secret put` で各環境に注入。
 
+### API 公開とセキュリティ注意
+
+- 公開ポリシー
+  - API の DNS（`api.kokosos.com`/`api-dev.kokosos.com`）は公開して問題ない。重要なのは「認証必須の境界」を厳格にすること。
+  - 本番/開発ともに `REQUIRE_AUTH_SENDER=true` を有効化し、送信者向けエンドポイントは常に Supabase Auth のトークン必須とする。
+  - `CORS_ALLOW_ORIGIN` は許可したオリジンのみに限定（例: `https://app.kokosos.com`、dev は `https://app-dev.kokosos.com`）。ワイルドカード（`*`）は使用しない。
+  - `JWT_SECRET` は十分強い値を設定。`SUPABASE_SERVICE_ROLE_KEY` は Workers Secrets のみ（クライアントへ露出しない）。
+
+- エンドポイント公開範囲（前提）
+  - 公開OK（署名付きJWTが必須）: `/public/alert/:token`, `/public/alert/:token/stream`, `/public/alert/:token/react`, `/public/verify/:token`。
+  - 認証必須（送信者）: `/alert/*`（start/update/stop/extend/revoke）, `/contacts/*`（list/bulk_upsert/send_verify）。
+
+- 注意・制限（必須）
+  - 診断系 `_diag/*` は本番で無効化または IP 制限・環境フラグで閉じる。
+  - `_health` は必要最小の情報のみ返す（必要に応じて簡易Authや出力削減を検討）。
+  - レート制限・Bot対策を有効化（Cloudflare WAF / Bot Fight）。特に `/public/*` やメール送信系は厳しめのしきい値を推奨。
+  - ログに PII/トークンを出力しない。出力時は必ずマスク（既定の `_health` はマスク済み）。
+  - TLS/セキュリティヘッダは維持（HSTS, CSP, X-Frame-Options など既定値を変更しない）。
+  - 検索避け: 公開リンクのクロール抑止が必要な場合は `X-Robots-Tag: noindex` を適用（必要性に応じて運用で判断）。
+
 
 ## 受信者選定・検証（追加仕様）
 
