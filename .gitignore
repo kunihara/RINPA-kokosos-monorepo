@@ -81,6 +81,8 @@ Dockerfile.local
 # Docs screenshots (local-only; avoid binary bloat)
 docs/screenshots/*
 !docs/screenshots/.gitkeep
+# Local artifacts (do not commit CI downloads)
+artifacts/
 # iOS local secrets (do not commit)
 apps/ios/Configs/Secrets-Dev.xcconfig
 apps/ios/Configs/Secrets-Stage.xcconfig
