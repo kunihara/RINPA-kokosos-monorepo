@@ -1,0 +1,61 @@
+name: Deploy Root Site (Cloudflare Pages)
+
+on:
+  push:
+    branches: [dev, stage, main]
+    paths:
+      - 'sites/root/**'
+      - '.github/workflows/deploy-root.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy kokosos.com (static)
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Wrangler (CLI)
+        run: npm i -g wrangler@4.41.0
+
+      - name: Validate Cloudflare token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          LEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)
+          echo "CF_TOKEN_LEN=$LEN"
+          echo "CF_TOKEN_VERIFY_CODE=$CODE"
+          if [ "$LEN" -lt 10 ] || [ "$CODE" != "200" ]; then
+            echo "::error ::Cloudflare token appears invalid or missing. Ensure prod Environment Secrets (CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID)." >&2
+            exit 1
+          fi
+
+      - name: Ensure & Deploy Pages (kokosos-root)
+        working-directory: sites/root
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          wrangler whoami
+          PROJECT="kokosos-root"
+          BRANCH="${{ github.ref_name }}"
+          # Create project if missing (production branch is ALWAYS 'main')
+          wrangler pages project list || true
+          wrangler pages project create "$PROJECT" --production-branch=main || true
+          # Deploy static folder (sites/root)
+          wrangler pages deploy . --project-name="$PROJECT" --branch="$BRANCH" --commit-dirty=true --commit-message="GitHub_Actions_Deploy"
+          if [ "$BRANCH" = "main" ]; then
+            echo "::notice title=Custom Domain (Production)::Add 'kokosos.com' as Custom Domain in Cloudflare Pages project '$PROJECT' if not configured."
+          elif [ "$BRANCH" = "dev" ]; then
+            echo "::notice title=Custom Domain (Preview-DEV)::Add 'site-dev.kokosos.com' as Preview Domain (branch=dev) in Pages project '$PROJECT'."
+          elif [ "$BRANCH" = "stage" ]; then
+            echo "::notice title=Custom Domain (Preview-STAGE)::Add 'site-stage.kokosos.com' as Preview Domain (branch=stage) in Pages project '$PROJECT'."
+          fi

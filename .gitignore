@@ -32,8 +32,16 @@ apps/web/.env.production.local
 .wrangler/
 apps/api-worker/.wrangler/
 apps/api-worker/dist/
+**/.dev.vars
+.github/env/*.secrets
+stage.test
+
+# GitHub Environment secret files (do not commit real values)
+.github/env/*.secrets
 
 # Supabase (CLI local state)
+# NOTE: supabase/config.toml と supabase/migrations/ はGit管理対象。
+# 以下はローカル実行時の一時/差分情報のためコミットしない。
 supabase/.branches/
 supabase/.temp/
 supabase/volumes/
@@ -69,3 +77,14 @@ fastlane/test_output/
 docker-compose.override.yml
 .env.docker
 Dockerfile.local
+
+# Docs screenshots (local-only; avoid binary bloat)
+docs/screenshots/*
+!docs/screenshots/.gitkeep
+# Local artifacts (do not commit CI downloads)
+artifacts/
+# iOS local secrets (do not commit)
+apps/ios/Configs/Secrets-Dev.xcconfig
+apps/ios/Configs/Secrets-Stage.xcconfig
+apps/ios/Configs/Secrets-Prod.xcconfig
+apps/ios/Configs/Secrets-Common.xcconfig

@@ -1,27 +1,38 @@
 name = "kokosos-api"
 main = "src/index.ts"
 compatibility_date = "2024-09-10"
+legacy_env = true
 
-[vars]
-# Populated from environment or Wrangler secrets
-# JWT_SECRET = "..."
-# SUPABASE_URL = "..."
-# SUPABASE_SERVICE_ROLE_KEY = "..."
-# SES_REGION = "..."
-# SES_ACCESS_KEY_ID = "..."
-# SES_SECRET_ACCESS_KEY = "..."
-# SES_SENDER_EMAIL = "..."
-
-[miniflare]
-kv_persist = true
-durable_objects_persist = true
-cache_persist = true
+[[migrations]]
+tag = "v1-alert-hub-sqlite"
+new_sqlite_classes = ["AlertHub"]
 
 [env.dev]
 name = "kokosos-api-dev"
+route = "api-dev.kokosos.com/*"
+[env.dev.durable_objects]
+bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
 
 [env.stage]
 name = "kokosos-api-stage"
+route = "api-stage.kokosos.com/*"
+[env.stage.durable_objects]
+bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
 
 [env.prod]
 name = "kokosos-api-prod"
+route = "api.kokosos.com/*"
+[env.prod.durable_objects]
+bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
+
+#[vars]
+# Placeholders for local dev; production uses Secrets
+# JWT_SECRET = "..."
+# SUPABASE_URL = "..."
+# SUPABASE_SERVICE_ROLE_KEY = "..."
+# CORS_ALLOW_ORIGIN = "..."
+
+# [miniflare]  # used only for local `wrangler dev`
+# kv_persist = true
+# durable_objects_persist = true
+# cache_persist = true

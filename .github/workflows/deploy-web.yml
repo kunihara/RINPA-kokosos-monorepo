@@ -3,15 +3,40 @@ name: Deploy Web (Cloudflare Pages)
 on:
   push:
     branches: [dev, stage, main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/deploy-web.yml'
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
 
 jobs:
+  changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+              - '.github/workflows/deploy-web.yml'
+
   deploy:
     name: Build & Deploy Pages
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
-    env:
-      ENV_NAME: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
-      PROJECT_NAME: kokosos-web-${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
-    environment: ${{ env.ENV_NAME }}
+    concurrency:
+      group: web-${{ github.ref }}
+      cancel-in-progress: true
+    environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,19 +48,50 @@ jobs:
 
       - name: Install deps
         working-directory: apps/web
-        run: npm ci
+        run: npm install --no-fund --no-audit --legacy-peer-deps
 
       - name: Build (next-on-pages)
         working-directory: apps/web
         run: npx @cloudflare/next-on-pages@latest
         env:
           NEXT_PUBLIC_API_BASE: ${{ secrets.NEXT_PUBLIC_API_BASE }}
+          NEXT_PUBLIC_MAPBOX_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPBOX_TOKEN }}
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ env.PROJECT_NAME }}
-          directory: apps/web/.vercel/output/static
-          wranglerVersion: '3'
+      - name: Install Wrangler (CLI)
+        run: npm i -g wrangler@4.41.0
+
+      - name: Validate Cloudflare token (stage/dev/prod)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          LEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | wc -c)
+          CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)
+          echo "CF_TOKEN_LEN=$LEN"
+          echo "CF_TOKEN_VERIFY_CODE=$CODE"
+          if [ "$LEN" -lt 10 ] || [ "$CODE" != "200" ]; then
+            echo "::error ::Cloudflare token appears invalid or missing. Ensure stage Environment approval and Secrets (CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID)." >&2
+            exit 1
+          fi
+
+      - name: Ensure & Deploy Pages
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          echo "CF_TOKEN_LEN=$(printf %s \"$CLOUDFLARE_API_TOKEN\" | wc -c)"
+          CF_TOKEN_VERIFY_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)
+          echo "CF_TOKEN_VERIFY_CODE=$CF_TOKEN_VERIFY_CODE"
+          wrangler whoami
+          PROJECT=${{ format('kokosos-web-{0}', (github.ref_name == 'main' && 'prod' || github.ref_name == 'stage' && 'stage' || 'dev')) }}
+          BRANCH=${{ github.ref_name == 'main' && 'main' || github.ref_name == 'stage' && 'stage' || 'dev' }}
+          wrangler pages project list || true
+          wrangler pages project create "$PROJECT" --production-branch="$BRANCH" || true
+          wrangler pages deploy .vercel/output/static --project-name="$PROJECT" --branch="$BRANCH" --commit-dirty=true --commit-message="GitHub_Actions_Deploy"

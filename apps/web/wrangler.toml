@@ -1,0 +1,5 @@
+[pages]
+# Ensure Pages Functions run with Node.js polyfills where needed
+compatibility_date = "2024-09-10"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"

@@ -1,0 +1,365 @@
+name: iOS Build (lite/matrix)
+
+on:
+  push:
+    branches: [dev, stage, main]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1' # Weekly Monday 03:00 UTC
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changed scopes
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ios:
+              - 'apps/ios/**'
+              - '.github/workflows/ios-build.yml'
+
+  build-ios-dev:
+    name: iOS Build (Dev - lightweight)
+    needs: changes
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') || needs.changes.outputs.ios == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 20
+    environment: dev
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          set -euo pipefail
+          brew update
+          brew install xcodegen jq
+
+      - name: Xcode environment (versions/sdks)
+        run: |
+          set -euo pipefail
+          xcodebuild -version || true
+          xcodebuild -showsdks || true
+          swiftc --version || true
+
+      - name: Write iOS Secrets xcconfig (Dev)
+        working-directory: apps/ios
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          OAUTH_REDIRECT_SCHEME: ${{ secrets.OAUTH_REDIRECT_SCHEME || 'kokosos' }}
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
+        run: |
+          set -euo pipefail
+          CFG=Dev
+          FILE="Configs/Secrets-${CFG}.xcconfig"
+          COMMON_FILE="Configs/Secrets-Common.xcconfig"
+          : "${SUPABASE_URL:?Missing SUPABASE_URL secret for environment ${{ matrix.env_name }}}"
+          : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY secret for environment ${{ matrix.env_name }}}"
+          : "${APP_BUNDLE_ID:?Missing APP_BUNDLE_ID secret for environment ${{ matrix.env_name }}}"
+          echo "Writing $FILE"
+          # Derive SUPABASE_HOST from SUPABASE_URL
+          SUPABASE_HOST=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^/]+)/?.*#\1#')
+          # Derive EMAIL_REDIRECT_* from WEB_PUBLIC_BASE when provided
+          EMAIL_REDIRECT_BASE=${WEB_PUBLIC_BASE:-}
+          EMAIL_REDIRECT_HOST=""
+          if [ -n "$EMAIL_REDIRECT_BASE" ]; then
+            EMAIL_REDIRECT_HOST=$(printf '%s' "$EMAIL_REDIRECT_BASE" | sed -E 's#^https?://([^/]+)/?.*#\1#')
+          fi
+          {
+            printf 'APP_BUNDLE_ID = %s\n' "$APP_BUNDLE_ID"
+            printf 'SUPABASE_URL = %s\n' "$SUPABASE_URL"
+            printf 'SUPABASE_HOST = %s\n' "$SUPABASE_HOST"
+            printf 'SUPABASE_ANON_KEY = %s\n' "$SUPABASE_ANON_KEY"
+            printf 'OAUTH_REDIRECT_SCHEME = %s\n' "$OAUTH_REDIRECT_SCHEME"
+            if [ -n "$EMAIL_REDIRECT_BASE" ]; then printf 'EMAIL_REDIRECT_BASE = %s\n' "$EMAIL_REDIRECT_BASE"; fi
+            if [ -n "$EMAIL_REDIRECT_HOST" ]; then printf 'EMAIL_REDIRECT_HOST = %s\n' "$EMAIL_REDIRECT_HOST"; fi
+          } > "$FILE"
+          # Ensure Secrets-Common.xcconfig exists (not committed by design)
+          if [ ! -f "$COMMON_FILE" ]; then
+            echo "Creating $COMMON_FILE"
+            {
+              printf 'DEVELOPMENT_TEAM =\n'
+            } > "$COMMON_FILE"
+          fi
+
+      - name: Generate Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      - name: Verify project/schemes
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -list -project KokoSOS.xcodeproj || true
+
+      - name: Resolve Simulator Destination (Dev)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          # Query destinations available for this scheme/config
+          OUT=$(xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-Dev -showdestinations || true)
+          echo "$OUT" | sed -n '1,200p'
+          # Prefer iPhone entries, else fallback to any iOS Simulator entry
+          DEST=$(printf '%s' "$OUT" | awk -F'[{},]' '/platform:iOS Simulator/ {
+            name=""; os="";
+            for (i=1;i<=NF;i++) { if ($i ~ /name:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); name=$i } if ($i ~ /OS:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); os=$i } }
+            if (name != "" && os != "") { print (index(name, "iPhone") ? "1" : (index(name, "iPad") ? "2" : "9")) ":platform=iOS Simulator,name=" name ",OS=" os }
+          }' | sort | head -n1 | cut -d: -f2-)
+          if [ -z "$DEST" ]; then
+            echo "::warning ::No specific iOS Simulator destination parsed; using generic placeholder"
+            DEST="platform=iOS Simulator,name=iPhone SE (3rd generation),OS=latest"
+          fi
+          echo "Using destination: $DEST"
+          echo "DEST_SPEC=$DEST" >> "$GITHUB_ENV"
+
+      - name: Build (Simulator, Debug-Dev)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-Dev \
+            -sdk iphonesimulator \
+            -destination "$DEST_SPEC" \
+            -resultBundlePath build/KokoSOS-Dev.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
+            build | tee build/xcodebuild-Dev.log | xcpretty || exit ${PIPESTATUS[0]}
+
+      - name: Re-run build without xcpretty (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::Re-run xcodebuild (raw output)"
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-Dev \
+            -sdk iphonesimulator \
+            -destination "$DEST_SPEC" \
+            -resultBundlePath build/KokoSOS-Dev-raw.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
+            clean build | tee build/xcodebuild-Dev-raw.log || true
+          echo "::endgroup::"
+
+      - name: Print first errors from xcodebuild log (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::First 50 error lines (JP/EN)"
+          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture|エラー|失敗|Undefined symbols)" build/xcodebuild-Dev.log | head -n 50 || true
+          echo "::endgroup::"
+          echo "::group::Last 200 lines"
+          tail -n 200 build/xcodebuild-Dev.log || true
+          echo "::endgroup::"
+
+      - name: Show Build Settings (Debug-Dev)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-Dev -showBuildSettings | head -n 200 || true
+
+      - name: Extract xcresult issues (Debug-Dev)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -d build/KokoSOS-Dev.xcresult ]; then
+            xcrun xcresulttool get --path build/KokoSOS-Dev.xcresult --format json > build/xcresult-Dev.json || true
+            jq '.issues' build/xcresult-Dev.json | head -n 200 || true
+          fi
+
+      - name: Upload build artifacts (logs/xcresult)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-artifacts-Dev
+          path: |
+            apps/ios/build/xcodebuild-Dev.log
+            apps/ios/build/xcodebuild-Dev-raw.log
+            apps/ios/build/KokoSOS-Dev.xcresult
+            apps/ios/build/KokoSOS-Dev-raw.xcresult
+
+  build-ios-matrix:
+    name: iOS Build (Dev/Stage/Prod - matrix)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    strategy:
+      matrix:
+        include:
+          - env_name: dev
+            cfg_suffix: Dev
+          - env_name: stage
+            cfg_suffix: Stage
+          - env_name: prod
+            cfg_suffix: Prod
+    environment: ${{ matrix.env_name }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          set -euo pipefail
+          brew update
+          brew install xcodegen jq
+
+      - name: Write iOS Secrets xcconfig (matrix=${{ matrix.cfg_suffix }})
+        working-directory: apps/ios
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          OAUTH_REDIRECT_SCHEME: ${{ secrets.OAUTH_REDIRECT_SCHEME || 'kokosos' }}
+          APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+          WEB_PUBLIC_BASE: ${{ secrets.WEB_PUBLIC_BASE }}
+        run: |
+          set -euo pipefail
+          CFG=${{ matrix.cfg_suffix }}
+          FILE="Configs/Secrets-${CFG}.xcconfig"
+          COMMON_FILE="Configs/Secrets-Common.xcconfig"
+          : "${SUPABASE_URL:?Missing SUPABASE_URL secret for environment ${{ matrix.env_name }}}"
+          : "${SUPABASE_ANON_KEY:?Missing SUPABASE_ANON_KEY secret for environment ${{ matrix.env_name }}}"
+          : "${APP_BUNDLE_ID:?Missing APP_BUNDLE_ID secret for environment ${{ matrix.env_name }}}"
+          echo "Writing $FILE"
+          SUPABASE_HOST=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://([^/]+)/?.*#\1#')
+          EMAIL_REDIRECT_BASE=${WEB_PUBLIC_BASE:-}
+          EMAIL_REDIRECT_HOST=""
+          if [ -n "$EMAIL_REDIRECT_BASE" ]; then
+            EMAIL_REDIRECT_HOST=$(printf '%s' "$EMAIL_REDIRECT_BASE" | sed -E 's#^https?://([^/]+)/?.*#\1#')
+          fi
+          {
+            printf 'APP_BUNDLE_ID = %s\n' "$APP_BUNDLE_ID"
+            printf 'SUPABASE_URL = %s\n' "$SUPABASE_URL"
+            printf 'SUPABASE_HOST = %s\n' "$SUPABASE_HOST"
+            printf 'SUPABASE_ANON_KEY = %s\n' "$SUPABASE_ANON_KEY"
+            printf 'OAUTH_REDIRECT_SCHEME = %s\n' "$OAUTH_REDIRECT_SCHEME"
+            if [ -n "$EMAIL_REDIRECT_BASE" ]; then printf 'EMAIL_REDIRECT_BASE = %s\n' "$EMAIL_REDIRECT_BASE"; fi
+            if [ -n "$EMAIL_REDIRECT_HOST" ]; then printf 'EMAIL_REDIRECT_HOST = %s\n' "$EMAIL_REDIRECT_HOST"; fi
+          } > "$FILE"
+          if [ ! -f "$COMMON_FILE" ]; then
+            echo "Creating $COMMON_FILE"
+            {
+              printf 'DEVELOPMENT_TEAM =\n'
+            } > "$COMMON_FILE"
+          fi
+
+      - name: Generate Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      - name: Verify project/schemes (matrix)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -list -project KokoSOS.xcodeproj || true
+
+      - name: Resolve Simulator Destination (matrix=${{ matrix.cfg_suffix }})
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          OUT=$(xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} -showdestinations || true)
+          echo "$OUT" | sed -n '1,200p'
+          DEST=$(printf '%s' "$OUT" | awk -F'[{},]' '/platform:iOS Simulator/ {
+            name=""; os="";
+            for (i=1;i<=NF;i++) { if ($i ~ /name:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); name=$i } if ($i ~ /OS:/) { sub(/^[^:]*: ?/, "", $i); gsub(/^ +| +$/, "", $i); os=$i } }
+            if (name != "" && os != "") { print (index(name, "iPhone") ? "1" : (index(name, "iPad") ? "2" : "9")) ":platform=iOS Simulator,name=" name ",OS=" os }
+          }' | sort | head -n1 | cut -d: -f2-)
+          if [ -z "$DEST" ]; then
+            echo "::warning ::No specific iOS Simulator destination parsed; using generic placeholder"
+            DEST="platform=iOS Simulator,name=iPhone SE (3rd generation),OS=latest"
+          fi
+          echo "Using destination: $DEST"
+          echo "DEST_SPEC=$DEST" >> "$GITHUB_ENV"
+
+      - name: Build (Simulator, Debug-${{ matrix.cfg_suffix }})
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
+            -sdk iphonesimulator \
+            -destination "$DEST_SPEC" \
+            -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
+            build | tee build/xcodebuild-${{ matrix.cfg_suffix }}.log | xcpretty || exit ${PIPESTATUS[0]}
+
+      - name: Re-run build without xcpretty (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::Re-run xcodebuild (raw output)"
+          xcodebuild -project KokoSOS.xcodeproj \
+            -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} \
+            -sdk iphonesimulator \
+            -destination "$DEST_SPEC" \
+            -resultBundlePath build/KokoSOS-${{ matrix.cfg_suffix }}-raw.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO ONLY_ACTIVE_ARCH=YES \
+            clean build | tee build/xcodebuild-${{ matrix.cfg_suffix }}-raw.log || true
+          echo "::endgroup::"
+
+      - name: Print first errors from xcodebuild log (on failure)
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          echo "::group::First 50 error lines (JP/EN)"
+          grep -n -E "(error:|ld: error|fatal error|Undefined symbols for architecture|エラー|失敗|Undefined symbols)" build/xcodebuild-${{ matrix.cfg_suffix }}.log | head -n 50 || true
+          echo "::endgroup::"
+          echo "::group::Last 200 lines"
+          tail -n 200 build/xcodebuild-${{ matrix.cfg_suffix }}.log || true
+          echo "::endgroup::"
+
+      - name: Show Build Settings (Debug-${{ matrix.cfg_suffix }})
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodebuild -project KokoSOS.xcodeproj -scheme KokoSOS -configuration Debug-${{ matrix.cfg_suffix }} -showBuildSettings | head -n 200 || true
+
+      - name: Extract xcresult issues (Debug-${{ matrix.cfg_suffix }})
+        if: failure()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -d build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult ]; then
+            xcrun xcresulttool get --path build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult --format json > build/xcresult-${{ matrix.cfg_suffix }}.json || true
+            jq '.issues' build/xcresult-${{ matrix.cfg_suffix }}.json | head -n 200 || true
+          fi
+
+      - name: Upload build artifacts (logs/xcresult)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-artifacts-${{ matrix.cfg_suffix }}
+          path: |
+            apps/ios/build/xcodebuild-${{ matrix.cfg_suffix }}.log
+            apps/ios/build/xcodebuild-${{ matrix.cfg_suffix }}-raw.log
+            apps/ios/build/KokoSOS-${{ matrix.cfg_suffix }}.xcresult
+            apps/ios/build/KokoSOS-${{ matrix.cfg_suffix }}-raw.xcresult

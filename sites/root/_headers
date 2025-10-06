@@ -1,0 +1,8 @@
+# Disable caching for HTML to reflect changes immediately on custom domains
+/
+  Cache-Control: no-store, must-revalidate
+  X-Robots-Tag: all
+
+# Long cache for static assets if added later
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
