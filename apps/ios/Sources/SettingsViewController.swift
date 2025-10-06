@@ -26,23 +26,9 @@ final class SettingsViewController: UIViewController {
         loadValues()
     }
 
+    // 設定画面では自動で「受信者の選択」を開かない（ユーザー操作で開く）
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // サインイン済み かつ 検証済み受信者が0件ならオンボーディングを提示
-        if presentedViewController == nil {
-            Task { @MainActor in
-                do {
-                    let items = try await ContactsClient().list(status: "verified")
-                    if items.isEmpty {
-                        let vc = ContactsPickerViewController()
-                        let nav = UINavigationController(rootViewController: vc)
-                        present(nav, animated: true)
-                    }
-                } catch {
-                    // 取得失敗時は黙って無視（次回以降に再評価）
-                }
-            }
-        }
     }
 
     private func setupUI() {
