@@ -106,7 +106,7 @@ final class ProfileEditViewController: UIViewController, PHPickerViewControllerD
                     let ext = mime.contains("png") ? "png" : "jpeg"
                     let up = try await api.profileAvatarUploadURL(ext: ext)
                     // 2) 画像をアップロード
-                    try await api.profileAvatarUpload(to: up.uploadURL, data: data, mime: mime)
+                    try await api.profileAvatarUpload(to: up.uploadUrl, data: data, mime: mime)
                     avatarPath = up.path
                 }
                 // 3) commit
@@ -124,4 +124,3 @@ final class ProfileEditViewController: UIViewController, PHPickerViewControllerD
         present(a, animated: true)
     }
 }
-
