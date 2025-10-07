@@ -275,15 +275,13 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     for (const r of recipients) {
       const token = await signJwtHs256({ alert_id: alertId, contact_id: r.contact_id, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
       const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/s/${encodeURIComponent(token)}`
-      ctx.waitUntil((async () => {
-        try {
-          await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) })
-          await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
-          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: r.contact_id, email: r.email, purpose: 'start' })
-        } catch (e) {
-          await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'error' })
-        }
-      })())
+      try {
+        await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) })
+        await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
+        await sb.insert('alert_recipients', { alert_id: alertId, contact_id: r.contact_id, email: r.email, purpose: 'start' })
+      } catch (e) {
+        await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'error' })
+      }
     }
   }
   const state = {
