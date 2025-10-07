@@ -271,12 +271,19 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
     return json({ error: 'server_misconfig', detail: 'WEB_PUBLIC_BASE is missing' }, { status: 500 })
   }
   if (recipients.length > 0 && env.WEB_PUBLIC_BASE) {
+    // sender name (if available) for better trust in email content
+    let senderName: string | undefined
+    try {
+      const m = (req.headers.get('authorization') || req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i)
+      const token = m ? m[1] : ''
+      if (token) { const supa = await fetchSupabaseUser(env, token); if (supa.ok) senderName = supa.name || (supa.email ? String(supa.email).split('@')[0] : undefined) }
+    } catch {}
     const emailer = makeEmailProvider(env)
     for (const r of recipients) {
       const token = await signJwtHs256({ alert_id: alertId, contact_id: r.contact_id, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
       const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/s/${encodeURIComponent(token)}`
       try {
-        await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link) })
+        await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link, senderName || null), text: emailInviteText(link, senderName || null) })
         await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
         await sb.insert('alert_recipients', { alert_id: alertId, contact_id: r.contact_id, email: r.email, purpose: 'start' })
       } catch (e) {
@@ -454,7 +461,8 @@ async function sendVerifyForContact(env: Env, contact: { id: string; email: stri
       ? `${senderName}さんからKokoSOSの受信者（見守り）依頼が届いています`
       : 'KokoSOS 受信許可の確認'
     const html = emailVerifyHtml(link, senderName || null, senderAvatarUrl || null)
-    await emailer.send({ to: String(contact.email), subject, html })
+    const text = emailVerifyText(link, senderName || null)
+    await emailer.send({ to: String(contact.email), subject, html, text })
     if (isEmailDebug(env)) {
       console.log(`[EMAIL-DEV] verify sent ok -> ${maskEmail(String(contact.email))}`)
     }
@@ -630,7 +638,7 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
       const emailer = makeEmailProvider(env)
       for (const r of (list.ok ? (list.data as any[]) : [])) {
         try {
-          await emailer.send({ to: String(r.email), subject: 'KokoSOS 到着のお知らせ', html: emailArrivalHtml() })
+          await emailer.send({ to: String(r.email), subject: 'KokoSOS 到着のお知らせ', html: emailArrivalHtml(), text: emailArrivalText() })
           await sb.insert('deliveries', { alert_id: alertId, contact_id: String(r.contact_id), channel: 'email', status: 'sent' })
           await sb.insert('alert_recipients', { alert_id: alertId, contact_id: String(r.contact_id), email: String(r.email), purpose: 'arrival' })
         } catch {}
@@ -1042,7 +1050,7 @@ async function verifySupabaseJwt(token: string, env: Env): Promise<Record<string
 
 // -------- Email provider (SES or log)
 interface EmailProvider {
-  send(input: { to: string; subject: string; html: string }): Promise<void>
+  send(input: { to: string; subject: string; html: string; text?: string }): Promise<void>
 }
 
 function makeEmailProvider(env: Env): EmailProvider {
@@ -1051,7 +1059,7 @@ function makeEmailProvider(env: Env): EmailProvider {
 }
 
 class LogEmailProvider implements EmailProvider {
-  async send(input: { to: string; subject: string; html: string }): Promise<void> {
+  async send(input: { to: string; subject: string; html: string; text?: string }): Promise<void> {
     console.log('EMAIL (dev log):', input.to, input.subject)
   }
 }
@@ -1059,13 +1067,13 @@ class LogEmailProvider implements EmailProvider {
 class SESEmailProvider implements EmailProvider {
   private env: Env
   constructor(env: Env) { this.env = env }
-  async send(input: { to: string; subject: string; html: string }): Promise<void> {
+  async send(input: { to: string; subject: string; html: string; text?: string }): Promise<void> {
     const region = this.env.SES_REGION!
     const endpoint = `https://email.${region}.amazonaws.com/v2/email/outbound-emails` // SESv2
     const body = JSON.stringify({
       FromEmailAddress: this.env.SES_SENDER_EMAIL,
       Destination: { ToAddresses: [input.to] },
-      Content: { Simple: { Subject: { Data: input.subject, Charset: 'UTF-8' }, Body: { Html: { Data: input.html, Charset: 'UTF-8' } } } },
+      Content: { Simple: { Subject: { Data: input.subject, Charset: 'UTF-8' }, Body: { Html: { Data: input.html, Charset: 'UTF-8' } , ...(input.text ? { Text: { Data: input.text, Charset: 'UTF-8' } } : {}) } } },
     })
     const now = new Date()
     const amzDate = toAmzDate(now)
@@ -1172,12 +1180,27 @@ async function hmacRaw(key: string | CryptoKey, data: string): Promise<Uint8Arra
   return new Uint8Array(sig)
 }
 
-function emailInviteHtml(link: string): string {
-  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
-  <p>KokoSOS からの緊急共有リンクです。</p>
-  <p><a href="${link}">${link}</a></p>
-  <p>このリンクは24時間で失効します。</p>
-</div>`
+function emailInviteHtml(link: string, senderName?: string | null): string {
+  const who = senderName && senderName.length > 0 ? `${escapeHtml(senderName)}さんが` : '送信者が'
+  const domain = (() => { try { const u = new URL(link); return u.host } catch { return 'kokosos.com' } })()
+  return `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
+    <p style="margin:0 0 8px 0"><strong style="font-size:16px;vertical-align:middle">KokoSOS</strong></p>
+    <p><strong>${who}KokoSOSで位置共有を開始しました。</strong></p>
+    <p>下のボタンから現在の状況を確認できます。このリンクは24時間で自動的に無効になります。</p>
+    <p style="margin:16px 0"><a href="${link}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">リンクを開く</a></p>
+    <p style="color:#6b7280;font-size:13px">このメールはKokoSOSからの通知です。覚えがない場合は、このメールを無視してください。配信元: ${escapeHtml(domain)}</p>
+  </div>`
+}
+
+function emailInviteText(link: string, senderName?: string | null): string {
+  const who = senderName && senderName.length > 0 ? `${senderName}さんが` : '送信者が'
+  return `${who}KokoSOSで位置共有を開始しました。
+
+以下のリンクから確認できます（24時間で自動的に無効になります）。
+${link}
+
+このメールに覚えがない場合は破棄してください。`
 }
 
 function emailVerifyHtml(link: string, senderName: string | null, _senderAvatarUrl: string | null): string {
@@ -1193,6 +1216,11 @@ function emailVerifyHtml(link: string, senderName: string | null, _senderAvatarU
     <p style="color:#6b7280">リンクは一定時間で無効になります。迷惑メールに入ってしまうことがあるため、kokosos.com からのメールを許可してください。誤って登録された場合は、このメールを無視してください。</p>
     <p style="font-weight:600">送信者を見守ってくださいね。</p>
   </div>`
+}
+
+function emailVerifyText(link: string, senderName: string | null): string {
+  const who = senderName && senderName.length > 0 ? `${senderName}さんから` : ''
+  return `${who}KokoSOSの受信者（見守り）依頼が届いています。\n\n次のリンクから受信許可を確認してください（一定時間で無効になります）。\n${link}\n\n心当たりが無い場合は、このメールを破棄してください。`
 }
 
 function escapeHtml(s: string): string {
@@ -1278,6 +1306,10 @@ function emailArrivalHtml(): string {
   return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
   <p>到着を確認しました。ご安心ください。</p>
 </div>`
+}
+
+function emailArrivalText(): string {
+  return `KokoSOS: 到着を確認しました。ご安心ください。\n\nこのメールに覚えがない場合は破棄してください。`
 }
 
 // -------- Ensure a default dev user exists and return its id
