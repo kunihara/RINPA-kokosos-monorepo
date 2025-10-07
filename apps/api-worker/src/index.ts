@@ -477,6 +477,32 @@ async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): P
     await sb.delete('users', `id=eq.${encodeURIComponent(userId)}`)
   } catch {}
 
+  // Best effort: delete avatar in Storage (if present in user_metadata)
+  try {
+    const token = (authz.match(/^Bearer\s+(.+)$/i) || [])[1]
+    if (token && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
+      const u = await fetchSupabaseUser(env, token)
+      const avatar = u.ok ? (u.avatarUrl || '') : ''
+      // Expect format like 'avatars/{path}' or '{bucket}/{path}'
+      if (avatar && /^(avatars)\//.test(avatar)) {
+        const [, bucketAndPath] = avatar.match(/^([^/]+)\/(.+)$/) || []
+        if (bucketAndPath) {
+          const parts = avatar.split('/')
+          const bucket = parts.shift() as string
+          const objPath = parts.join('/')
+          const delUrl = `${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${encodeURIComponent(bucket)}/${encodeURIComponent(objPath)}`
+          await fetch(delUrl, {
+            method: 'DELETE',
+            headers: {
+              apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+          }).catch(() => undefined)
+        }
+      }
+    }
+  } catch {}
+
   // Delete Supabase Auth user via Admin API
   try {
     const adminUrl = `${env.SUPABASE_URL!.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`

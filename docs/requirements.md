@@ -776,3 +776,6 @@ Lambda実装メモ
 
 - メール
   - 検証メールにはアイコンを表示しない（画像不使用）。件名・本文は送信者名のみを使用。
+
+- アカウント削除
+  - API `DELETE /account` 実行時に、ユーザー関連データ（alerts/contacts/users）削除に加えて、user_metadata.avatar_url（`avatars/{path}`）があれば Storage(avatars) の当該オブジェクトも削除（best effort）。
