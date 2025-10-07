@@ -691,55 +691,39 @@ API（最小追加案）
 
 ---
 
-## Push通知（将来計画）
+## Push通知（FCM 採用／実装方針）
 
-方針（iOS/Android/Webを見据えた最適解）
-- メッセージ基盤: Firebase Cloud Messaging (FCM) を採用
-  - iOSは FCM→APNs 経由、Androidは FCM 直配信
-  - 無料枠が厚く、クロスプラットフォームで一元化しやすい
-- 送信サービス: AWS Lambda（Node.js + Firebase Admin SDK）
-  - 再試行や無効トークン回収を実装しやすい
-  - 秘密情報は AWS Secrets Manager で管理
-- 連携: Cloudflare Workers →（Cloudflare Queues）→ Lambda
-  - Workers は通知イベント発火役に専念、バーストはQueuesで吸収
+- メッセージ基盤: Firebase Cloud Messaging (FCM)
+  - iOS は FCM→APNs、Android は FCM 直配信
+  - Workers→FCM HTTP v1 で送信（サービスアカウント署名→OAuth2→messages:send）
+  - APNs直送は行わない（WorkersのHTTP/2要件不一致による不安定回避）
 
-WorkersからAPNs直送を避ける理由
-- APNsはHTTP/2前提で、Workersの外向きfetchは任意オリジンへのHTTP/2を保証しないため運用上の不安定リスクがある
-- FCM採用によりHTTP/1.1ベースの送信やAdmin SDK利用で実装が簡素化
+- データモデル（実装済み）
+  - devices(id, user_id, platform[ios|android|web], fcm_token, valid, last_seen_at, created_at)
 
-データモデル（将来追加）
-- devices(id, user_id, platform[ios|android|web], fcm_token, valid, last_seen_at, created_at)
+- API（実装済み）
+  - POST /devices/register（認証必須）… FCMトークン登録/更新（upsert）
+  - POST /devices/unregister（認証必須）… トークン無効化（valid=false）
 
-API（将来追加）
-- POST /devices/register … fcm_token登録（user紐付け・プラットフォーム付与）
-- POST /devices/unregister … fcm_token無効化
-- 既存イベント発火はWorkersが担当（reaction/opened/extended）
+- 送信トリガー（第1弾）
+  - 受信者リアクション（OK/向かっています/今すぐ連絡します/通報しました）→ 送信者デバイスへPush
+  - 停止/到着 → 送信者デバイスへPush
+  - 第2弾で「開始／延長／タイムアウト」も追加可
 
-イベントスキーマ（Queues→Lambda）
-- 共通: { id, type: 'reaction'|'opened'|'extended', user_id, tokens: string[], data: {...}, ts }
-- 例: reaction → data = { preset }
-- 例: opened → data = { ua, ip (オプション) }
-- 例: extended → data = { added_sec, remaining_sec }
+- Workers の送信ユーティリティ
+  - Secrets: FCM_PROJECT_ID / FCM_CLIENT_EMAIL / FCM_PRIVATE_KEY（\n エスケープ）
+  - スコープ: https://www.googleapis.com/auth/firebase.messaging
+  - エンドポイント: https://fcm.googleapis.com/v1/projects/<PROJECT_ID>/messages:send
+  - 失効トークン: NotRegistered等で devices.valid=false に更新（今後追加）
 
-Lambda実装メモ
-- Firebase Admin SDKで sendMulticast / sendEachForMulticast を使用
-- 応答で無効トークン(410/invalid)を回収し devices.valid=false
-- 429/5xxは指数バックオフで再試行、DLQ(SQS)へ退避
+- クライアント（iOS）
+  - FirebaseMessaging を導入し、APNs許諾→FCMトークン取得→/devices/register へ送信
+  - サインアウト時は /devices/unregister
+  - 受信時はフレンドリー文言・ディープリンクに従って該当画面へ遷移
 
-セキュリティ
-- Firebaseサービスアカウント鍵はSecrets Manager（KMS）で暗号化・最小権限・定期ローテーション
-- Apple開発者プログラム登録（$99/年）とAPNs設定（FCMコンソール）
-
-概算コスト（小規模）
-- FCM: 無料
-- Lambda/API Gateway/Queues: 無料枠〜数ドル/月
-- Apple Developer Program: $99/年
-
-導入ロードマップ
-1) devicesテーブルと /devices/register を先に実装（クライアントのトークン収集）
-2) Workers→Queues→Lambdaの経路を用意（最初はWebhookでも可）
-3) reaction/opened/extended の通知種別を段階導入（まずは reaction）
-4) 監視/再試行/無効トークン回収の運用整備
+- 環境分離（推奨）
+  - prod は別 Firebase プロジェクトへ分離（dev+stage は共有で開始可）
+  - iOS の GoogleService-Info.plist と Workers Secrets を環境ごとに切替
 
 ## 追加要件
 - MVPでは録音・録画は非搭載（将来の拡張候補）
