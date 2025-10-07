@@ -120,7 +120,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                             let vc = SignInViewController()
                             self?.navigationController?.setViewControllers([vc], animated: true)
                         }))
-                        present(a, animated: true)
+                        self.presentAlertController(a)
                     } catch {
                         let raw2 = error.localizedDescription
                         let lower2 = raw2.lowercased()
@@ -136,7 +136,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                                 let vc = SignInViewController()
                                 self?.navigationController?.setViewControllers([vc], animated: true)
                             }))
-                            present(a, animated: true)
+                            self.presentAlertController(a)
                         } else if lower2.contains("not confirmed") || lower2.contains("confirm") || raw2.contains("確認") {
                             // 未確認アカウント
                             showAlert("メール確認が未完了", "このメールアドレスは登録済みですが、確認が完了していません。受信トレイや迷惑メールをご確認のうえ、サインイン画面から再設定メールの送信もお試しください。")
@@ -157,7 +157,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                         let vc = SignInViewController()
                         self?.navigationController?.setViewControllers([vc], animated: true)
                     }))
-                    present(a, animated: true)
+                    self.presentAlertController(a)
                 }
                 // リクエスト頻度制限（60秒に1回など）
                 else if lower.contains("once every") || lower.contains("60 seconds") || lower.contains("too many requests") {
@@ -172,7 +172,21 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
     private func showAlert(_ title: String, _ msg: String) {
         let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
-        present(a, animated: true)
+        presentAlertController(a)
+    }
+
+    private func presentAlertController(_ alert: UIAlertController) {
+        func topViewController(from vc: UIViewController?) -> UIViewController? {
+            if let nav = vc as? UINavigationController { return topViewController(from: nav.visibleViewController) }
+            if let tab = vc as? UITabBarController { return topViewController(from: tab.selectedViewController) }
+            if let presented = vc?.presentedViewController { return topViewController(from: presented) }
+            return vc
+        }
+        DispatchQueue.main.async {
+            let root = self.view.window?.rootViewController
+            let presenter = topViewController(from: root) ?? topViewController(from: self) ?? self
+            presenter.present(alert, animated: true)
+        }
     }
 
     private func makeKeyboardAccessoryToolbar() -> UIToolbar {
