@@ -191,13 +191,12 @@ struct APIClient {
         body.append(crlf)
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
-        let (respData, http) = try await URLSession.shared.data(for: {
-            var req = URLRequest(url: fullURL)
-            req.httpMethod = "POST"
-            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-            req.httpBody = body
-            return req
-        }())
+        var uploadReq = URLRequest(url: fullURL)
+        uploadReq.httpMethod = "POST"
+        uploadReq.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        uploadReq.httpBody = body
+        let (respData, resp) = try await URLSession.shared.data(for: uploadReq)
+        guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         if !(200..<300).contains(http.statusCode) {
             throw APIError.http(status: http.statusCode, body: String(data: respData, encoding: .utf8))
         }
