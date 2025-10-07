@@ -188,8 +188,28 @@ async function handleWhoAmI({ req, env }: Parameters<RouteHandler>[0]): Promise<
 }
 
 async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]): Promise<Response> {
-  const user = await getSenderFromAuth(req, env)
-  if (!user.ok) return json({ error: user.error }, { status: user.status })
+  // Prefer JWT (JWKS) auth, then fall back to Supabase /auth/v1/user
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  const primary = await getSenderFromAuth(req, env)
+  let userId: string | null = primary.ok ? (primary as any).userId ?? null : null
+  if (!userId) {
+    try {
+      const m = authz.match(/^Bearer\s+(.+)$/i)
+      const token = m ? m[1] : ''
+      if (token) {
+        const supa = await fetchSupabaseUser(env, token)
+        if (supa.ok && supa.userId) userId = supa.userId
+      }
+    } catch {}
+  }
+  if (!userId) {
+    // As a last resort for dev environments only, optionally ensure a default user
+    const sbDev = supabase(env)
+    if (sbDev && env.DEFAULT_USER_EMAIL) {
+      try { userId = await ensureDefaultUserId(sbDev, env) } catch {}
+    }
+  }
+  if (!userId) return json({ error: 'unauthorized', detail: 'invalid_sender' }, { status: primary.ok ? 401 : (primary as any).status || 401 })
   const body = await req.json().catch(() => null)
   if (!body) return json({ error: 'invalid_json' }, { status: 400 })
   const initial = {
@@ -207,7 +227,6 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   // Ensure user row exists and get id
-  const userId = user.userId ?? (await ensureDefaultUserId(sb, env))
   await ensureUserExists(sb, userId)
   // Sanitize max duration (server-side clamp). Allow 5 minutes to 6 hours.
   const clampedMax = Math.min(6 * 3600, Math.max(5 * 60, initial.max_duration_sec))
