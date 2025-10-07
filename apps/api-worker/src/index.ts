@@ -288,13 +288,20 @@ async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Pr
   if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
   let userId: string | null = null
   const auth = await getSenderFromAuth(req, env)
-  if (auth.ok && auth.userId) userId = auth.userId
-  else {
+  let senderEmail: string | undefined
+  if (auth.ok && auth.userId) {
+    userId = auth.userId
+    // 可能ならメールも取得（トークンがある場合）
+    const m = authz.match(/^Bearer\s+(.+)$/i)
+    const token = m ? m[1] : ''
+    if (token) { try { const supa = await fetchSupabaseUser(env, token); if (supa.ok) senderEmail = supa.email } catch {} }
+  } else {
     const m = authz.match(/^Bearer\s+(.+)$/i)
     const token = m ? m[1] : ''
     const supa = await fetchSupabaseUser(env, token)
     if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
     userId = supa.userId
+    senderEmail = supa.email
   }
   const url = new URL(req.url)
   const status = (url.searchParams.get('status') || 'all').toLowerCase()
@@ -343,7 +350,7 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
       const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
       if (list.ok && list.data.length > 0 && !(list.data[0] as any).verified_at) {
         try {
-          await sendVerifyForContact(env, list.data[0] as any)
+          await sendVerifyForContact(env, list.data[0] as any, senderEmail || null)
         } catch {
           verifyFailed.push(email)
         }
@@ -360,6 +367,13 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
   if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
   const auth = await getSenderFromAuth(req, env)
   if (!auth.ok || !auth.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: auth.status })
+  // 送信者メール（あれば）
+  let senderEmail: string | undefined
+  try {
+    const m = authz.match(/^Bearer\s+(.+)$/i)
+    const token = m ? m[1] : ''
+    if (token) { const supa = await fetchSupabaseUser(env, token); if (supa.ok) senderEmail = supa.email }
+  } catch {}
   const m = req.url.match(/\/contacts\/([^/]+)\/send_verify/)
   if (!m) return notFound()
   const id = m[1]
@@ -368,11 +382,11 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
   const found = await sb.select('contacts', 'id,email,verified_at', `id=eq.${id}`, 1)
   if (!found.ok || found.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
   const c = found.data[0] as any
-  await sendVerifyForContact(env, c)
+  await sendVerifyForContact(env, c, senderEmail || null)
   return json({ ok: true })
 }
 
-async function sendVerifyForContact(env: Env, contact: { id: string; email: string }) {
+async function sendVerifyForContact(env: Env, contact: { id: string; email: string }, senderLabel?: string | null) {
   if (!env.WEB_PUBLIC_BASE) return
   const token = await signJwtHs256({ action: 'verify', contact_id: contact.id, exp: nowSec() + 7 * 24 * 3600 }, env.JWT_SECRET)
   const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/verify/${encodeURIComponent(token)}`
@@ -381,7 +395,10 @@ async function sendVerifyForContact(env: Env, contact: { id: string; email: stri
     console.log(`[EMAIL-DEV] verify start -> ${maskEmail(String(contact.email))}`)
   }
   try {
-    await emailer.send({ to: String(contact.email), subject: 'KokoSOS 受信許可の確認', html: emailVerifyHtml(link) })
+    const subject = senderLabel && senderLabel.length > 0
+      ? `${senderLabel}さんからKokoSOSの受信者（見守り）依頼が届いています`
+      : 'KokoSOS 受信許可の確認'
+    await emailer.send({ to: String(contact.email), subject, html: emailVerifyHtml(link, senderLabel || null) })
     if (isEmailDebug(env)) {
       console.log(`[EMAIL-DEV] verify sent ok -> ${maskEmail(String(contact.email))}`)
     }
@@ -460,7 +477,7 @@ async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): P
   return json({ ok: true })
 }
 
-async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: boolean; userId?: string }> {
+async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: boolean; userId?: string; email?: string }> {
   const base = env.SUPABASE_URL?.replace(/\/$/, '')
   if (!base) return { ok: false }
   const url = `${base}/auth/v1/user`
@@ -471,8 +488,8 @@ async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: b
     },
   })
   if (!res.ok) return { ok: false }
-  const j = (await res.json()) as { id?: string }
-  return { ok: true, userId: j.id || undefined }
+  const j = (await res.json()) as { id?: string; email?: string }
+  return { ok: true, userId: j.id || undefined, email: j.email || undefined }
 }
 
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1072,13 +1089,21 @@ function emailInviteHtml(link: string): string {
 </div>`
 }
 
-function emailVerifyHtml(link: string): string {
-  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
-  <p>KokoSOS からの受信許可の確認です。</p>
-  <p>以下のボタンから受信許可を完了してください。</p>
-  <p><a href="${link}">受信許可を確認する</a></p>
-  <p>誤って登録された場合は、このメールを無視してください。</p>
-</div>`
+function emailVerifyHtml(link: string, senderLabel: string | null): string {
+  const who = senderLabel && senderLabel.length > 0 ? `${escapeHtml(senderLabel)}さんから` : ''
+  return `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
+    <p><strong>${who}KokoSOSの受信者（見守り）依頼が届いています。</strong></p>
+    <p>KokoSOSは、送信者が危険を感じたときに最小の操作で信頼できる相手へ通知し、共有中のみ「現在地・状態・残り時間」を共有できるサービスです。</p>
+    <p>下のボタンから受信許可を確認してください。許可後は、送信者が共有を開始したときにメールでお知らせします。</p>
+    <p style="margin:16px 0"><a href="${link}" style="background:#2563eb;color:#fff;padding:10px 14px;border-radius:6px;text-decoration:none;display:inline-block">受信許可を確認する</a></p>
+    <p style="color:#6b7280">リンクは一定時間で無効になります。迷惑メールに入ってしまうことがあるため、kokosos.com からのメールを許可してください。誤って登録された場合は、このメールを無視してください。</p>
+    <p style="font-weight:600">送信者を見守ってくださいね。</p>
+  </div>`
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
 
 function emailArrivalHtml(): string {
