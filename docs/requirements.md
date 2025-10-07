@@ -725,6 +725,53 @@ API（最小追加案）
   - prod は別 Firebase プロジェクトへ分離（dev+stage は共有で開始可）
   - iOS の GoogleService-Info.plist と Workers Secrets を環境ごとに切替
 
+### FCM 導入手順（Step by Step）
+
+目的: 送信者端末へリアクション/停止（到着）通知をプッシュ配信できる状態を作る。
+
+Step 1: Firebase プロジェクト（環境）
+- 方針: 「prod は分離、dev+stage は共有」で開始（将来 stage 切り出し可）。
+- 作成例: kokosos-devstage / kokosos-prod。
+
+Step 2: サービスアカウント（SA）と鍵
+- GCP → IAM → サービスアカウント → 作成（例: fcm-sender-devstage, fcm-sender-prod）。
+- 権限: Firebase Admin（roles/firebase.admin）から開始（運用で最小権限に絞り込み可）。
+- キー: JSON を1つ発行し保管（client_email / private_key / project_id を使用）。
+- 注意: SA JSON は Git に含めない。パスワードマネージャ保管 + Workers Secrets に値で登録。
+
+Step 3: iOS アプリ登録と APNs 連携
+- Firebase Console → iOSアプリ追加（環境の Bundle ID で登録）。
+- GoogleService-Info.plist をダウンロード（Dev/Prod）。
+- Apple Developer → APNs p8 キーを Firebase Console に登録。
+- Xcode: Push Notifications / Background Modes(Remote notifications) を有効化。
+
+Step 3.1: GoogleService-Info の切替（XcodeGen）
+- リポ内: `apps/ios/Resources/Firebase/GoogleService-Info-Dev.plist` / `...-Prod.plist` を配置。
+- Stage は暫定で Dev を流用（`project.yml` の postBuildScripts 済み）。
+- ビルド構成に応じて postBuildScript が対象 plist を `GoogleService-Info.plist` としてコピー。
+
+Step 4: Workers の Secrets 登録（環境ごと）
+- `FCM_PROJECT_ID` = Firebase の Project ID
+- `FCM_CLIENT_EMAIL` = SA JSON の `client_email`
+- `FCM_PRIVATE_KEY` = SA JSON の `private_key`（改行は `\n` に置換して登録）
+- 既存Secrets（`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`/`JWT_SECRET`/`WEB_PUBLIC_BASE` など）も確認。
+
+Step 5: iOS 依存と初期化
+- SPM: FirebaseCore / FirebaseMessaging を追加（`project.yml` 反映済み）。
+- AppDelegate: `FirebaseApp.configure()`、`Messaging.messaging().delegate` 設定。
+- 起動時に FCM トークン取得→ `/devices/register` を呼び出し（実装済み）。
+- サインアウト時に `/devices/unregister` を呼ぶ（実装済み）。
+
+Step 6: 動作確認（Dev）
+- 実機で Dev 構成をビルド・起動→ 通知許可。
+- Supabase の `devices` に `fcm_token` が登録されることを確認。
+- 受信者Webからプリセット返信→ 送信者端末に Push（リアクション）。
+- 送信者が「停止」→ Push（到着）。
+
+補足（運用）
+- 失効トークン（NotRegistered等）の回収で `devices.valid=false` に更新（今後追加）。
+- プロジェクト分離: 将来 stage も切り出し、plist/Secrets を整合させる。
+
 ## 追加要件
 - MVPでは録音・録画は非搭載（将来の拡張候補）
 - 最大共有時間は60分（延長可能）。帰るモードは設定から最大共有時間を変更可能（既定120分）。
