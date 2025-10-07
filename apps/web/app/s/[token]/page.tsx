@@ -27,6 +27,7 @@ export default function ReceiverPage({ params }: any) {
   const routeSourceId = 'route-line'
   const routeCoordsRef = useRef<[number, number][]>([])
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const [mapError, setMapError] = useState<string | null>(null)
   const lastEventAtRef = useRef<number>(0)
   const [remainingLocal, setRemainingLocal] = useState<number>(0)
   const [toast, setToast] = useState<string | null>(null)
@@ -153,7 +154,7 @@ export default function ReceiverPage({ params }: any) {
   // Initialize Mapbox map when token and container are ready (skip for going_home)
   useEffect(() => {
     if (!mapRef.current) return
-    if (!mapboxToken) return
+    if (!mapboxToken || /^(?:YOUR_|xxxx|placeholder)/i.test(mapboxToken)) { setMapError('地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）'); return }
     if (state?.type === 'going_home') return
     if (mapInstance.current) return
     mapboxgl.accessToken = mapboxToken
@@ -203,6 +204,16 @@ export default function ReceiverPage({ params }: any) {
         updateRoute(map)
         map.jumpTo({ center: [latest.lng, latest.lat], zoom: 15 })
       }
+    })
+    map.on('error', (ev) => {
+      try {
+        const err = (ev as any).error
+        if (err && typeof err.message === 'string' && /401|unauthorized|forbidden|token/i.test(err.message)) {
+          setMapError('地図トークンが無効です（Mapboxのアクセストークンと許可ドメインを確認）')
+        } else {
+          setMapError('地図の読み込みに失敗しました')
+        }
+      } catch { setMapError('地図の読み込みに失敗しました') }
     })
     mapInstance.current = map
     return () => {
@@ -343,9 +354,9 @@ export default function ReceiverPage({ params }: any) {
             </div>
           ) : (
             <div style={{ height: 320, borderRadius: 8, overflow: 'hidden', position: 'relative', background: '#e5e7eb' }}>
-              {!mapboxToken && (
+              {mapError && (
                 <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1, background: 'rgba(255,255,255,0.8)' }}>
-                  <div style={{ color: '#111827' }}>地図トークンが未設定です（NEXT_PUBLIC_MAPBOX_TOKEN）</div>
+                  <div style={{ color: '#111827', padding: 12, textAlign: 'center', lineHeight: 1.6 }}>{mapError}</div>
                 </div>
               )}
               <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
