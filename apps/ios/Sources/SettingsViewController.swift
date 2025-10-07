@@ -181,10 +181,7 @@ final class SettingsViewController: UIViewController {
     }
 
     private func navigateToSignInRoot() {
-        // Pushトークンをサーバーから解除（非同期でベストエフォート）
-        PushRegistrationService.shared.unregisterLastToken()
-        // SDKセッションをサインアウト（非同期で発火）
-        Task { try? await SupabaseAuthAdapter.shared.client.auth.signOut() }
+        // サインアウトは行わず、サインイン画面へ遷移のみ（インストール毎のセッション消失を避けるため）
         let complete: (UINavigationController) -> Void = { nav in
             nav.setViewControllers([SignInViewController()], animated: true)
         }

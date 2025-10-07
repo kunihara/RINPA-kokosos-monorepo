@@ -107,6 +107,8 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                     UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
+                    // サインアップ成功時にデバイス登録を試行
+                    PushRegistrationService.shared.ensureRegisteredIfPossible()
                 } else {
                     // セッションが返らない場合は、既存アカウントの可能性を検証（弾くための確認）
                     do {
@@ -247,6 +249,8 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                 UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
+                // OAuth後にデバイス登録を試行
+                PushRegistrationService.shared.ensureRegisteredIfPossible()
             } catch {
                 showAlert("サインイン失敗", error.localizedDescription)
             }

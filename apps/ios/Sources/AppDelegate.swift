@@ -36,6 +36,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     // Explicitly forward APNs token to FCM (in case swizzling is disabled later)
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
+        // APNsトークン設定後に FCM トークンを再取得（初回起動などで未取得の取りこぼしを防ぐ）
+        Messaging.messaging().token { token, _ in
+            if let t = token { PushRegistrationService.shared.register(token: t) }
+        }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {

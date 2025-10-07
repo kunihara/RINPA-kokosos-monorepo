@@ -57,6 +57,9 @@ xcuserdata/
 apps/ios/KokoSOS.xcodeproj/
 .swiftpm/
 .build/
+# Xcode per-configuration entitlements generated during manual tweaks
+apps/ios/*Debug-*.entitlements
+apps/ios/*Release-*.entitlements
 
 # CocoaPods / Carthage (not used by default)
 Pods/
@@ -88,3 +91,5 @@ apps/ios/Configs/Secrets-Dev.xcconfig
 apps/ios/Configs/Secrets-Stage.xcconfig
 apps/ios/Configs/Secrets-Prod.xcconfig
 apps/ios/Configs/Secrets-Common.xcconfig
+# Supabase CLI working dir under api-worker (environment-specific state)
+apps/api-worker/supabase/

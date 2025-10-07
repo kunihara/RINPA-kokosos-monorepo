@@ -65,6 +65,15 @@ targets:
   KokoSOS:
     type: application
     platform: iOS
+    signing:
+      style: manual
+      team: $(DEVELOPMENT_TEAM)
+    attributes:
+      SystemCapabilities:
+        com.apple.Push:
+          enabled: 1
+        com.apple.BackgroundModes:
+          enabled: 1
     dependencies:
       - sdk: Contacts.framework
       - sdk: ContactsUI.framework
@@ -93,33 +102,67 @@ targets:
     scheme:
       testTargets: []
       gatherCoverageData: false
+      build:
+        config: Debug-Dev
+      run:
+        config: Debug-Dev
+      test:
+        config: Debug-Dev
+      analyze:
+        config: Debug-Dev
+      profile:
+        config: Release-Dev
+      archive:
+        config: Release-Dev
     settings:
       base:
-        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_STYLE: Manual
         SUPPORTED_PLATFORMS: iphonesimulator iphoneos
         OTHER_LDFLAGS: ""
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Dev.entitlements
       configs:
         Debug-Dev:
           INFOPLIST_FILE: Resources/Info-Dev.plist
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Dev.entitlements
+          CODE_SIGN_IDENTITY: Apple Development
+          PROVISIONING_PROFILE_SPECIFIER: kokosos-dev
         Debug-Stage:
           INFOPLIST_FILE: Resources/Info-Stage.plist
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Dev.entitlements
+          CODE_SIGN_IDENTITY: Apple Development
+          PROVISIONING_PROFILE_SPECIFIER: kokosos-dev
         Debug-Prod:
           INFOPLIST_FILE: Resources/Info-Prod.plist
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Dev.entitlements
+          CODE_SIGN_IDENTITY: Apple Development
+          PROVISIONING_PROFILE_SPECIFIER: kokosos-dev
         Release-Dev:
           INFOPLIST_FILE: Resources/Info-Dev.plist
+          CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Dev.entitlements
+          CODE_SIGN_IDENTITY: Apple Development
+          PROVISIONING_PROFILE_SPECIFIER: kokosos-dev
         Release-Stage:
           INFOPLIST_FILE: Resources/Info-Stage.plist
+          CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Dev.entitlements
+          CODE_SIGN_IDENTITY: Apple Development
+          PROVISIONING_PROFILE_SPECIFIER: kokosos-dev
         Release-Prod:
           INFOPLIST_FILE: Resources/Info-Prod.plist
+          CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Prod.entitlements
     info:
       path: Resources/Info.plist
     entitlements:
-      path: Resources/KokoSOS.entitlements
+      path: Resources/KokoSOS-Dev.entitlements
     capabilities:
-      - push
+      - pushNotifications: true
       - backgroundModes:
-          - remote-notification
+          modes:
+            - remote-notification
+            - location
     postBuildScripts:
       - name: Copy GoogleService-Info for Environment
         shell: /bin/sh

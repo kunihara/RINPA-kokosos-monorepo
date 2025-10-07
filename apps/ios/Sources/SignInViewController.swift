@@ -127,6 +127,8 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 // ルートをMainへ切替
                 let main = MainViewController()
                 navigationController?.setViewControllers([main], animated: true)
+                // サインイン直後にデバイス登録を試行
+                PushRegistrationService.shared.ensureRegisteredIfPossible()
             } catch {
                 showAlert("サインイン失敗", error.localizedDescription)
             }

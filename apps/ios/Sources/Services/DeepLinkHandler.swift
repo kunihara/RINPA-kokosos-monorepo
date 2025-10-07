@@ -33,6 +33,8 @@ enum DeepLinkHandler {
                 // Move to main screen
                 let main = MainViewController()
                 navigation?.setViewControllers([main], animated: true)
+                // After restoring session from deep link, try device registration
+                PushRegistrationService.shared.ensureRegisteredIfPossible()
             } catch {
                 // Even if session parsing fails, navigate to SignIn screen to avoid being stuck
                 // and let the user proceed manually (e.g., password login after confirmation)

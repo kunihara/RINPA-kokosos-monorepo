@@ -6,15 +6,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
     guard let windowScene = scene as? UIWindowScene else { return }
     let window = UIWindow(windowScene: windowScene)
-    let rootVC: UIViewController
-    let api = APIClient()
-    if SupabaseAuthAdapter.shared.accessToken != nil || api.currentAuthToken() != nil {
-      rootVC = MainViewController()
-    } else {
-      // 初回はサインイン画面を表示
-      rootVC = SignInViewController()
-    }
-    let root = UINavigationController(rootViewController: rootVC)
+    // 一旦プレースホルダを表示し、非同期にセッションを確認してから初期画面を決定
+    let placeholder = UIViewController()
+    placeholder.view.backgroundColor = .systemBackground
+    let root = UINavigationController(rootViewController: placeholder)
     window.rootViewController = root
     window.makeKeyAndVisible()
     self.window = window
@@ -22,6 +17,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // Handle URL if app launched via deep link
     if let url = connectionOptions.urlContexts.first?.url {
       _ = DeepLinkHandler.handle(url: url, in: root)
+    }
+    // Decide initial root after loading persisted session
+    Task { @MainActor in
+      await SupabaseAuthAdapter.shared.updateCachedToken()
+      let has = (SupabaseAuthAdapter.shared.accessToken != nil) || (APIClient().currentAuthToken() != nil)
+      let target = has ? MainViewController() : SignInViewController()
+      root.setViewControllers([target], animated: false)
+      // If already signed in, try registering FCM token captured earlier
+      PushRegistrationService.shared.ensureRegisteredIfPossible()
     }
   }
 
@@ -37,5 +41,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     Task { @MainActor in
       _ = await SupabaseAuthAdapter.shared.refresh()
     }
+    // After refresh, if signed in, ensure device registration
+    PushRegistrationService.shared.ensureRegisteredIfPossible()
   }
 }
