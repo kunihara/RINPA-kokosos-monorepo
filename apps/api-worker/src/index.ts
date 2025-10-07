@@ -11,6 +11,8 @@ export interface Env {
   CORS_ALLOW_ORIGIN?: string
   WEB_PUBLIC_BASE?: string
   EMAIL_PROVIDER?: string
+  // dev専用デバッグ用フラグ（true でマスク付きログを出力）
+  EMAIL_DEBUG?: string
   DEFAULT_USER_EMAIL?: string
   ALERT_HUB: DurableObjectNamespace
 }
@@ -375,7 +377,20 @@ async function sendVerifyForContact(env: Env, contact: { id: string; email: stri
   const token = await signJwtHs256({ action: 'verify', contact_id: contact.id, exp: nowSec() + 7 * 24 * 3600 }, env.JWT_SECRET)
   const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/verify/${encodeURIComponent(token)}`
   const emailer = makeEmailProvider(env)
-  await emailer.send({ to: String(contact.email), subject: 'KokoSOS 受信許可の確認', html: emailVerifyHtml(link) })
+  if (isEmailDebug(env)) {
+    console.log(`[EMAIL-DEV] verify start -> ${maskEmail(String(contact.email))}`)
+  }
+  try {
+    await emailer.send({ to: String(contact.email), subject: 'KokoSOS 受信許可の確認', html: emailVerifyHtml(link) })
+    if (isEmailDebug(env)) {
+      console.log(`[EMAIL-DEV] verify sent ok -> ${maskEmail(String(contact.email))}`)
+    }
+  } catch (e) {
+    if (isEmailDebug(env)) {
+      console.log(`[EMAIL-DEV] verify failed -> ${maskEmail(String(contact.email))} : ${String(e).slice(0,200)}`)
+    }
+    throw e
+  }
 }
 
 async function handleVerifyContact({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1022,6 +1037,20 @@ async function getSignatureKey(key: string, dateStamp: string, regionName: strin
   const kService = await importKey(await hmacRaw(kRegion, serviceName))
   const kSigning = await importKey(await hmacRaw(kService, 'aws4_request'))
   return kSigning
+}
+
+// -------- Debug helpers (dev only)
+function isEmailDebug(env: Env): boolean {
+  return (env.EMAIL_DEBUG || '').toLowerCase() === 'true'
+}
+
+function maskEmail(email: string): string {
+  const parts = String(email).split('@')
+  if (parts.length !== 2) return '***'
+  const [user, domain] = parts
+  const u = user ? (user[0] + '***') : '***'
+  const d = domain ? (domain[0] + '***') : '***'
+  return `${u}@${d}`
 }
 
 async function hmacRaw(key: string | CryptoKey, data: string): Promise<Uint8Array> {
