@@ -61,6 +61,9 @@ final class MainViewController: UIViewController {
                         let vc = ContactsPickerViewController()
                         let nav = UINavigationController(rootViewController: vc)
                         present(nav, animated: true)
+                    } else if self.selectedRecipients.isEmpty {
+                        // 初回や未選択時は、検証済みの受信者を自動選択
+                        self.selectedRecipients = items.map { $0.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
                     }
                 } catch {
                     // 失敗時は誘導しない（次回以降に再評価）
