@@ -37,6 +37,7 @@
   <key>UIBackgroundModes</key>
   <array>
     <string>location</string>
+    <string>remote-notification</string>
   </array>
 
   <!-- DevのみATSを緩和（ローカルHTTP接続用）。Stage/Prodでは無効。 -->

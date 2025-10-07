@@ -117,9 +117,9 @@ targets:
     entitlements:
       path: Resources/KokoSOS.entitlements
     capabilities:
-      - pushNotifications: true
+      - push
       - backgroundModes:
-          modes: [remote-notification]
+          - remote-notification
     postBuildScripts:
       - name: Copy GoogleService-Info for Environment
         shell: /bin/sh
