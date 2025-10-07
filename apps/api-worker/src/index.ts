@@ -330,13 +330,28 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
   if (!authz) return json({ error: 'unauthorized', detail: 'missing_authorization' }, { status: 401 })
   let userId: string | null = null
   const auth = await getSenderFromAuth(req, env)
-  if (auth.ok && auth.userId) userId = auth.userId
-  else {
+  // 送信者のメール/名前（件名や本文に利用）
+  let senderEmail: string | undefined
+  let senderName: string | undefined
+  if (auth.ok && auth.userId) {
+    userId = auth.userId
+    // トークンからメール/名前を取得（可能なら）
+    try {
+      const m = authz.match(/^Bearer\s+(.+)$/i)
+      const token = m ? m[1] : ''
+      if (token) {
+        const supa = await fetchSupabaseUser(env, token)
+        if (supa.ok) { senderEmail = supa.email; senderName = supa.name }
+      }
+    } catch {}
+  } else {
     const m = authz.match(/^Bearer\s+(.+)$/i)
     const token = m ? m[1] : ''
     const supa = await fetchSupabaseUser(env, token)
     if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
     userId = supa.userId
+    senderEmail = supa.email
+    senderName = supa.name
   }
   const body = await req.json().catch(() => null)
   if (!body || !Array.isArray(body.contacts)) return json({ error: 'invalid_body' }, { status: 400 })
@@ -384,6 +399,7 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
   if (!auth.ok || !auth.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: auth.status })
   // 送信者メール（あれば）
   let senderEmail: string | undefined
+  let senderName: string | undefined
   try {
     const m = authz.match(/^Bearer\s+(.+)$/i)
     const token = m ? m[1] : ''
