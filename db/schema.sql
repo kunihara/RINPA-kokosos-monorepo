@@ -177,6 +177,27 @@ ALTER TABLE ONLY "public"."contacts"
     ADD CONSTRAINT "contacts_pkey" PRIMARY KEY ("id");
 
 
+-- FCM devices (push notifications)
+CREATE TABLE IF NOT EXISTS "public"."devices" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "user_id" uuid NOT NULL,
+    "platform" text NOT NULL, -- 'ios' | 'android' | 'web'
+    "fcm_token" text NOT NULL,
+    "valid" boolean DEFAULT true NOT NULL,
+    "last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE "public"."devices" OWNER TO "postgres";
+
+ALTER TABLE ONLY "public"."devices"
+    ADD CONSTRAINT "devices_pkey" PRIMARY KEY ("id");
+
+-- Fast lookups for upsert/cleanup
+CREATE INDEX IF NOT EXISTS devices_user_token_idx ON public.devices (user_id, fcm_token);
+CREATE INDEX IF NOT EXISTS devices_user_valid_idx ON public.devices (user_id, valid);
+
+
 
 ALTER TABLE ONLY "public"."deliveries"
     ADD CONSTRAINT "deliveries_pkey" PRIMARY KEY ("id");

@@ -15,6 +15,10 @@ export interface Env {
   EMAIL_DEBUG?: string
   DEFAULT_USER_EMAIL?: string
   ALERT_HUB: DurableObjectNamespace
+  // FCM (HTTP v1) credentials for push notifications
+  FCM_PROJECT_ID?: string
+  FCM_CLIENT_EMAIL?: string
+  FCM_PRIVATE_KEY?: string
 }
 
 type Method = 'GET' | 'POST'
@@ -109,6 +113,9 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/contacts$/, handler: handleContactsList },
   { method: 'POST', pattern: /^\/contacts\/bulk_upsert$/, handler: handleContactsBulkUpsert },
   { method: 'POST', pattern: /^\/contacts\/([^/]+)\/send_verify$/, handler: handleContactSendVerify },
+  // Devices (FCM)
+  { method: 'POST', pattern: /^\/devices\/register$/, handler: handleDevicesRegister },
+  { method: 'POST', pattern: /^\/devices\/unregister$/, handler: handleDevicesUnregister },
   // Profile (avatar)
   { method: 'POST', pattern: /^\/profile\/avatar\/upload-url$/, handler: handleAvatarUploadURL },
   { method: 'POST', pattern: /^\/profile\/avatar\/upload$/, handler: handleAvatarUpload },
@@ -457,6 +464,41 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
   return json({ ok: true })
 }
 
+// -------- Devices register/unregister (FCM)
+async function handleDevicesRegister({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: (auth as any).status || 401 })
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body.fcm_token !== 'string' || typeof body.platform !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
+  const token = String(body.fcm_token).trim()
+  const platform = String(body.platform).trim().toLowerCase()
+  if (!token || !/^ios|android|web$/.test(platform)) return json({ error: 'invalid_body' }, { status: 400 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // Upsert: if exists, update valid/last_seen; else insert
+  const found = await sb.select('devices', 'id,fcm_token,valid', `user_id=eq.${encodeURIComponent(auth.userId)}&fcm_token=eq.${encodeURIComponent(token)}`, 1)
+  if (found.ok && found.data.length > 0) {
+    const id = String((found.data[0] as any).id)
+    await sb.update('devices', { valid: true, last_seen_at: new Date().toISOString(), platform }, `id=eq.${encodeURIComponent(id)}`)
+  } else {
+    await sb.insert('devices', { user_id: auth.userId, platform, fcm_token: token, valid: true })
+  }
+  return json({ ok: true })
+}
+
+async function handleDevicesUnregister({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: (auth as any).status || 401 })
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body.fcm_token !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
+  const token = String(body.fcm_token).trim()
+  if (!token) return json({ error: 'invalid_body' }, { status: 400 })
+  const sb = supabase(env)
+  if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  await sb.update('devices', { valid: false, last_seen_at: new Date().toISOString() }, `user_id=eq.${encodeURIComponent(auth.userId)}&fcm_token=eq.${encodeURIComponent(token)}`)
+  return json({ ok: true })
+}
+
 async function sendVerifyForContact(env: Env, contact: { id: string; email: string }, senderName?: string | null, senderAvatarUrl?: string | null) {
   if (!env.WEB_PUBLIC_BASE) return
   const token = await signJwtHs256({ action: 'verify', contact_id: contact.id, exp: nowSec() + 7 * 24 * 3600 }, env.JWT_SECRET)
@@ -638,6 +680,14 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   await sb.update('alerts', { status: 'ended', ended_at }, `id=eq.${alertId}`)
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
   await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
+  // Push notify sender about arrival/stop (best-effort)
+  try {
+    await pushNotifySender(env, alertId, {
+      title: '到着しました',
+      body: '共有を停止しました。ご安心ください。',
+      category: 'arrival',
+    })
+  } catch {}
   // If going_home, send arrival emails to start recipients
   try {
     const a = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
@@ -846,6 +896,10 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
     const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
     await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'reaction', preset, ts: Date.now() }) })
   } catch {}
+  // Push notify sender devices (best-effort)
+  try {
+    await pushNotifySenderForReaction(env, alertId, preset)
+  } catch {}
   return json({ ok: true })
 }
 
@@ -872,6 +926,101 @@ function base64urlArr(input: Uint8Array): string {
   for (let i = 0; i < input.length; i++) s += String.fromCharCode(input[i])
   s = btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   return s
+}
+
+// -------- FCM (HTTP v1) push utilities
+type PushMessage = { title: string; body: string; category?: string; data?: Record<string, string> }
+
+let fcmCachedToken: { token: string; exp: number } | null = null
+
+async function getFcmAccessToken(env: Env): Promise<string> {
+  if (!env.FCM_PROJECT_ID || !env.FCM_CLIENT_EMAIL || !env.FCM_PRIVATE_KEY) throw new Error('fcm_env_missing')
+  const now = Math.floor(Date.now() / 1000)
+  if (fcmCachedToken && fcmCachedToken.exp - 60 > now) return fcmCachedToken.token
+  const header = { alg: 'RS256', typ: 'JWT' }
+  const iat = now
+  const exp = now + 3600
+  const iss = env.FCM_CLIENT_EMAIL
+  const scope = 'https://www.googleapis.com/auth/firebase.messaging'
+  const aud = 'https://oauth2.googleapis.com/token'
+  const payload = { iss, scope, aud, iat, exp }
+  const enc = new TextEncoder()
+  const toB64 = (obj: any) => base64urlArr(new Uint8Array(enc.encode(JSON.stringify(obj))))
+  const h = toB64(header)
+  const p = toB64(payload)
+  const data = `${h}.${p}`
+  // Private key may contain literal \n sequences
+  const pk = (env.FCM_PRIVATE_KEY as string).replace(/\\n/g, '\n')
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToPkcs8(pk),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(data))
+  const assertion = `${data}.${base64urlArr(new Uint8Array(sig))}`
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${encodeURIComponent(assertion)}`,
+  })
+  if (!res.ok) throw new Error(`fcm_token_failed:${res.status}`)
+  const j = (await res.json()) as { access_token: string; expires_in: number }
+  fcmCachedToken = { token: j.access_token, exp: now + Math.max(60, Math.min(3600, Number(j.expires_in || 3600))) }
+  return fcmCachedToken.token
+}
+
+function pemToPkcs8(pem: string): ArrayBuffer {
+  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes.buffer
+}
+
+async function fcmSendToTokens(env: Env, tokens: string[], msg: PushMessage) {
+  if (!tokens.length) return
+  const accessToken = await getFcmAccessToken(env)
+  const url = `https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`
+  for (const token of tokens) {
+    const body = {
+      message: {
+        token,
+        notification: { title: msg.title, body: msg.body },
+        data: msg.data || {},
+        apns: { payload: { aps: { category: msg.category || 'general' } } },
+      },
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      // On failure, consider invalidating token later (NotRegistered/Unavailable handling TBD)
+      // console.log('fcm_send_fail', token, res.status, await res.text())
+    }
+  }
+}
+
+async function pushNotifySender(env: Env, alertId: string, msg: PushMessage) {
+  const sb = supabase(env)
+  if (!sb) return
+  const a = await sb.select('alerts', 'user_id,type', `id=eq.${encodeURIComponent(alertId)}`, 1)
+  if (!a.ok || !a.data.length) return
+  const userId = String((a.data[0] as any).user_id)
+  const devs = await sb.select('devices', 'fcm_token,platform,valid', `user_id=eq.${encodeURIComponent(userId)}&valid=is.true`)
+  if (!devs.ok) return
+  const tokens = (devs.data as any[]).map((d) => String(d.fcm_token)).filter(Boolean)
+  await fcmSendToTokens(env, tokens, msg)
+}
+
+async function pushNotifySenderForReaction(env: Env, alertId: string, preset: string) {
+  const labelMap: Record<string, string> = { ok: 'OK', on_my_way: '向かっています', will_call: '今すぐ連絡します', call_police: '通報しました' }
+  const title = `受信者から『${labelMap[preset] || preset}』`
+  const body = '引き続き見守りをお願いします'
+  await pushNotifySender(env, alertId, { title, body, category: 'reaction', data: { alert_id: alertId, preset } })
 }
 
 export default {
