@@ -325,6 +325,7 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   await ensureUserExists(sb, userId!)
   const out: any[] = []
+  const verifyFailed: string[] = []
   for (const c of body.contacts as Array<{ email: string; name?: string }>) {
     const email = String((c.email || '').toLowerCase().trim())
     if (!isValidEmail(email)) continue
@@ -339,11 +340,17 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
     if (sendVerify) {
       const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
       if (list.ok && list.data.length > 0 && !(list.data[0] as any).verified_at) {
-        await sendVerifyForContact(env, list.data[0] as any)
+        try {
+          await sendVerifyForContact(env, list.data[0] as any)
+        } catch {
+          verifyFailed.push(email)
+        }
       }
     }
   }
-  return json({ ok: true, items: out })
+  const bodyOut: any = { ok: true, items: out }
+  if (verifyFailed.length > 0) bodyOut.verify_failed = verifyFailed
+  return json(bodyOut)
 }
 
 async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -946,9 +953,15 @@ class SESEmailProvider implements EmailProvider {
     const canonicalUri = url.pathname
     const canonicalQuerystring = ''
     const host = url.host
-    const canonicalHeaders = `host:${host}\n` + `x-amz-date:${amzDate}\n`
-    const signedHeaders = 'host;x-amz-date'
+    const contentType = 'application/json'
     const payloadHash = await sha256Hex(body)
+    // Include x-amz-content-sha256 and content-type in signed headers for stricter SigV4
+    const canonicalHeaders =
+      `content-type:${contentType}\n` +
+      `host:${host}\n` +
+      `x-amz-content-sha256:${payloadHash}\n` +
+      `x-amz-date:${amzDate}\n`
+    const signedHeaders = 'content-type;host;x-amz-content-sha256;x-amz-date'
     const canonicalRequest = `${method}\n${canonicalUri}\n${canonicalQuerystring}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`
     const algorithm = 'AWS4-HMAC-SHA256'
     const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`
@@ -956,7 +969,16 @@ class SESEmailProvider implements EmailProvider {
     const signingKey = await getSignatureKey(this.env.SES_SECRET_ACCESS_KEY!, dateStamp, region, service)
     const signature = await hmacHex(signingKey, stringToSign)
     const authorizationHeader = `${algorithm} Credential=${this.env.SES_ACCESS_KEY_ID!}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-    const res = await fetch(endpoint, { method, headers: { 'content-type': 'application/json', host, 'x-amz-date': amzDate, Authorization: authorizationHeader }, body })
+    const res = await fetch(endpoint, {
+      method,
+      headers: {
+        'content-type': contentType,
+        'x-amz-content-sha256': payloadHash,
+        'x-amz-date': amzDate,
+        Authorization: authorizationHeader,
+      },
+      body,
+    })
     if (!res.ok) {
       const text = await res.text()
       throw new Error(`SES send failed: ${res.status} ${text}`)
