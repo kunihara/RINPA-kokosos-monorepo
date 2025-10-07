@@ -108,7 +108,39 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
                 } else {
-                    showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、ログインしてください。")
+                    // セッションが返らない場合は、既存アカウントの可能性を検証
+                    do {
+                        try await client.auth.signIn(email: email, password: pass)
+                        // 同じパスワードで既存アカウントにサインイン成功 → そのまま遷移
+                        UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
+                        UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
+                        let main = MainViewController()
+                        navigationController?.setViewControllers([main], animated: true)
+                    } catch {
+                        let raw2 = error.localizedDescription
+                        let lower2 = raw2.lowercased()
+                        if lower2.contains("invalid login") || lower2.contains("invalid credentials") || raw2.contains("無効") {
+                            // 既存アカウントでパスワード不一致の可能性が高い
+                            let a = UIAlertController(title: "すでにアカウントが存在します", message: "このメールアドレスは登録済みの可能性があります。サインインするか、パスワード再設定を行ってください。", preferredStyle: .alert)
+                            a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+                            a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
+                                let vc = SignInViewController()
+                                self?.navigationController?.setViewControllers([vc], animated: true)
+                            }))
+                            a.addAction(UIAlertAction(title: "パスワード再設定", style: .default, handler: { [weak self] _ in
+                                let vc = SignInViewController()
+                                // サインイン画面でメールを入力済みにしたいが、簡易に画面誘導のみ
+                                self?.navigationController?.setViewControllers([vc], animated: true)
+                            }))
+                            present(a, animated: true)
+                        } else if lower2.contains("not confirmed") || lower2.contains("confirm") || raw2.contains("確認") {
+                            // 未確認アカウント
+                            showAlert("メール確認が未完了", "このメールアドレスは登録済みですが、確認が完了していません。受信トレイや迷惑メールをご確認のうえ、サインイン画面から再設定メールの送信もお試しください。")
+                        } else {
+                            // 既存でない/判別不能 → 従来案内
+                            showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、ログインしてください。")
+                        }
+                    }
                 }
             } catch {
                 let raw = error.localizedDescription
