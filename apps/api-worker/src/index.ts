@@ -302,7 +302,7 @@ async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Pr
     if (token) {
       try {
         const supa = await fetchSupabaseUser(env, token)
-        if (supa.ok) { senderEmail = supa.email; var senderName = supa.name }
+        if (supa.ok) { senderEmail = supa.email; senderName = supa.name }
       } catch {}
     }
   } else {
@@ -312,7 +312,7 @@ async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Pr
     if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
     userId = supa.userId
     senderEmail = supa.email
-    var senderName = supa.name
+    senderName = supa.name
   }
   const url = new URL(req.url)
   const status = (url.searchParams.get('status') || 'all').toLowerCase()
