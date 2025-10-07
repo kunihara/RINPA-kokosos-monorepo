@@ -141,17 +141,32 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         Task { @MainActor in
             if !emails.isEmpty {
                 do {
-                    _ = try await client.bulkUpsert(emails: emails, sendVerify: true)
+                    let res = try await client.bulkUpsert(emails: emails, sendVerify: true)
+                    let failed = res.verifyFailed
+                    let sentCount = emails.count - failed.count
+                    let title = failed.isEmpty ? "送信しました" : "送信完了（一部エラー）"
+                    let msg: String = failed.isEmpty
+                        ? "\(sentCount)件の宛先に確認メールを送信しました。"
+                        : "\(sentCount)件に送信しました。送信できなかった宛先:\n\(failed.joined(separator: ", "))"
+                    let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "OK", style: .default, handler: { [weak self] _ in
+                        // Close modal and return selected (verified) emails
+                        self?.onDone?(Array(self?.selectedEmails ?? []))
+                        self?.dismiss(animated: true)
+                    }))
+                    present(a, animated: true)
+                    return
                 } catch {
                     let a = UIAlertController(title: "送信失敗", message: error.localizedDescription, preferredStyle: .alert)
                     a.addAction(UIAlertAction(title: "OK", style: .default))
                     present(a, animated: true)
                     return
                 }
+            } else {
+                // 入力が無い場合は選択済み受信者の確定のみ
+                self.onDone?(Array(self.selectedEmails))
+                self.dismiss(animated: true)
             }
-            // Close modal and return selected (verified) emails
-            self.onDone?(Array(self.selectedEmails))
-            self.dismiss(animated: true)
         }
     }
 

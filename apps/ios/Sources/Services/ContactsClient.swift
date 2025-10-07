@@ -45,7 +45,9 @@ final class ContactsClient {
         return try JSONDecoder().decode([Contact].self, from: jsonData)
     }
 
-    func bulkUpsert(emails: [String], sendVerify: Bool) async throws -> [Contact] {
+    struct BulkUpsertResult { let items: [Contact]; let verifyFailed: [String] }
+
+    func bulkUpsert(emails: [String], sendVerify: Bool) async throws -> BulkUpsertResult {
         let contacts = emails.map { ["email": $0] }
         let body: [String: Any] = ["contacts": contacts, "send_verify": sendVerify]
         let (data, http) = try await execute {
@@ -61,8 +63,10 @@ final class ContactsClient {
         }
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let items = obj?["items"] as? [[String: Any]] ?? []
+        let failed = obj?["verify_failed"] as? [String] ?? []
         let jsonData = try JSONSerialization.data(withJSONObject: items)
-        return try JSONDecoder().decode([Contact].self, from: jsonData)
+        let decoded = try JSONDecoder().decode([Contact].self, from: jsonData)
+        return BulkUpsertResult(items: decoded, verifyFailed: failed)
     }
 
     private func apiApplyAuth(_ req: inout URLRequest) {

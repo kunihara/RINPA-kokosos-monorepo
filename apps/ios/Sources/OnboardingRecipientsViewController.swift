@@ -69,9 +69,15 @@ final class OnboardingRecipientsViewController: UIViewController, UITableViewDat
         }
         Task { @MainActor in
             do {
-                _ = try await client.bulkUpsert(emails: parts, sendVerify: true)
+                let res = try await client.bulkUpsert(emails: parts, sendVerify: true)
                 textView.text = ""
-                let a = UIAlertController(title: "送信しました", message: "確認メールを送信しました。受信者に確認を依頼してください。", preferredStyle: .alert)
+                let failed = res.verifyFailed
+                let sentCount = parts.count - failed.count
+                let title = failed.isEmpty ? "送信しました" : "送信完了（一部エラー）"
+                let msg: String = failed.isEmpty
+                    ? "\(sentCount)件の宛先に確認メールを送信しました。"
+                    : "\(sentCount)件に送信しました。送信できなかった宛先:\n\(failed.joined(separator: ", "))"
+                let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
                 a.addAction(UIAlertAction(title: "OK", style: .default))
                 present(a, animated: true)
                 await refreshList()
@@ -106,4 +112,3 @@ final class OnboardingRecipientsViewController: UIViewController, UITableViewDat
         return cell
     }
 }
-
