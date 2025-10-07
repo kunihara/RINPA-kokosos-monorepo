@@ -1113,9 +1113,9 @@ function emailInviteHtml(link: string): string {
 </div>`
 }
 
-function emailVerifyHtml(link: string, senderName: string | null, senderAvatarUrl: string | null): string {
+function emailVerifyHtml(link: string, senderName: string | null, _senderAvatarUrl: string | null): string {
   const who = senderName && senderName.length > 0 ? `${escapeHtml(senderName)}さんから` : ''
-  const icon = senderAvatarUrl && senderAvatarUrl.length > 0 ? `<img src="${senderAvatarUrl}" alt="${who || 'sender'}" style="height:32px;width:32px;vertical-align:middle;margin-right:8px;border-radius:50%"/>` : ''
+  const icon = '' // メール内に画像は表示しない方針
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
     <p style="margin:0 0 8px 0">${icon}<strong style="font-size:16px;vertical-align:middle">KokoSOS</strong></p>
