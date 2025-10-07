@@ -104,6 +104,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                 let res = try await client.auth.signUp(email: email, password: pass)
                 if res.session != nil {
                     UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
+                    UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
                 } else {

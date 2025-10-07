@@ -35,6 +35,13 @@ final class MainViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        // プロフィールオンボーディング（初回1回だけ）
+        if UserDefaults.standard.bool(forKey: "ShouldShowProfileOnboardingOnce"), presentedViewController == nil {
+            UserDefaults.standard.set(false, forKey: "ShouldShowProfileOnboardingOnce")
+            let vc = ProfileEditViewController()
+            navigationController?.pushViewController(vc, animated: true)
+            return
+        }
         // 1) サインアップ直後のワンショット誘導
         let onceKey = "ShouldShowRecipientsOnboardingOnce"
         if UserDefaults.standard.bool(forKey: onceKey), presentedViewController == nil {
