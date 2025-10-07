@@ -283,7 +283,16 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
       const token = await signJwtHs256({ alert_id: alertId, contact_id: r.contact_id, scope: 'viewer', exp: nowSec() + 24 * 3600 }, env.JWT_SECRET)
       const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/s/${encodeURIComponent(token)}`
       try {
-        await emailer.send({ to: r.email, subject: 'KokoSOS 共有リンク', html: emailInviteHtml(link, senderName || null), text: emailInviteText(link, senderName || null) })
+        const subj = initial.type === 'going_home'
+          ? `${senderName ? senderName + 'さんが' : '送信者が'}「帰る」共有を開始しました（KokoSOS）`
+          : `${senderName ? senderName + 'さんが' : '送信者が'}いまの状況を共有しています（KokoSOS）`
+        const html = initial.type === 'going_home'
+          ? emailInviteHtmlGoingHome(link, senderName || null)
+          : emailInviteHtmlEmergency(link, senderName || null)
+        const text = initial.type === 'going_home'
+          ? emailInviteTextGoingHome(link, senderName || null)
+          : emailInviteTextEmergency(link, senderName || null)
+        await emailer.send({ to: r.email, subject: subj, html, text })
         await sb.insert('deliveries', { alert_id: alertId, contact_id: r.contact_id, channel: 'email', status: 'sent' })
         await sb.insert('alert_recipients', { alert_id: alertId, contact_id: r.contact_id, email: r.email, purpose: 'start' })
       } catch (e) {
@@ -1180,24 +1189,47 @@ async function hmacRaw(key: string | CryptoKey, data: string): Promise<Uint8Arra
   return new Uint8Array(sig)
 }
 
-function emailInviteHtml(link: string, senderName?: string | null): string {
+function emailInviteHtmlEmergency(link: string, senderName?: string | null): string {
   const who = senderName && senderName.length > 0 ? `${escapeHtml(senderName)}さんが` : '送信者が'
   const domain = (() => { try { const u = new URL(link); return u.host } catch { return 'kokosos.com' } })()
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
     <p style="margin:0 0 8px 0"><strong style="font-size:16px;vertical-align:middle">KokoSOS</strong></p>
-    <p><strong>${who}KokoSOSで位置共有を開始しました。</strong></p>
-    <p>下のボタンから現在の状況を確認できます。このリンクは24時間で自動的に無効になります。</p>
-    <p style="margin:16px 0"><a href="${link}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">リンクを開く</a></p>
-    <p style="color:#6b7280;font-size:13px">このメールはKokoSOSからの通知です。覚えがない場合は、このメールを無視してください。配信元: ${escapeHtml(domain)}</p>
+    <p><strong>${who}「いま」の状況を共有しています。</strong></p>
+    <p>すぐに位置と状態を確認できます。必要に応じて見守りをお願いします。</p>
+    <p style="margin:16px 0"><a href="${link}" style="display:inline-block;background:#ef4444;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">状況を確認する</a></p>
+    <p style="color:#6b7280;font-size:13px">このリンクは24時間で自動的に無効になります。覚えがない場合は、このメールを無視してください。配信元: ${escapeHtml(domain)}</p>
   </div>`
 }
 
-function emailInviteText(link: string, senderName?: string | null): string {
+function emailInviteTextEmergency(link: string, senderName?: string | null): string {
   const who = senderName && senderName.length > 0 ? `${senderName}さんが` : '送信者が'
-  return `${who}KokoSOSで位置共有を開始しました。
+  return `${who}「いま」の状況をKokoSOSで共有しています。
 
-以下のリンクから確認できます（24時間で自動的に無効になります）。
+位置と状態を確認できます（24時間で自動的に無効になります）。
+${link}
+
+このメールに覚えがない場合は破棄してください。`
+}
+
+function emailInviteHtmlGoingHome(link: string, senderName?: string | null): string {
+  const who = senderName && senderName.length > 0 ? `${escapeHtml(senderName)}さんが` : '送信者が'
+  const domain = (() => { try { const u = new URL(link); return u.host } catch { return 'kokosos.com' } })()
+  return `
+  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
+    <p style="margin:0 0 8px 0"><strong style="font-size:16px;vertical-align:middle">KokoSOS</strong></p>
+    <p><strong>${who}「帰る」共有を開始しました。</strong></p>
+    <p>到着までのあいだ、温かく見守ってください。</p>
+    <p style="margin:16px 0"><a href="${link}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">現在の様子を見る</a></p>
+    <p style="color:#6b7280;font-size:13px">このリンクは24時間で自動的に無効になります。覚えがない場合は、このメールを無視してください。配信元: ${escapeHtml(domain)}</p>
+  </div>`
+}
+
+function emailInviteTextGoingHome(link: string, senderName?: string | null): string {
+  const who = senderName && senderName.length > 0 ? `${senderName}さんが` : '送信者が'
+  return `${who}「帰る」共有をKokoSOSで開始しました。
+
+到着までのあいだ、見守りをお願いします（リンクは24時間で自動的に無効になります）。
 ${link}
 
 このメールに覚えがない場合は破棄してください。`
