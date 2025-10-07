@@ -266,6 +266,10 @@ async function handleAlertStart({ req, env, ctx }: Parameters<RouteHandler>[0]):
   }
   if (invalid.length > 0) return json({ error: 'invalid_recipients', pending: invalid }, { status: 400 })
   // Send emails and store deliveries; record alert_recipients(start)
+  if (recipients.length > 0 && !env.WEB_PUBLIC_BASE) {
+    // 明示的に設定がない場合はサーバー設定不備として返却（無音スキップをやめる）
+    return json({ error: 'server_misconfig', detail: 'WEB_PUBLIC_BASE is missing' }, { status: 500 })
+  }
   if (recipients.length > 0 && env.WEB_PUBLIC_BASE) {
     const emailer = makeEmailProvider(env)
     for (const r of recipients) {
