@@ -117,8 +117,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                         let a = UIAlertController(title: "すでにアカウントが存在します", message: "このメールアドレスは登録済みです。サインインしてください。", preferredStyle: .alert)
                         a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
                         a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
-                            let vc = SignInViewController()
-                            self?.navigationController?.setViewControllers([vc], animated: true)
+                            self?.goBackToSignIn()
                         }))
                         self.presentAlertController(a)
                     } catch {
@@ -129,12 +128,10 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                             let a = UIAlertController(title: "すでにアカウントが存在します", message: "このメールアドレスは登録済みの可能性があります。サインインするか、パスワード再設定を行ってください。", preferredStyle: .alert)
                             a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
                             a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
-                                let vc = SignInViewController()
-                                self?.navigationController?.setViewControllers([vc], animated: true)
+                                self?.goBackToSignIn()
                             }))
                             a.addAction(UIAlertAction(title: "パスワード再設定", style: .default, handler: { [weak self] _ in
-                                let vc = SignInViewController()
-                                self?.navigationController?.setViewControllers([vc], animated: true)
+                                self?.goBackToSignIn()
                             }))
                             self.presentAlertController(a)
                         } else if lower2.contains("not confirmed") || lower2.contains("confirm") || raw2.contains("確認") {
@@ -154,8 +151,7 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                     let a = UIAlertController(title: "すでに登録済みです", message: "このメールアドレスは既に登録されています。サインインしてください。", preferredStyle: .alert)
                     a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
                     a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
-                        let vc = SignInViewController()
-                        self?.navigationController?.setViewControllers([vc], animated: true)
+                        self?.goBackToSignIn()
                     }))
                     self.presentAlertController(a)
                 }
@@ -186,6 +182,18 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
             let root = self.view.window?.rootViewController
             let presenter = topViewController(from: root) ?? topViewController(from: self) ?? self
             presenter.present(alert, animated: true)
+        }
+    }
+
+    private func goBackToSignIn() {
+        if let nav = navigationController {
+            if let target = nav.viewControllers.first(where: { $0 is SignInViewController }) {
+                nav.popToViewController(target, animated: true)
+            } else {
+                nav.popViewController(animated: true)
+            }
+        } else {
+            dismiss(animated: true)
         }
     }
 
