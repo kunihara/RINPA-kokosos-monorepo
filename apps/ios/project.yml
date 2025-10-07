@@ -8,6 +8,9 @@ packages:
   Supabase:
     url: https://github.com/supabase-community/supabase-swift
     from: 2.2.0
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 10.15.0
 configs:
   Debug-Dev: debug
   Debug-Stage: debug
@@ -67,6 +70,10 @@ targets:
       - sdk: ContactsUI.framework
       - package: Supabase
         product: Supabase
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseMessaging
     configFiles:
       Debug-Dev: Configs/Dev.xcconfig
       Debug-Stage: Configs/Stage.xcconfig

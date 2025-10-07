@@ -378,6 +378,7 @@ final class MainViewController: UIViewController {
     @objc private func tapSignOut() {
         // SDKサインアウト
         try? awaitTask {
+            PushRegistrationService.shared.unregisterLastToken()
             try await SupabaseAuthAdapter.shared.client.auth.signOut()
         }
         // ルートをサインイン画面へ

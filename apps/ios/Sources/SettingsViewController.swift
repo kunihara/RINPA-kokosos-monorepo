@@ -181,6 +181,8 @@ final class SettingsViewController: UIViewController {
     }
 
     private func navigateToSignInRoot() {
+        // Pushトークンをサーバーから解除（非同期でベストエフォート）
+        PushRegistrationService.shared.unregisterLastToken()
         // SDKセッションをサインアウト（非同期で発火）
         Task { try? await SupabaseAuthAdapter.shared.client.auth.signOut() }
         let complete: (UINavigationController) -> Void = { nav in
@@ -219,6 +221,8 @@ final class SettingsViewController: UIViewController {
                 defer { self.deleteAccountButton.isEnabled = true }
                 do {
                     try await APIClient().deleteAccount()
+                    // Pushトークン解除→サインアウト
+                    PushRegistrationService.shared.unregisterLastToken()
                     try? await SupabaseAuthAdapter.shared.client.auth.signOut()
                     let signin = SignInViewController()
                     self.navigationController?.setViewControllers([signin], animated: true)

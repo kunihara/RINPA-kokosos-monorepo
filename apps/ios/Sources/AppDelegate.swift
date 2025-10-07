@@ -1,12 +1,23 @@
 import UIKit
 import UserNotifications
+import FirebaseCore
+import FirebaseMessaging
 
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UIDevice.current.isBatteryMonitoringEnabled = true
-        // Local notifications: ensure delegate is set so foreground notifications can appear
+        // Firebase
+        FirebaseApp.configure()
+        Messaging.messaging().delegate = self
+        // Local/Push notifications: ensure delegate is set so foreground notifications can appear
         UNUserNotificationCenter.current().delegate = self
+        // Register for remote notifications (permission prompt is handled elsewhere)
+        DispatchQueue.main.async { UIApplication.shared.registerForRemoteNotifications() }
+        // Try to fetch FCM token and register to server
+        Messaging.messaging().token { token, _ in
+            if let t = token { PushRegistrationService.shared.register(token: t) }
+        }
         return true
     }
 
@@ -27,5 +38,13 @@ extension AppDelegate {
         } else {
             completionHandler([.alert, .sound])
         }
+    }
+}
+
+// Firebase Messaging token updates
+extension AppDelegate {
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let token = fcmToken, !token.isEmpty else { return }
+        PushRegistrationService.shared.register(token: token)
     }
 }
