@@ -111,7 +111,24 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                     showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、ログインしてください。")
                 }
             } catch {
-                showAlert("サインアップ失敗", error.localizedDescription)
+                let raw = error.localizedDescription
+                let lower = raw.lowercased()
+                // 既存メールでのサインアップ（GoTrueの一般的な文言: "User already registered" など）
+                if lower.contains("already registered") || lower.contains("already exists") || raw.contains("既に") || raw.contains("すでに") {
+                    let a = UIAlertController(title: "すでに登録済みです", message: "このメールアドレスは既に登録されています。サインインしてください。", preferredStyle: .alert)
+                    a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+                    a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
+                        let vc = SignInViewController()
+                        self?.navigationController?.setViewControllers([vc], animated: true)
+                    }))
+                    present(a, animated: true)
+                }
+                // リクエスト頻度制限（60秒に1回など）
+                else if lower.contains("once every") || lower.contains("60 seconds") || lower.contains("too many requests") {
+                    showAlert("しばらく待ってから再試行", "短時間に複数回リクエストされました。1分ほど待ってからもう一度お試しください。")
+                } else {
+                    showAlert("サインアップ失敗", raw)
+                }
             }
         }
     }
