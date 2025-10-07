@@ -1,4 +1,5 @@
 import UIKit
+import Supabase
 
 enum DeepLinkHandler {
     /// Handle custom URL scheme callback like:
@@ -6,7 +7,7 @@ enum DeepLinkHandler {
     @discardableResult
     static func handle(url: URL, in navigation: UINavigationController?) -> Bool {
         guard let host = url.host?.lowercased(), host == "oauth-callback" else { return false }
-        // Parse fragment as query parameters
+        // Parse fragment as query parameters (type, access_token, refresh_token など)
         let fragment = url.fragment ?? ""
         var params: [String: String] = [:]
         for pair in fragment.split(separator: "&") {
@@ -15,8 +16,32 @@ enum DeepLinkHandler {
                 params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1]
             }
         }
-        // SDKのOAuthは signInWithOAuth の完了でセッションが確立される想定。
-        // ここではトークンを直接扱わず、ハンドル済みとしてtrueを返すのみ。
+
+        // Deep link handling: let Supabase SDK establish session from the URL
+        Task { @MainActor in
+            do {
+                // Supabase Swift v2: recover session from redirect URL
+                _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url)
+                // Refresh cached token for APIClient headers
+                await SupabaseAuthAdapter.shared.updateCachedToken()
+                // If this was a new signup confirmation, show onboarding once
+                let t = params["type"]?.lowercased()
+                if t == "signup" || t == "email_confirmation" {
+                    UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
+                    UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
+                }
+                // Move to main screen
+                let main = MainViewController()
+                navigation?.setViewControllers([main], animated: true)
+            } catch {
+                // Even if session parsing fails, navigate to SignIn screen to avoid being stuck
+                // and let the user proceed manually (e.g., password login after confirmation)
+                let signIn = SignInViewController()
+                if let nav = navigation {
+                    nav.setViewControllers([signIn], animated: true)
+                }
+            }
+        }
         return true
     }
 }
