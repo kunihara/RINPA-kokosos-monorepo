@@ -11,8 +11,6 @@ export interface Env {
   CORS_ALLOW_ORIGIN?: string
   WEB_PUBLIC_BASE?: string
   EMAIL_PROVIDER?: string
-  EMAIL_BRAND_NAME?: string
-  EMAIL_ICON_URL?: string
   // dev専用デバッグ用フラグ（true でマスク付きログを出力）
   EMAIL_DEBUG?: string
   DEFAULT_USER_EMAIL?: string
@@ -291,12 +289,18 @@ async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Pr
   let userId: string | null = null
   const auth = await getSenderFromAuth(req, env)
   let senderEmail: string | undefined
+  let senderName: string | undefined
   if (auth.ok && auth.userId) {
     userId = auth.userId
     // 可能ならメールも取得（トークンがある場合）
     const m = authz.match(/^Bearer\s+(.+)$/i)
     const token = m ? m[1] : ''
-    if (token) { try { const supa = await fetchSupabaseUser(env, token); if (supa.ok) senderEmail = supa.email } catch {} }
+    if (token) {
+      try {
+        const supa = await fetchSupabaseUser(env, token)
+        if (supa.ok) { senderEmail = supa.email; var senderName = supa.name }
+      } catch {}
+    }
   } else {
     const m = authz.match(/^Bearer\s+(.+)$/i)
     const token = m ? m[1] : ''
@@ -304,6 +308,7 @@ async function handleContactsList({ req, env }: Parameters<RouteHandler>[0]): Pr
     if (!supa.ok || !supa.userId) return json({ error: 'unauthorized', detail: 'invalid_token' }, { status: 401 })
     userId = supa.userId
     senderEmail = supa.email
+    var senderName = supa.name
   }
   const url = new URL(req.url)
   const status = (url.searchParams.get('status') || 'all').toLowerCase()
@@ -352,7 +357,11 @@ async function handleContactsBulkUpsert({ req, env }: Parameters<RouteHandler>[0
       const list = await sb.select('contacts', 'id,email,verified_at', `user_id=eq.${encodeURIComponent(userId!)}&email=eq.${encodeURIComponent(email)}`, 1)
       if (list.ok && list.data.length > 0 && !(list.data[0] as any).verified_at) {
         try {
-          await sendVerifyForContact(env, list.data[0] as any, senderEmail || null)
+          // 名前が無い場合はメールのローカル部から推測
+          const display = senderName && senderName.length > 0
+            ? senderName
+            : (senderEmail ? String(senderEmail).split('@')[0] : null)
+          await sendVerifyForContact(env, list.data[0] as any, display || null, undefined)
         } catch {
           verifyFailed.push(email)
         }
@@ -374,7 +383,7 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
   try {
     const m = authz.match(/^Bearer\s+(.+)$/i)
     const token = m ? m[1] : ''
-    if (token) { const supa = await fetchSupabaseUser(env, token); if (supa.ok) senderEmail = supa.email }
+    if (token) { const supa = await fetchSupabaseUser(env, token); if (supa.ok) { senderEmail = supa.email; senderName = supa.name } }
   } catch {}
   const m = req.url.match(/\/contacts\/([^/]+)\/send_verify/)
   if (!m) return notFound()
@@ -384,11 +393,14 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
   const found = await sb.select('contacts', 'id,email,verified_at', `id=eq.${id}`, 1)
   if (!found.ok || found.data.length === 0) return json({ error: 'not_found' }, { status: 404 })
   const c = found.data[0] as any
-  await sendVerifyForContact(env, c, senderEmail || null)
+  const display = senderName && senderName.length > 0
+    ? senderName
+    : (senderEmail ? String(senderEmail).split('@')[0] : null)
+  await sendVerifyForContact(env, c, display || null, undefined)
   return json({ ok: true })
 }
 
-async function sendVerifyForContact(env: Env, contact: { id: string; email: string }, senderLabel?: string | null) {
+async function sendVerifyForContact(env: Env, contact: { id: string; email: string }, senderName?: string | null, senderAvatarUrl?: string | null) {
   if (!env.WEB_PUBLIC_BASE) return
   const token = await signJwtHs256({ action: 'verify', contact_id: contact.id, exp: nowSec() + 7 * 24 * 3600 }, env.JWT_SECRET)
   const link = `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/verify/${encodeURIComponent(token)}`
@@ -397,11 +409,10 @@ async function sendVerifyForContact(env: Env, contact: { id: string; email: stri
     console.log(`[EMAIL-DEV] verify start -> ${maskEmail(String(contact.email))}`)
   }
   try {
-    const brandName = env.EMAIL_BRAND_NAME && env.EMAIL_BRAND_NAME.trim().length > 0 ? env.EMAIL_BRAND_NAME : 'KokoSOS'
-    const subject = senderLabel && senderLabel.length > 0
-      ? `${senderLabel}さんから${brandName}の受信者（見守り）依頼が届いています`
-      : `${brandName} 受信許可の確認`
-    const html = emailVerifyHtml(link, senderLabel || null, brandName || null, env.EMAIL_ICON_URL || null)
+    const subject = senderName && senderName.length > 0
+      ? `${senderName}さんからKokoSOSの受信者（見守り）依頼が届いています`
+      : 'KokoSOS 受信許可の確認'
+    const html = emailVerifyHtml(link, senderName || null, senderAvatarUrl || null)
     await emailer.send({ to: String(contact.email), subject, html })
     if (isEmailDebug(env)) {
       console.log(`[EMAIL-DEV] verify sent ok -> ${maskEmail(String(contact.email))}`)
@@ -481,7 +492,7 @@ async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): P
   return json({ ok: true })
 }
 
-async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: boolean; userId?: string; email?: string }> {
+async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: boolean; userId?: string; email?: string; name?: string; avatarUrl?: string }> {
   const base = env.SUPABASE_URL?.replace(/\/$/, '')
   if (!base) return { ok: false }
   const url = `${base}/auth/v1/user`
@@ -492,8 +503,17 @@ async function fetchSupabaseUser(env: Env, accessToken: string): Promise<{ ok: b
     },
   })
   if (!res.ok) return { ok: false }
-  const j = (await res.json()) as { id?: string; email?: string }
-  return { ok: true, userId: j.id || undefined, email: j.email || undefined }
+  const j = (await res.json()) as { id?: string; email?: string; user_metadata?: Record<string, unknown> }
+  const md = (j.user_metadata || {}) as Record<string, unknown>
+  const name =
+    (typeof md['full_name'] === 'string' && md['full_name'] as string) ||
+    (typeof md['name'] === 'string' && md['name'] as string) ||
+    (typeof md['user_name'] === 'string' && md['user_name'] as string) ||
+    (typeof md['nickname'] === 'string' && md['nickname'] as string) || undefined
+  const avatarUrl =
+    (typeof md['avatar_url'] === 'string' && md['avatar_url'] as string) ||
+    (typeof md['picture'] === 'string' && md['picture'] as string) || undefined
+  return { ok: true, userId: j.id || undefined, email: j.email || undefined, name, avatarUrl }
 }
 
 async function handleAlertUpdate({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1093,15 +1113,14 @@ function emailInviteHtml(link: string): string {
 </div>`
 }
 
-function emailVerifyHtml(link: string, senderLabel: string | null, brandName: string | null, iconUrl: string | null): string {
-  const who = senderLabel && senderLabel.length > 0 ? `${escapeHtml(senderLabel)}さんから` : ''
-  const brand = brandName && brandName.length > 0 ? escapeHtml(brandName) : 'KokoSOS'
-  const icon = iconUrl && iconUrl.length > 0 ? `<img src="${iconUrl}" alt="${brand}" style="height:32px;width:auto;vertical-align:middle;margin-right:8px;border-radius:6px"/>` : ''
+function emailVerifyHtml(link: string, senderName: string | null, senderAvatarUrl: string | null): string {
+  const who = senderName && senderName.length > 0 ? `${escapeHtml(senderName)}さんから` : ''
+  const icon = senderAvatarUrl && senderAvatarUrl.length > 0 ? `<img src="${senderAvatarUrl}" alt="${who || 'sender'}" style="height:32px;width:32px;vertical-align:middle;margin-right:8px;border-radius:50%"/>` : ''
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
-    <p style="margin:0 0 8px 0">${icon}<strong style="font-size:16px;vertical-align:middle">${brand}</strong></p>
-    <p><strong>${who}${brand}の受信者（見守り）依頼が届いています。</strong></p>
-    <p>${brand}は、送信者が危険を感じたときに最小の操作で信頼できる相手へ通知し、共有中のみ「現在地・状態・残り時間」を共有できるサービスです。</p>
+    <p style="margin:0 0 8px 0">${icon}<strong style="font-size:16px;vertical-align:middle">KokoSOS</strong></p>
+    <p><strong>${who}KokoSOSの受信者（見守り）依頼が届いています。</strong></p>
+    <p>KokoSOSは、送信者が危険を感じたときに最小の操作で信頼できる相手へ通知し、共有中のみ「現在地・状態・残り時間」を共有できるサービスです。</p>
     <p>下のボタンから受信許可を確認してください。許可後は、送信者が共有を開始したときにメールでお知らせします。</p>
     <p style="margin:16px 0"><a href="${link}" style="background:#2563eb;color:#fff;padding:10px 14px;border-radius:6px;text-decoration:none;display:inline-block">受信許可を確認する</a></p>
     <p style="color:#6b7280">リンクは一定時間で無効になります。迷惑メールに入ってしまうことがあるため、kokosos.com からのメールを許可してください。誤って登録された場合は、このメールを無視してください。</p>
