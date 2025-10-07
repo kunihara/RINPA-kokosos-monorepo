@@ -7,7 +7,6 @@ export const runtime = 'edge'
 export default function VerifyPage(props: any) {
   const token: string = props?.params?.token || ''
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || ''
-  const appDeepLink = (process.env.NEXT_PUBLIC_APP_SCHEME || 'kokosos') + '://oauth-callback'
 
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading')
   const [message, setMessage] = useState<string>('')
@@ -37,13 +36,28 @@ export default function VerifyPage(props: any) {
   }, [apiBase, token])
 
   return (
-    <main style={{ padding: 24, maxWidth: 600, margin: '0 auto' }}>
+    <main style={{ padding: 24, maxWidth: 720, margin: '0 auto', lineHeight: 1.7 }}>
       <h1>KokoSOS</h1>
       {status === 'loading' && <p>確認中です…</p>}
-      {status !== 'loading' && <p>{message}</p>}
-      <div style={{ marginTop: 16 }}>
-        <a href={appDeepLink} style={{ color: '#2563eb' }}>アプリに戻る</a>
-      </div>
+      {status !== 'loading' && (
+        <>
+          <h2 style={{ fontSize: 22, fontWeight: 700, marginTop: 12 }}>{message || '受信許可の確認'}</h2>
+          {status === 'ok' && (
+            <section style={{ marginTop: 12, color: '#374151' }}>
+              <p>今後、この送信者が共有を開始するとメールでお知らせします。</p>
+              <p>メール内のリンクから、共有中のみ「現在地・状態・残り時間」を確認できます（リンクは一定時間で無効になります）。</p>
+              <p>共有を停止すると閲覧できなくなります。アプリやアカウントは不要です。</p>
+              <p>迷惑メールに入る場合があるため、kokosos.com からのメールを許可してください。</p>
+              <p style={{ fontWeight: 600, marginTop: 8 }}>送信者を見守ってくださいね。</p>
+            </section>
+          )}
+          {status === 'error' && (
+            <section style={{ marginTop: 12, color: '#6b7280' }}>
+              <p>リンクが無効または期限切れの可能性があります。送信者に再送を依頼してください。</p>
+            </section>
+          )}
+        </>
+      )}
     </main>
   )
 }
