@@ -11,6 +11,8 @@ export interface Env {
   CORS_ALLOW_ORIGIN?: string
   WEB_PUBLIC_BASE?: string
   EMAIL_PROVIDER?: string
+  EMAIL_BRAND_NAME?: string
+  EMAIL_ICON_URL?: string
   // dev専用デバッグ用フラグ（true でマスク付きログを出力）
   EMAIL_DEBUG?: string
   DEFAULT_USER_EMAIL?: string
@@ -395,10 +397,12 @@ async function sendVerifyForContact(env: Env, contact: { id: string; email: stri
     console.log(`[EMAIL-DEV] verify start -> ${maskEmail(String(contact.email))}`)
   }
   try {
+    const brandName = env.EMAIL_BRAND_NAME && env.EMAIL_BRAND_NAME.trim().length > 0 ? env.EMAIL_BRAND_NAME : 'KokoSOS'
     const subject = senderLabel && senderLabel.length > 0
-      ? `${senderLabel}さんからKokoSOSの受信者（見守り）依頼が届いています`
-      : 'KokoSOS 受信許可の確認'
-    await emailer.send({ to: String(contact.email), subject, html: emailVerifyHtml(link, senderLabel || null) })
+      ? `${senderLabel}さんから${brandName}の受信者（見守り）依頼が届いています`
+      : `${brandName} 受信許可の確認`
+    const html = emailVerifyHtml(link, senderLabel || null, brandName || null, env.EMAIL_ICON_URL || null)
+    await emailer.send({ to: String(contact.email), subject, html })
     if (isEmailDebug(env)) {
       console.log(`[EMAIL-DEV] verify sent ok -> ${maskEmail(String(contact.email))}`)
     }
@@ -1089,12 +1093,15 @@ function emailInviteHtml(link: string): string {
 </div>`
 }
 
-function emailVerifyHtml(link: string, senderLabel: string | null): string {
+function emailVerifyHtml(link: string, senderLabel: string | null, brandName: string | null, iconUrl: string | null): string {
   const who = senderLabel && senderLabel.length > 0 ? `${escapeHtml(senderLabel)}さんから` : ''
+  const brand = brandName && brandName.length > 0 ? escapeHtml(brandName) : 'KokoSOS'
+  const icon = iconUrl && iconUrl.length > 0 ? `<img src="${iconUrl}" alt="${brand}" style="height:32px;width:auto;vertical-align:middle;margin-right:8px;border-radius:6px"/>` : ''
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.7">
-    <p><strong>${who}KokoSOSの受信者（見守り）依頼が届いています。</strong></p>
-    <p>KokoSOSは、送信者が危険を感じたときに最小の操作で信頼できる相手へ通知し、共有中のみ「現在地・状態・残り時間」を共有できるサービスです。</p>
+    <p style="margin:0 0 8px 0">${icon}<strong style="font-size:16px;vertical-align:middle">${brand}</strong></p>
+    <p><strong>${who}${brand}の受信者（見守り）依頼が届いています。</strong></p>
+    <p>${brand}は、送信者が危険を感じたときに最小の操作で信頼できる相手へ通知し、共有中のみ「現在地・状態・残り時間」を共有できるサービスです。</p>
     <p>下のボタンから受信許可を確認してください。許可後は、送信者が共有を開始したときにメールでお知らせします。</p>
     <p style="margin:16px 0"><a href="${link}" style="background:#2563eb;color:#fff;padding:10px 14px;border-radius:6px;text-decoration:none;display:inline-block">受信許可を確認する</a></p>
     <p style="color:#6b7280">リンクは一定時間で無効になります。迷惑メールに入ってしまうことがあるため、kokosos.com からのメールを許可してください。誤って登録された場合は、このメールを無視してください。</p>
