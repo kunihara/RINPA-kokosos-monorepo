@@ -12,6 +12,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         Messaging.messaging().delegate = self
         // Local/Push notifications: ensure delegate is set so foreground notifications can appear
         UNUserNotificationCenter.current().delegate = self
+        // Ask notification permission on first launch (alert/sound/badge)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            #if DEBUG
+            print("[Notifications] permission granted=\(granted)")
+            #endif
+        }
         // Register for remote notifications (permission prompt is handled elsewhere)
         DispatchQueue.main.async { UIApplication.shared.registerForRemoteNotifications() }
         // Try to fetch FCM token and register to server
@@ -25,6 +31,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         let config = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
         config.delegateClass = SceneDelegate.self
         return config
+    }
+
+    // Explicitly forward APNs token to FCM (in case swizzling is disabled later)
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Messaging.messaging().apnsToken = deviceToken
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        #if DEBUG
+        print("[Notifications] APNs registration failed: \(error.localizedDescription)")
+        #endif
     }
 }
 

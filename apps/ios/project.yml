@@ -71,8 +71,6 @@ targets:
       - package: Supabase
         product: Supabase
       - package: Firebase
-        product: FirebaseCore
-      - package: Firebase
         product: FirebaseMessaging
     configFiles:
       Debug-Dev: Configs/Dev.xcconfig
@@ -116,6 +114,12 @@ targets:
           INFOPLIST_FILE: Resources/Info-Prod.plist
     info:
       path: Resources/Info.plist
+    entitlements:
+      path: Resources/KokoSOS.entitlements
+    capabilities:
+      - pushNotifications: true
+      - backgroundModes:
+          modes: [remote-notification]
     postBuildScripts:
       - name: Copy GoogleService-Info for Environment
         shell: /bin/sh
