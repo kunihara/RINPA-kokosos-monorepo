@@ -109,3 +109,27 @@ targets:
           INFOPLIST_FILE: Resources/Info-Prod.plist
     info:
       path: Resources/Info.plist
+    postBuildScripts:
+      - name: Copy GoogleService-Info for Environment
+        shell: /bin/sh
+        basedOnDependencyAnalysis: false
+        showEnvVarsInLog: true
+        script: |
+          GOOGLE_INFO_DIR="${PROJECT_DIR}/Resources/Firebase"
+          DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist"
+
+          case "${CONFIGURATION}" in
+            *Dev*)   SRC="${GOOGLE_INFO_DIR}/GoogleService-Info-Dev.plist" ;;
+            *Stage*) SRC="${GOOGLE_INFO_DIR}/GoogleService-Info-Dev.plist" ;; # Stage未用意のためDevを流用
+            *Prod*)  SRC="${GOOGLE_INFO_DIR}/GoogleService-Info-Prod.plist" ;;
+            *) echo "Unknown CONFIGURATION: ${CONFIGURATION}" ; exit 1 ;;
+          esac
+
+          if [ ! -f "${SRC}" ]; then
+            echo "Missing source plist: ${SRC}"
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "${DEST}")"
+          cp -f "${SRC}" "${DEST}"
+          echo "Copied ${SRC} -> ${DEST}"
