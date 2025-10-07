@@ -308,6 +308,72 @@ OAuth（Apple/Google/Facebook）
     - SES 連携: `SES_REGION`, `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`, `SES_SENDER_EMAIL`
   - `deploy-api.yml` が `wrangler secret put` で各環境に注入。
 
+#### SES（メール）設定手順とIAMポリシー（kokosos.com）
+
+目的
+- 迷惑メール入りを避けつつ、環境ごとに安全に送信する。
+
+手順（ap-northeast-1 の例）
+- ドメイン認証（Easy DKIM）
+  - SES → Verified identities → Create identity: Domain = `kokosos.com`, DKIM = Easy DKIM
+  - SESが提示するDKIM CNAME 3件を Cloudflare DNS に追加（DNS only / グレー雲）
+  - Identity の DKIM/Verification が Verified になるまで待機
+- MAIL FROM（SPF整合）
+  - SES → Verified identities → `kokosos.com` → Set MAIL FROM
+  - 例) `bounce.kokosos.com`
+  - 表示された `MX` と `TXT(SPF)` を Cloudflare DNS に追加（DNS only / グレー雲）
+- DMARC（観測→段階強化）
+  - Cloudflare DNS: TXT `_dmarc.kokosos.com` → `v=DMARC1; p=none; rua=mailto:dmarc@kokosos.com; fo=1`
+  - 安定後に `p=quarantine` → `p=reject` を検討
+
+IAM（送信専用ユーザーの例）
+- ユーザー命名（例）
+  - dev: `ses-sender-kokosos-dev`
+  - stage: `ses-sender-kokosos-stage`
+  - prod: `ses-sender-kokosos-prod`
+- ポリシー（例: `ses-send-only-kokosos`）
+  - ドメイン全体許可（Fromが `*@kokosos.com`）
+  - `Resource` は SES アイデンティティARNに限定（ドメインと必要に応じて個別アドレス）
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowSesSendFromKokososDomain",
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": [
+        "arn:aws:ses:ap-northeast-1:<ACCOUNT_ID>:identity/kokosos.com",
+        "arn:aws:ses:ap-northeast-1:<ACCOUNT_ID>:identity/noreply@kokosos.com"
+      ],
+      "Condition": {
+        "StringLike": { "ses:FromAddress": "*@kokosos.com" }
+      }
+    }
+  ]
+}
+```
+
+備考
+- 単一の差出人のみ許可する場合は `StringEquals` + `noreply@kokosos.com` を使用
+- アイデンティティARNは SES > Verified identities の詳細に表示
+
+Workers（環境ごと）
+- Secrets（dev/stage/prod）
+  - `EMAIL_PROVIDER=ses`
+  - `SES_REGION=ap-northeast-1`
+  - `SES_ACCESS_KEY_ID`, `SES_SECRET_ACCESS_KEY`（上記IAMユーザー）
+  - `SES_SENDER_EMAIL=noreply@kokosos.com`
+  - （診断時のみ）`EMAIL_DEBUG=true`（dev限定推奨）
+- 反映: `npx wrangler deploy --env <env>` → `/_health` で `ok: true`
+
+運用のポイント
+- From を自社ドメインで統一（例: `noreply@kokosos.com`）
+- DKIM/DMARC/MAIL FROM を整えてから本運用へ移行
+- 迷惑メール入りの初期学習: 受信者側で「迷惑ではない」を実施
+- 送信量増加は段階的に（ウォームアップ）
+
 ### Cloudflare Pages/Workers 構成（方式B: プロジェクト分割）
 
 - 目的
