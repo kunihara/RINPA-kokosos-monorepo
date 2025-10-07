@@ -108,14 +108,19 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                     let main = MainViewController()
                     navigationController?.setViewControllers([main], animated: true)
                 } else {
-                    // セッションが返らない場合は、既存アカウントの可能性を検証
+                    // セッションが返らない場合は、既存アカウントの可能性を検証（弾くための確認）
                     do {
                         try await client.auth.signIn(email: email, password: pass)
-                        // 同じパスワードで既存アカウントにサインイン成功 → そのまま遷移
-                        UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
-                        UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
-                        let main = MainViewController()
-                        navigationController?.setViewControllers([main], animated: true)
+                        // ここに到達 = 既存アカウントでパスワード一致
+                        // サインアップ導線ではロールを分けるため弾く。即サインアウトして誘導のみ行う。
+                        try? await client.auth.signOut()
+                        let a = UIAlertController(title: "すでにアカウントが存在します", message: "このメールアドレスは登録済みです。サインインしてください。", preferredStyle: .alert)
+                        a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+                        a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
+                            let vc = SignInViewController()
+                            self?.navigationController?.setViewControllers([vc], animated: true)
+                        }))
+                        present(a, animated: true)
                     } catch {
                         let raw2 = error.localizedDescription
                         let lower2 = raw2.lowercased()
@@ -129,7 +134,6 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                             }))
                             a.addAction(UIAlertAction(title: "パスワード再設定", style: .default, handler: { [weak self] _ in
                                 let vc = SignInViewController()
-                                // サインイン画面でメールを入力済みにしたいが、簡易に画面誘導のみ
                                 self?.navigationController?.setViewControllers([vc], animated: true)
                             }))
                             present(a, animated: true)
