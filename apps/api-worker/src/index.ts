@@ -109,6 +109,10 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/contacts$/, handler: handleContactsList },
   { method: 'POST', pattern: /^\/contacts\/bulk_upsert$/, handler: handleContactsBulkUpsert },
   { method: 'POST', pattern: /^\/contacts\/([^/]+)\/send_verify$/, handler: handleContactSendVerify },
+  // Profile (avatar)
+  { method: 'POST', pattern: /^\/profile\/avatar\/upload-url$/, handler: handleAvatarUploadURL },
+  { method: 'POST', pattern: /^\/profile\/avatar\/upload$/, handler: handleAvatarUpload },
+  { method: 'POST', pattern: /^\/profile\/avatar\/commit$/, handler: handleAvatarCommit },
   // Verify (public)
   { method: 'GET', pattern: /^\/public\/verify\/([^/]+)$/, handler: handleVerifyContact },
   // Account deletion
@@ -1132,6 +1136,81 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
 
+// ---------- Avatar upload (Supabase Storage via Workers proxy)
+const AVATAR_BUCKET = 'avatars'
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024 // 2MB
+const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+// 1) issue short-lived upload URL (to this Worker) with path token
+async function handleAvatarUploadURL({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: 401 })
+  const url = new URL(req.url)
+  const ext = (url.searchParams.get('ext') || 'jpg').toLowerCase()
+  const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? (ext === 'jpg' ? 'jpeg' : ext) : 'jpeg'
+  const path = `${auth.userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`
+  const token = await signJwtHs256({ scope: 'avatar_upload', path, exp: nowSec() + 300 }, env.JWT_SECRET)
+  return json({ uploadUrl: `/profile/avatar/upload?token=${encodeURIComponent(token)}`, path, expiresIn: 300 })
+}
+
+// 2) accept multipart/form-data { file } and forward to Supabase Storage
+async function handleAvatarUpload({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const url = new URL(req.url)
+  const token = url.searchParams.get('token') || ''
+  const payload = await verifyJwtHs256(token, env.JWT_SECRET)
+  if (!payload || (payload as any).scope !== 'avatar_upload') return json({ error: 'invalid_token' }, { status: 401 })
+  const path = String((payload as any).path || '')
+  if (!path) return json({ error: 'invalid_path' }, { status: 400 })
+  const form = await req.formData().catch(() => null)
+  if (!form) return json({ error: 'invalid_form' }, { status: 400 })
+  const file = form.get('file') as unknown as File | null
+  if (!file || typeof (file as any).arrayBuffer !== 'function') return json({ error: 'missing_file' }, { status: 400 })
+  const contentType = (file as any).type || 'application/octet-stream'
+  if (!ALLOWED_TYPES.has(contentType)) return json({ error: 'unsupported_type' }, { status: 400 })
+  const buf = await (file as any).arrayBuffer()
+  if ((buf as ArrayBuffer).byteLength > AVATAR_MAX_BYTES) return json({ error: 'file_too_large' }, { status: 400 })
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'server_misconfig' }, { status: 500 })
+  const putUrl = `${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${encodeURIComponent(AVATAR_BUCKET)}/${encodeURIComponent(path)}`
+  const res = await fetch(putUrl, {
+    method: 'PUT',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'content-type': contentType,
+      'x-upsert': 'true',
+    },
+    body: buf as ArrayBuffer,
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    return json({ error: 'storage_put_failed', detail: `${res.status} ${t}` }, { status: 500 })
+  }
+  return json({ ok: true, path })
+}
+
+// 3) commit avatar path into user_metadata (and name if provided)
+async function handleAvatarCommit({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (!authz) return json({ error: 'unauthorized' }, { status: 401 })
+  const auth = await getSenderFromAuth(req, env)
+  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: auth.status })
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body.path !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
+  const name = typeof body.name === 'string' && body.name.trim().length > 0 ? body.name.trim() : undefined
+  const userMeta: Record<string, unknown> = { avatar_url: `${AVATAR_BUCKET}/${body.path}` }
+  if (name) userMeta['full_name'] = name
+  const adminUrl = `${env.SUPABASE_URL!.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(auth.userId)}`
+  const res = await fetch(adminUrl, {
+    method: 'PUT',
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY as string, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` , 'content-type': 'application/json' },
+    body: JSON.stringify({ user_metadata: userMeta }),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    return json({ error: 'update_user_failed', detail: `${res.status} ${t}` }, { status: 500 })
+  }
+  return json({ ok: true })
+}
 function emailArrivalHtml(): string {
   return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial">
   <p>到着を確認しました。ご安心ください。</p>

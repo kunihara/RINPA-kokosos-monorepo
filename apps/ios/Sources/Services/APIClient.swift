@@ -159,6 +159,65 @@ struct APIClient {
         }
     }
 
+    // MARK: Profile - Avatar
+    struct UploadURLResponse: Codable { let uploadUrl: String; let path: String; let expiresIn: Int }
+
+    func profileAvatarUploadURL(ext: String) async throws -> UploadURLResponse {
+        let (data, http) = try await execute {
+            var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+            comps.path = (comps.path as NSString).appendingPathComponent("profile/avatar/upload-url")
+            comps.queryItems = [URLQueryItem(name: "ext", value: ext)]
+            var req = URLRequest(url: comps.url!)
+            req.httpMethod = "POST"
+            applyAuth(&req)
+            return req
+        }
+        if !(200..<300).contains(http.statusCode) { throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8)) }
+        return try JSONDecoder().decode(UploadURLResponse.self, from: data)
+    }
+
+    func profileAvatarUpload(to uploadURL: String, data: Data, mime: String) async throws {
+        let fullURL: URL
+        if let u = URL(string: uploadURL), u.scheme != nil { fullURL = u }
+        else { fullURL = baseURL.appendingPathComponent(uploadURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))) }
+
+        let boundary = "Boundary-" + UUID().uuidString
+        var body = Data()
+        let crlf = "\r\n".data(using: .utf8)!
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"avatar\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mime)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append(crlf)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        let (respData, http) = try await URLSession.shared.data(for: {
+            var req = URLRequest(url: fullURL)
+            req.httpMethod = "POST"
+            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            req.httpBody = body
+            return req
+        }())
+        if !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: respData, encoding: .utf8))
+        }
+    }
+
+    func profileAvatarCommit(path: String?, name: String) async throws {
+        let payload: [String: Any?] = ["path": path, "name": name]
+        let (data, http) = try await execute {
+            var req = URLRequest(url: baseURL.appendingPathComponent("profile/avatar/commit"))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            var r = req; applyAuth(&r)
+            r.httpBody = try? JSONSerialization.data(withJSONObject: payload.compactMapValues { $0 }, options: [])
+            return r
+        }
+        if !(200..<300).contains(http.statusCode) {
+            throw APIError.http(status: http.statusCode, body: String(data: data, encoding: .utf8))
+        }
+    }
+
     func stopAlert(id: String) async throws {
         let (data, http) = try await execute {
             var req = URLRequest(url: endpoint("alert", id, "stop"))

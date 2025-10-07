@@ -10,6 +10,7 @@ final class SettingsViewController: UIViewController {
     private let maxSegmented = UISegmentedControl(items: ["60分", "90分", "120分", "180分", "240分"])
     private let maxOptions = [60, 90, 120, 180, 240]
     private let recipientsButton = UIButton(type: .system)
+    private let profileButton = UIButton(type: .system)
 
     // API Base URL override
     private let apiGroupLabel = UILabel()
@@ -53,6 +54,11 @@ final class SettingsViewController: UIViewController {
         recipientsButton.addTarget(self, action: #selector(openRecipients), for: .touchUpInside)
         recipientsButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(recipientsButton)
+
+        profileButton.setTitle("プロフィール設定", for: .normal)
+        profileButton.addTarget(self, action: #selector(openProfile), for: .touchUpInside)
+        profileButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(profileButton)
 
         // API override UI
         apiGroupLabel.text = "APIベースURL(上級者向け)"
@@ -102,7 +108,10 @@ final class SettingsViewController: UIViewController {
             recipientsButton.topAnchor.constraint(equalTo: maxSegmented.bottomAnchor, constant: 28),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            apiGroupLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 32),
+            profileButton.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 16),
+            profileButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            apiGroupLabel.topAnchor.constraint(equalTo: profileButton.bottomAnchor, constant: 32),
             apiGroupLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             apiGroupLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
@@ -164,6 +173,11 @@ final class SettingsViewController: UIViewController {
         let picker = ContactsPickerViewController()
         let nav = UINavigationController(rootViewController: picker)
         present(nav, animated: true)
+    }
+
+    @objc private func openProfile() {
+        let vc = ProfileEditViewController()
+        navigationController?.pushViewController(vc, animated: true)
     }
 
     private func navigateToSignInRoot() {

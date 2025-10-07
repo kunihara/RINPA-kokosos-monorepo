@@ -741,3 +741,38 @@ Lambda実装メモ
 - iOSはローカル通知でリマインダー（既定30分後／設定で変更可／バックグラウンドでも通知）。
 - 受信ページリンクは24hで失効、即時失効可
 - メール送信時に受信者ごとに固有トークンURLを生成（誤共有リスクを抑止）
+### プロフィール（表示名・アイコン）仕様
+
+- 目的
+  - サインアップ後のオンボーディングで「表示名（必須）」「アイコン（任意）」を設定できるようにする
+  - 設定画面からも再編集可能
+  - アイコンはメールには出さない（プライバシー保護）。アプリ内の認証済みコンテキストのみ表示。
+
+- 保存先
+  - Supabase Auth の user_metadata
+    - full_name: 表示名
+    - avatar_url: `avatars/{user_id}/...` のパス（StorageはPrivate）
+
+- ストレージ
+  - Supabase Storage バケット `avatars`（Private）を使用
+  - 画像: jpeg/png/webp、上限~2MB
+  - 表示時は認証済み経由（将来 signed download or proxy を検討）
+
+- API（Workers）
+  - `POST /profile/avatar/upload-url?ext=jpeg|png|webp`
+    - 認証必須。保存パスと5分有効のトークン付きアップロードURLを返す
+    - 返り値: `{ uploadUrl, path, expiresIn }`
+  - `POST /profile/avatar/upload?token=...`（multipart/form-data）
+    - フィールド `file` を受け取り、Supabase Storage(avatars)にPUT（x-upsert）
+    - 返り値: `{ ok: true, path }`
+  - `POST /profile/avatar/commit`（JSON）
+    - 認証必須。`{ path, name }` を受け取り、user_metadata を更新
+    - 返り値: `{ ok: true }`
+
+- iOS
+  - オンボーディング: プロフィール設定画面（name必須、アイコン任意）
+  - 設定 > 「プロフィール設定」ボタンで同UIに遷移可能
+  - フロー: upload-url → 直アップロード → commit
+
+- メール
+  - 検証メールにはアイコンを表示しない（画像不使用）。件名・本文は送信者名のみを使用。
