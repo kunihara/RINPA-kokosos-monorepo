@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 
 export const runtime = 'edge'
 
-export default function VerifyPage({ params }: { params: { token: string } }) {
-  const token = params?.token || ''
+export default function VerifyPage(props: any) {
+  const token: string = props?.params?.token || ''
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || ''
   const appDeepLink = (process.env.NEXT_PUBLIC_APP_SCHEME || 'kokosos') + '://oauth-callback'
 
@@ -47,4 +47,3 @@ export default function VerifyPage({ params }: { params: { token: string } }) {
     </main>
   )
 }
-
