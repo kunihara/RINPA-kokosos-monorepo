@@ -688,18 +688,19 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
       category: 'arrival',
     })
   } catch {}
-  // If going_home, send arrival emails to start recipients
+  // Send stop/arrival emails to recipients (both modes)
   try {
     const a = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
     const aType = (a.ok && a.data.length > 0) ? String((a.data[0] as any).type) : ''
-    if (aType === 'going_home' && env.WEB_PUBLIC_BASE) {
+    if (env.WEB_PUBLIC_BASE) {
       const list = await sb.select('alert_recipients', 'contact_id,email', `alert_id=eq.${alertId}&purpose=eq.start`)
       const emailer = makeEmailProvider(env)
       for (const r of (list.ok ? (list.data as any[]) : [])) {
         try {
-          await emailer.send({ to: String(r.email), subject: 'KokoSOS 到着のお知らせ', html: emailArrivalHtml(), text: emailArrivalText() })
+          // going_home は『到着』メール、emergency も現状は同文面（共有停止）で通知
+          await emailer.send({ to: String(r.email), subject: aType === 'going_home' ? 'KokoSOS 到着のお知らせ' : 'KokoSOS 共有停止のお知らせ', html: emailArrivalHtml(), text: emailArrivalText() })
+          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: String(r.contact_id), email: String(r.email), purpose: aType === 'going_home' ? 'arrival' : 'stop' })
           await sb.insert('deliveries', { alert_id: alertId, contact_id: String(r.contact_id), channel: 'email', status: 'sent' })
-          await sb.insert('alert_recipients', { alert_id: alertId, contact_id: String(r.contact_id), email: String(r.email), purpose: 'arrival' })
         } catch {}
       }
     }
