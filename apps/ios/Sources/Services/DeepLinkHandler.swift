@@ -26,7 +26,10 @@ enum DeepLinkHandler {
         Task { @MainActor in
             let flowType = (params["type"] ?? params["flow"])?.lowercased()
             #if DEBUG
-            print("[DEBUG] DeepLink type=\(flowType ?? \"nil\") urlFrag=#\(url.fragment ?? \"\") query=?\(url.query ?? \"\")")
+            let tt = flowType ?? "nil"
+            let fragStr = url.fragment ?? ""
+            let queryStr = url.query ?? ""
+            print("[DEBUG] DeepLink type=\(tt) urlFrag=#\(fragStr) query=?\(queryStr)")
             #endif
             // Try to recover session if tokens are present (does nothing if not)
             do {
