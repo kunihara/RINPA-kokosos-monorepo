@@ -466,8 +466,20 @@ async function handleContactSendVerify({ req, env }: Parameters<RouteHandler>[0]
 
 // -------- Devices register/unregister (FCM)
 async function handleDevicesRegister({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
-  const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: (auth as any).status || 401 })
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  const primary = await getSenderFromAuth(req, env)
+  let userId: string | null = primary.ok ? (primary as any).userId ?? null : null
+  if (!userId && authz) {
+    try {
+      const m = authz.match(/^Bearer\s+(.+)$/i)
+      const token = m ? m[1] : ''
+      if (token) {
+        const supa = await fetchSupabaseUser(env, token)
+        if (supa.ok && supa.userId) userId = supa.userId
+      }
+    } catch {}
+  }
+  if (!userId) return json({ error: 'unauthorized' }, { status: (primary as any).status || 401 })
   const body = await req.json().catch(() => null)
   if (!body || typeof body.fcm_token !== 'string' || typeof body.platform !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
   const token = String(body.fcm_token).trim()
@@ -476,26 +488,38 @@ async function handleDevicesRegister({ req, env }: Parameters<RouteHandler>[0]):
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   // Upsert: if exists, update valid/last_seen; else insert
-  const found = await sb.select('devices', 'id,fcm_token,valid', `user_id=eq.${encodeURIComponent(auth.userId)}&fcm_token=eq.${encodeURIComponent(token)}`, 1)
+  const found = await sb.select('devices', 'id,fcm_token,valid', `user_id=eq.${encodeURIComponent(userId)}&fcm_token=eq.${encodeURIComponent(token)}`, 1)
   if (found.ok && found.data.length > 0) {
     const id = String((found.data[0] as any).id)
     await sb.update('devices', { valid: true, last_seen_at: new Date().toISOString(), platform }, `id=eq.${encodeURIComponent(id)}`)
   } else {
-    await sb.insert('devices', { user_id: auth.userId, platform, fcm_token: token, valid: true })
+    await sb.insert('devices', { user_id: userId, platform, fcm_token: token, valid: true })
   }
   return json({ ok: true })
 }
 
 async function handleDevicesUnregister({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
-  const auth = await getSenderFromAuth(req, env)
-  if (!auth.ok || !auth.userId) return json({ error: 'unauthorized' }, { status: (auth as any).status || 401 })
+  const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+  const primary = await getSenderFromAuth(req, env)
+  let userId: string | null = primary.ok ? (primary as any).userId ?? null : null
+  if (!userId && authz) {
+    try {
+      const m = authz.match(/^Bearer\s+(.+)$/i)
+      const token = m ? m[1] : ''
+      if (token) {
+        const supa = await fetchSupabaseUser(env, token)
+        if (supa.ok && supa.userId) userId = supa.userId
+      }
+    } catch {}
+  }
+  if (!userId) return json({ error: 'unauthorized' }, { status: (primary as any).status || 401 })
   const body = await req.json().catch(() => null)
   if (!body || typeof body.fcm_token !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
   const token = String(body.fcm_token).trim()
   if (!token) return json({ error: 'invalid_body' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  await sb.update('devices', { valid: false, last_seen_at: new Date().toISOString() }, `user_id=eq.${encodeURIComponent(auth.userId)}&fcm_token=eq.${encodeURIComponent(token)}`)
+  await sb.update('devices', { valid: false, last_seen_at: new Date().toISOString() }, `user_id=eq.${encodeURIComponent(userId)}&fcm_token=eq.${encodeURIComponent(token)}`)
   return json({ ok: true })
 }
 
