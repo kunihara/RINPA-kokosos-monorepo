@@ -32,8 +32,10 @@ final class SupabaseAuthAdapter {
     func updateCachedToken() async {
         if let s = try? await client.auth.session, !s.accessToken.isEmpty {
             cachedAccessToken = s.accessToken
+            DLog("updateCachedToken: session present (prefix=\(s.accessToken.prefix(8)))")
         } else {
             cachedAccessToken = nil
+            DLog("updateCachedToken: no session")
         }
     }
 
@@ -45,15 +47,17 @@ final class SupabaseAuthAdapter {
             // refresh成功後に最新セッションを取得してキャッシュ
             if let s = try? await client.auth.session, !s.accessToken.isEmpty {
                 cachedAccessToken = s.accessToken
+                DLog("refresh: ok (prefix=\(s.accessToken.prefix(8)))")
                 return true
             } else {
                 cachedAccessToken = nil
+                DLog("refresh: ok but no session")
                 return false
             }
         } catch {
-            #if DEBUG
+#if DEBUG
             print("[SupabaseSDK] refresh error=\(error.localizedDescription)")
-            #endif
+#endif
             cachedAccessToken = nil
             return false
         }
@@ -66,11 +70,13 @@ final class SupabaseAuthAdapter {
         // Fast-fail if no local session at all
         guard let _ = try? await client.auth.session else {
             cachedAccessToken = nil
+            DLog("validateOnline: no local session")
             return false
         }
         // Attempt to refresh; this performs a server-side validation implicitly
         let ok = await refresh()
         if !ok { cachedAccessToken = nil }
+        DLog("validateOnline result=\(ok)")
         return ok
     }
 }

@@ -24,27 +24,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       let hasRecoveryInFrag = frag.contains("type=recovery") || frag.contains("flow=recovery")
       let hasRecoveryInQuery = que.contains("type=recovery") || que.contains("flow=recovery")
       isRecoveryLaunch = hasRecoveryInFrag || hasRecoveryInQuery
+      DLog("launchURL=\(url.absoluteString.prefix(200)) isRecovery=\(isRecoveryLaunch)")
       didHandleDeepLink = DeepLinkHandler.handle(url: url, in: root)
+      DLog("didHandleDeepLink=\(didHandleDeepLink)")
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
       // Policy: 初回起動かつローカルにSupabaseセッションが存在する場合は、前回インストールの残骸とみなし一度サインアウト
       let firstRun = (UserDefaults.standard.string(forKey: "InstallSentinel") == nil)
       if firstRun && !isRecoveryLaunch {
+        DLog("firstRun=true & non-recovery: signing out any residual session")
         if let _ = try? await SupabaseAuthAdapter.shared.client.auth.session {
           try? await SupabaseAuthAdapter.shared.client.auth.signOut()
           await SupabaseAuthAdapter.shared.updateCachedToken()
         }
       }
       // Validate session with server (401/invalid will clear token)
-      _ = await SupabaseAuthAdapter.shared.validateOnline()
+      let valid = await SupabaseAuthAdapter.shared.validateOnline()
+      DLog("validateOnline=\(valid)")
       // If deep link already pushed ResetPassword, do not override the stack
       if didHandleDeepLink, let top = root.viewControllers.last, top is ResetPasswordViewController {
+        DLog("keep ResetPassword on stack; skip root override")
         PushRegistrationService.shared.ensureRegisteredIfPossible()
         return
       }
       // Decide initial root by validated session presence only
       let has = (SupabaseAuthAdapter.shared.accessToken != nil)
+      DLog("routeInitial hasSession=\(has)")
       let target = has ? MainViewController() : SignInViewController()
       root.setViewControllers([target], animated: false)
       if has { PushRegistrationService.shared.ensureRegisteredIfPossible() }
