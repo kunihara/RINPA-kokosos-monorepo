@@ -141,7 +141,14 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
         Task { @MainActor in
             if !emails.isEmpty {
                 do {
-                    let res = try await client.bulkUpsert(emails: emails, sendVerify: true)
+                    // Try to auto-fill names from device contacts list, or derive from email local-part
+                    func deriveName(from email: String) -> String? {
+                        if let found = deviceEmails.first(where: { $0.email == email && !$0.name.isEmpty }) { return found.name }
+                        if let local = email.split(separator: "@").first, !local.isEmpty { return String(local) }
+                        return nil
+                    }
+                    let entries: [(email: String, name: String?)] = emails.map { e in (email: e, name: deriveName(from: e)) }
+                    let res = try await client.bulkUpsert(entries: entries, sendVerify: true)
                     let failed = res.verifyFailed
                     let sentCount = emails.count - failed.count
                     let title = failed.isEmpty ? "送信しました" : "送信完了（一部エラー）"

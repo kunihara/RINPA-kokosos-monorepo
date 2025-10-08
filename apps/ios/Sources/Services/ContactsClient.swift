@@ -48,8 +48,19 @@ final class ContactsClient {
 
     struct BulkUpsertResult { let items: [Contact]; let verifyFailed: [String] }
 
+    /// Bulk upsert with email only (backward compatible)
     func bulkUpsert(emails: [String], sendVerify: Bool) async throws -> BulkUpsertResult {
-        let contacts = emails.map { ["email": $0] }
+        let entries = emails.map { (email: $0, name: Optional<String>.none) }
+        return try await bulkUpsert(entries: entries, sendVerify: sendVerify)
+    }
+
+    /// Bulk upsert with optional names (preferred)
+    func bulkUpsert(entries: [(email: String, name: String?)], sendVerify: Bool) async throws -> BulkUpsertResult {
+        let contacts: [[String: Any]] = entries.map { pair in
+            var dict: [String: Any] = ["email": pair.email]
+            if let n = pair.name, !n.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { dict["name"] = n }
+            return dict
+        }
         let body: [String: Any] = ["contacts": contacts, "send_verify": sendVerify]
         let (data, http) = try await execute {
             var req = URLRequest(url: api.baseURL.appendingPathComponent("contacts/bulk_upsert"))
