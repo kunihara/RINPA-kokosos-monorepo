@@ -15,21 +15,7 @@ export default function AuthCallbackPage() {
   const hash = typeof window !== 'undefined' ? window.location.hash : ''
   const search = typeof window !== 'undefined' ? window.location.search : ''
   const params = useMemo(() => (hash && hash.startsWith('#') ? hash : ''), [hash])
-  useEffect(() => {
-    const deeplink = buildDeepLink()
-    // Try immediate deep-link; if blocked, user can tap the button below.
-    try {
-      window.location.href = deeplink
-    } catch {}
-    const id = setTimeout(() => setAttempted(true), 800)
-    return () => clearInterval(id)
-  }, [params, flow])
-
-  const openApp = () => {
-    window.location.href = buildDeepLink()
-  }
-
-  // Derive flow type from URL hash or search
+  // Derive flow type from URL hash or search (declare before hooks below)
   const flow = useMemo(() => {
     // Prefer hash params
     if (params) {
@@ -45,6 +31,20 @@ export default function AuthCallbackPage() {
     }
     return null
   }, [params, search])
+
+  useEffect(() => {
+    const deeplink = buildDeepLink()
+    // Try immediate deep-link; if blocked, user can tap the button below.
+    try {
+      window.location.href = deeplink
+    } catch {}
+    const id = setTimeout(() => setAttempted(true), 800)
+    return () => clearTimeout(id)
+  }, [params, flow])
+
+  const openApp = () => {
+    window.location.href = buildDeepLink()
+  }
 
   function buildDeepLink(): string {
     // Prefer adding a query 'flow=recovery' for iOS to reliably route to Reset UI
