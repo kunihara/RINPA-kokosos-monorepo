@@ -32,10 +32,14 @@ final class SupabaseAuthAdapter {
     func updateCachedToken() async {
         if let s = try? await client.auth.session, !s.accessToken.isEmpty {
             cachedAccessToken = s.accessToken
-            DLog("updateCachedToken: session present (prefix=\(s.accessToken.prefix(8)))")
+            #if DEBUG
+            print("[DEBUG] AuthAdapter updateCachedToken: session present (prefix=\(s.accessToken.prefix(8)))")
+            #endif
         } else {
             cachedAccessToken = nil
-            DLog("updateCachedToken: no session")
+            #if DEBUG
+            print("[DEBUG] AuthAdapter updateCachedToken: no session")
+            #endif
         }
     }
 
@@ -47,11 +51,15 @@ final class SupabaseAuthAdapter {
             // refresh成功後に最新セッションを取得してキャッシュ
             if let s = try? await client.auth.session, !s.accessToken.isEmpty {
                 cachedAccessToken = s.accessToken
-                DLog("refresh: ok (prefix=\(s.accessToken.prefix(8)))")
+                #if DEBUG
+                print("[DEBUG] AuthAdapter refresh: ok (prefix=\(s.accessToken.prefix(8)))")
+                #endif
                 return true
             } else {
                 cachedAccessToken = nil
-                DLog("refresh: ok but no session")
+                #if DEBUG
+                print("[DEBUG] AuthAdapter refresh: ok but no session")
+                #endif
                 return false
             }
         } catch {
@@ -70,13 +78,17 @@ final class SupabaseAuthAdapter {
         // Fast-fail if no local session at all
         guard let _ = try? await client.auth.session else {
             cachedAccessToken = nil
-            DLog("validateOnline: no local session")
+            #if DEBUG
+            print("[DEBUG] AuthAdapter validateOnline: no local session")
+            #endif
             return false
         }
         // Attempt to refresh; this performs a server-side validation implicitly
         let ok = await refresh()
         if !ok { cachedAccessToken = nil }
-        DLog("validateOnline result=\(ok)")
+        #if DEBUG
+        print("[DEBUG] AuthAdapter validateOnline result=\(ok)")
+        #endif
         return ok
     }
 }

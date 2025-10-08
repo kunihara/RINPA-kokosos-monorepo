@@ -25,19 +25,31 @@ enum DeepLinkHandler {
         // Deep link handling: for recovery flow, prioritize showing reset UI even if tokens are absent.
         Task { @MainActor in
             let flowType = (params["type"] ?? params["flow"])?.lowercased()
-            DLog("DeepLink type=\(flowType ?? "nil") urlFrag=#\(url.fragment ?? "") query=?\(url.query ?? "")")
+            #if DEBUG
+            print("[DEBUG] DeepLink type=\(flowType ?? \"nil\") urlFrag=#\(url.fragment ?? \"\") query=?\(url.query ?? \"\")")
+            #endif
             // Try to recover session if tokens are present (does nothing if not)
             do {
                 _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url)
-                DLog("session(from:) applied")
-            } catch { DLog("session(from:) failed: \(error.localizedDescription)") }
+                #if DEBUG
+                print("[DEBUG] DeepLink session(from:) applied")
+                #endif
+            } catch {
+                #if DEBUG
+                print("[DEBUG] DeepLink session(from:) failed: \(error.localizedDescription)")
+                #endif
+            }
             // Validate session server-side so that stale tokens don't slip through
             let ok = await SupabaseAuthAdapter.shared.validateOnline()
-            DLog("validateOnline=\(ok)")
+            #if DEBUG
+            print("[DEBUG] DeepLink validateOnline=\(ok)")
+            #endif
             if flowType == "recovery" {
                 let reset = ResetPasswordViewController()
                 guard let nav = navigation else { return }
-                DLog("push ResetPasswordViewController")
+                #if DEBUG
+                print("[DEBUG] DeepLink push ResetPasswordViewController")
+                #endif
                 nav.pushViewController(reset, animated: true)
                 // After restoring session from deep link, try device registration
                 PushRegistrationService.shared.ensureRegisteredIfPossible()

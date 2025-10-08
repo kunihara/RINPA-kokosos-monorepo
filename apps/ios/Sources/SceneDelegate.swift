@@ -24,16 +24,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       let hasRecoveryInFrag = frag.contains("type=recovery") || frag.contains("flow=recovery")
       let hasRecoveryInQuery = que.contains("type=recovery") || que.contains("flow=recovery")
       isRecoveryLaunch = hasRecoveryInFrag || hasRecoveryInQuery
-      DLog("launchURL=\(url.absoluteString.prefix(200)) isRecovery=\(isRecoveryLaunch)")
+      #if DEBUG
+      print("[DEBUG] SceneDelegate launchURL=\(url.absoluteString.prefix(200)) isRecovery=\(isRecoveryLaunch)")
+      #endif
       didHandleDeepLink = DeepLinkHandler.handle(url: url, in: root)
-      DLog("didHandleDeepLink=\(didHandleDeepLink)")
+      #if DEBUG
+      print("[DEBUG] SceneDelegate didHandleDeepLink=\(didHandleDeepLink)")
+      #endif
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
       // Policy: 初回起動かつローカルにSupabaseセッションが存在する場合は、前回インストールの残骸とみなし一度サインアウト
       let firstRun = (UserDefaults.standard.string(forKey: "InstallSentinel") == nil)
       if firstRun && !isRecoveryLaunch {
-        DLog("firstRun=true & non-recovery: signing out any residual session")
+        #if DEBUG
+        print("[DEBUG] SceneDelegate firstRun=true & non-recovery: signing out any residual session")
+        #endif
         if let _ = try? await SupabaseAuthAdapter.shared.client.auth.session {
           try? await SupabaseAuthAdapter.shared.client.auth.signOut()
           await SupabaseAuthAdapter.shared.updateCachedToken()
@@ -41,16 +47,22 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       }
       // Validate session with server (401/invalid will clear token)
       let valid = await SupabaseAuthAdapter.shared.validateOnline()
-      DLog("validateOnline=\(valid)")
+      #if DEBUG
+      print("[DEBUG] SceneDelegate validateOnline=\(valid)")
+      #endif
       // If deep link already pushed ResetPassword, do not override the stack
       if didHandleDeepLink, let top = root.viewControllers.last, top is ResetPasswordViewController {
-        DLog("keep ResetPassword on stack; skip root override")
+        #if DEBUG
+        print("[DEBUG] SceneDelegate keep ResetPassword on stack; skip root override")
+        #endif
         PushRegistrationService.shared.ensureRegisteredIfPossible()
         return
       }
       // Decide initial root by validated session presence only
       let has = (SupabaseAuthAdapter.shared.accessToken != nil)
-      DLog("routeInitial hasSession=\(has)")
+      #if DEBUG
+      print("[DEBUG] SceneDelegate routeInitial hasSession=\(has)")
+      #endif
       let target = has ? MainViewController() : SignInViewController()
       root.setViewControllers([target], animated: false)
       if has { PushRegistrationService.shared.ensureRegisteredIfPossible() }

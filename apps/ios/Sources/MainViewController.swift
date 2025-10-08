@@ -38,7 +38,9 @@ final class MainViewController: UIViewController {
         // Guard against phantom sessions: validate with server; if invalid, force back to SignIn
         Task { @MainActor in
             let ok = await SupabaseAuthAdapter.shared.validateOnline()
-            DLog("MainView appear validateOnline=\(ok)")
+            #if DEBUG
+            print("[DEBUG] MainView appear validateOnline=\(ok)")
+            #endif
             if !ok {
                 let signin = SignInViewController()
                 self.navigationController?.setViewControllers([signin], animated: true)
