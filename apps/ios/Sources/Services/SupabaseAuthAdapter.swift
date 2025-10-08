@@ -54,6 +54,7 @@ final class SupabaseAuthAdapter {
             #if DEBUG
             print("[SupabaseSDK] refresh error=\(error.localizedDescription)")
             #endif
+            cachedAccessToken = nil
             return false
         }
     }

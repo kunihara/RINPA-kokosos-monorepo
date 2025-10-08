@@ -21,7 +21,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
-      // Always refresh cached token; do not force signOut to preserve valid sessions across reinstall
+      // Proactively refresh session to avoid using stale/invalid tokens after reinstall or server-side revocation
+      let _ = await SupabaseAuthAdapter.shared.refresh()
       await SupabaseAuthAdapter.shared.updateCachedToken()
       // If deep link already pushed ResetPassword, do not override the stack
       if didHandleDeepLink, let top = root.viewControllers.last, top is ResetPasswordViewController {
