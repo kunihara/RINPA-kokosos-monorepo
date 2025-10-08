@@ -21,16 +21,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
-      // First-launch after reinstall: clear any residual session in Keychain to avoid phantom login
-      let firstLaunchKey = "HasLaunchedOnce"
-      let isFirstLaunch = !UserDefaults.standard.bool(forKey: firstLaunchKey)
-      if isFirstLaunch {
-        try? await SupabaseAuthAdapter.shared.client.auth.signOut()
-        await SupabaseAuthAdapter.shared.updateCachedToken()
-        UserDefaults.standard.set(true, forKey: firstLaunchKey)
-      } else {
-        await SupabaseAuthAdapter.shared.updateCachedToken()
-      }
+      // Always refresh cached token; do not force signOut to preserve valid sessions across reinstall
+      await SupabaseAuthAdapter.shared.updateCachedToken()
       // If deep link already pushed ResetPassword, do not override the stack
       if didHandleDeepLink, let top = root.viewControllers.last, top is ResetPasswordViewController {
         PushRegistrationService.shared.ensureRegisteredIfPossible()
@@ -40,7 +32,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       let has = (SupabaseAuthAdapter.shared.accessToken != nil)
       let target = has ? MainViewController() : SignInViewController()
       root.setViewControllers([target], animated: false)
-      PushRegistrationService.shared.ensureRegisteredIfPossible()
+      if has { PushRegistrationService.shared.ensureRegisteredIfPossible() }
     }
   }
 
