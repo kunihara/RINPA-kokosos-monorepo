@@ -156,7 +156,6 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 let info = Bundle.main.infoDictionary
                 let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
                 let redirect: String?
                 if let b = base, !b.isEmpty { redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback" }
                 else if let h = host, !h.isEmpty { redirect = "https://\(h)/auth/callback" }
