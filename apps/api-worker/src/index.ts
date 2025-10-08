@@ -501,6 +501,23 @@ async function handleDevicesRegister({ req, env }: Parameters<RouteHandler>[0]):
   } else {
     await sb.insert('devices', { user_id: userId, platform, fcm_token: token, valid: true })
   }
+  // Best-effort: remove duplicate rows if any (same user_id + fcm_token)
+  try {
+    const dups = await sb.select(
+      'devices',
+      'id,created_at',
+      `user_id=eq.${encodeURIComponent(userId)}&fcm_token=eq.${encodeURIComponent(token)}&order=created_at.asc`
+    )
+    if (dups.ok && (dups.data as any[]).length > 1) {
+      const keep = String((dups.data as any[])[0].id)
+      const removeIds = (dups.data as any[])
+        .map((r) => String(r.id))
+        .filter((x) => x !== keep)
+      if (removeIds.length > 0) {
+        await sb.delete('devices', `id=in.(${removeIds.map(encodeURIComponent).join(',')})`)
+      }
+    }
+  } catch {}
   return json({ ok: true })
 }
 
@@ -920,8 +937,24 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
   if (!contactId) return json({ error: 'forbidden' }, { status: 403 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
-  // Save
-  await sb.insert('reactions', { alert_id: alertId, contact_id: contactId, preset })
+  // Duplicate suppression window: if same preset from same contact within 5s, skip push (and skip DB insert)
+  let isDuplicateRecent = false
+  try {
+    const last = await sb.select(
+      'reactions',
+      'id,created_at,preset,contact_id',
+      `alert_id=eq.${encodeURIComponent(alertId)}&contact_id=eq.${encodeURIComponent(contactId)}&preset=eq.${encodeURIComponent(preset)}&order=created_at.desc&limit=1`,
+      1
+    )
+    if (last.ok && last.data.length > 0) {
+      const ts = new Date(String((last.data[0] as any).created_at)).getTime()
+      if (Date.now() - ts < 5000) isDuplicateRecent = true
+    }
+  } catch {}
+  if (!isDuplicateRecent) {
+    // Save only when not recent duplicate
+    await sb.insert('reactions', { alert_id: alertId, contact_id: contactId, preset })
+  }
   // Broadcast
   try {
     const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
@@ -931,8 +964,12 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
   let push: 'sent' | 'skipped' | 'error' = 'skipped'
   try {
     if (env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY) {
-      await pushNotifySenderForReaction(env, alertId, preset)
-      push = 'sent'
+      if (!isDuplicateRecent) {
+        await pushNotifySenderForReaction(env, alertId, preset)
+        push = 'sent'
+      } else {
+        push = 'skipped'
+      }
     } else {
       push = 'skipped'
     }
@@ -1051,7 +1088,7 @@ async function pushNotifySender(env: Env, alertId: string, msg: PushMessage) {
   const userId = String((a.data[0] as any).user_id)
   const devs = await sb.select('devices', 'fcm_token,platform,valid', `user_id=eq.${encodeURIComponent(userId)}&valid=is.true`)
   if (!devs.ok) return
-  const tokens = (devs.data as any[]).map((d) => String(d.fcm_token)).filter(Boolean)
+  const tokens = Array.from(new Set((devs.data as any[]).map((d) => String(d.fcm_token)).filter(Boolean)))
   await fcmSendToTokens(env, tokens, msg)
 }
 
