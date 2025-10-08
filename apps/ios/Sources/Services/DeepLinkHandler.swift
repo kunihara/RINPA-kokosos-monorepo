@@ -37,12 +37,18 @@ enum DeepLinkHandler {
                 return
             }
             // Non-recovery flows
+            let hasSession = (SupabaseAuthAdapter.shared.accessToken != nil)
             if flowType == "signup" || flowType == "email_confirmation" {
                 UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
                 UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
             }
-            let main = MainViewController()
-            navigation?.setViewControllers([main], animated: true)
+            if hasSession {
+                let main = MainViewController()
+                navigation?.setViewControllers([main], animated: true)
+            } else {
+                let signIn = SignInViewController()
+                navigation?.setViewControllers([signIn], animated: true)
+            }
             PushRegistrationService.shared.ensureRegisteredIfPossible()
         }
         return true
