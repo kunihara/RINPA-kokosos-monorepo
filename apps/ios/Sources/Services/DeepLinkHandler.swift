@@ -29,12 +29,9 @@ enum DeepLinkHandler {
                 if t == "recovery" {
                     // Password reset flow: show reset UI
                     let reset = ResetPasswordViewController()
-                    if let nav = navigation {
-                        // push to keep back navigation natural
-                        nav.pushViewController(reset, animated: true)
-                    } else {
-                        UIApplication.shared.keyWindow?.rootViewController?.show(reset, sender: nil)
-                    }
+                    guard let nav = navigation else { return }
+                    // push to keep back navigation natural
+                    nav.pushViewController(reset, animated: true)
                 } else {
                     // Signup/email confirmation etc: show main, enable onboarding flags
                     if t == "signup" || t == "email_confirmation" {
