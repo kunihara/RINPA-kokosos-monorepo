@@ -12,18 +12,21 @@
 
 ---
 
-## アーキテクチャ概要
+## アーキテクチャ概要（更新）
 - iOSアプリ：UIKit/Swift。CoreLocationで位置取得。3秒カウントダウン→API呼び出し。
 - API：Cloudflare Workers（TypeScript）。JWTトークン認証。SSEで受信者にライブ配信。
 - DB：Supabase（Postgres + RLS）。alerts/locations等の短期保持（24〜48hで自動削除）。
 - 受信Webページ：Next.js 14 (App Router)。静的SPAシェル＋APIからデータ取得。EventSourceでSSE購読。
-- 通知：AWS SESでメール送信（招待・SOS通知）。APNsは将来対応。
+- 通知：
+  - メール: AWS SES（招待・停止/到着）
+  - プッシュ: Firebase Cloud Messaging(FCM, HTTP v1) 経由で送信者デバイスへ通知（受信者のプリセット返信時）
+  - 備考: 停止時に送信者へのプッシュは送信しない（緊急/帰る共通）。
 - 地図：Mapbox。
 - ホスティング：WebはCloudflare Pages、APIはWorkers。
 
 ---
 
-## データモデル（最小）
+## データモデル（最小・更新）
 - users(id, apple_sub, apns_token, email, created_at)
 - contacts(id, user_id, name, email, role, capabilities)
 - alerts(id, user_id, type[emergency|going_home], status[active|ended|timeout], started_at, ended_at, max_duration_sec, revoked_at)
@@ -31,12 +34,13 @@
 - deliveries(id, alert_id, contact_id, channel[push|email], status, created_at)
 - revocations(alert_id, revoked_at)
 - reactions(id, alert_id, contact_id, preset, created_at)  ← 受信者のプリセット返信を保存
+- devices(id, user_id, platform[ios|android|web], fcm_token, valid, last_seen_at, created_at) ← 送信者端末のプッシュ送信先
 
 保持期間は alerts/locations/deliveries を 24〜48h に制限。
 
 ---
 
-## APIエンドポイント
+## APIエンドポイント（更新）
 
 ### 送信者用 (iOSアプリ)
 - POST `/alert/start` … 共有開始（初期位置・バッテリー送信／shareToken生成／メール送信）
@@ -44,6 +48,8 @@
 - POST `/alert/:id/stop` … 停止／到着通知
 - POST `/alert/:id/extend` … 共有時間を延長（max_duration_sec を +N秒／サーバ側で5分〜6時間にクランプ）
 - POST `/alert/:id/revoke` … 即時失効
+- POST `/devices/register` … FCMトークン登録（platform, fcm_token）
+- POST `/devices/unregister` … FCMトークン解除
 
 ### 受信者用 (Web公開API・JWT必須)
 - GET `/public/alert/:token` … 初期データ（種別type・状態・最新位置・残り時間・権限）
@@ -71,6 +77,13 @@ SSEイベント（例）
 - ログ：トークンは必ずマスク化して保存。
 - データ最小化：名前や電話番号は受信者権限に応じて制御。
 - 権限（受信者）：JWTに`contact_id`がある個別招待リンクのみ返信可（`can_reply=true`）。汎用共有トークンは返信不可。
+- ヘルスチェック：`GET /_health` で FCM 設定有無を確認可能（`has.FCM_*`）。
+
+---
+
+## 通知動作（更新）
+- 受信者のプリセット返信時：送信者デバイスへFCMプッシュを送信（重複抑止あり：同一受信者・同一プリセットの5秒以内連打はスキップ）。
+- 停止時（緊急/帰る）：送信者へのプッシュは送らない。受信者にはメールで停止/到着を通知。
 
 ---
 
@@ -140,6 +153,12 @@ SSEイベント（例）
   - 返信トースト（例: 「返信: OK」）
 - CTAボタン：電話・プリセット返信（複数プリセット）・110へ電話（権限に応じて制御）
 
+開発者向けSSE診断（追加）
+- `/_diag/resolve/:token` … トークンから `alert_id` を解決
+- `/_diag/alert/:id` … DO接続状況（sockets/accepts/broadcasts）
+- `/_diag/alert/:id/publish` … 診断イベントを配信
+- Web: `/diag/sse` … ブラウザ上で token を貼り付けて接続/配信確認
+
 ---
 
 ## iOS クライアント接続仕様（追記）
@@ -163,6 +182,7 @@ SSEイベント（例）
 - 実機での注意
   - 実機は `localhost` に到達できないため、公開ドメイン（例: workers.dev のサブドメインやカスタムドメイン）またはLAN IPを指定する。
   - DevはATS緩和（http可）。Stage/Prodはhttps必須。
+  - 位置更新間隔（緊急モードの目安）: フォアグラウンド約60秒、バックグラウンド最短30秒（電池/OS条件で変動）。
 
 - エラーハンドリング（アプリ表示）
   - ホスト解決失敗（cannotFindHost）: 「設定 > APIベースURL」で到達可能なURLを促すメッセージを表示。
