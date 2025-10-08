@@ -12,8 +12,13 @@ enum DeepLinkHandler {
         var params: [String: String] = [:]
         for pair in fragment.split(separator: "&") {
             let kv = pair.split(separator: "=", maxSplits: 1).map { String($0) }
-            if kv.count == 2 {
-                params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1]
+            if kv.count == 2 { params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
+        }
+        // Also parse query string to supplement (e.g., flow=recovery)
+        if let q = url.query, !q.isEmpty {
+            for pair in q.split(separator: "&") {
+                let kv = pair.split(separator: "=", maxSplits: 1).map { String($0) }
+                if kv.count == 2, params[kv[0]] == nil { params[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
             }
         }
 
@@ -25,7 +30,7 @@ enum DeepLinkHandler {
                 // Refresh cached token for APIClient headers
                 await SupabaseAuthAdapter.shared.updateCachedToken()
                 // Route by flow type
-                let t = params["type"]?.lowercased()
+                let t = (params["type"] ?? params["flow"])?.lowercased()
                 if t == "recovery" {
                     // Password reset flow: show reset UI
                     let reset = ResetPasswordViewController()

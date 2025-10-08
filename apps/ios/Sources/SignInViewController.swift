@@ -157,8 +157,8 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let redirect: String?
-                if let b = base, !b.isEmpty { redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback" }
-                else if let h = host, !h.isEmpty { redirect = "https://\(h)/auth/callback" }
+                if let b = base, !b.isEmpty { redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback?flow=recovery" }
+                else if let h = host, !h.isEmpty { redirect = "https://\(h)/auth/callback?flow=recovery" }
                 else { redirect = nil }
                 let client = SupabaseAuthAdapter.shared.client
                 if let redirect, let url = URL(string: redirect) {

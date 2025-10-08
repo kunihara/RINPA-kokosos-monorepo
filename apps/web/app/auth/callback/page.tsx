@@ -30,19 +30,19 @@ export default function AuthCallbackPage() {
     window.location.href = url
   }
 
-  // Derive flow type from URL hash or search (e.g., type=recovery)
+  // Derive flow type from URL hash or search
   const flow = useMemo(() => {
     // Prefer hash params
     if (params) {
       const q = new URLSearchParams(params.replace(/^#/, ''))
-      const t = q.get('type')
-      if (t) return t
+      const t = q.get('type') || q.get('flow')
+      if (t) return t.toLowerCase()
     }
     // Fallback: query params
     if (search) {
       const q2 = new URLSearchParams(search.replace(/^\?/, ''))
-      const t2 = q2.get('type')
-      if (t2) return t2
+      const t2 = (q2.get('type') || q2.get('flow'))
+      if (t2) return t2.toLowerCase()
     }
     return null
   }, [params, search])
