@@ -16,14 +16,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     // Handle URL if app launched via deep link
     var didHandleDeepLink = false
+    var isRecoveryLaunch = false
     if let url = connectionOptions.urlContexts.first?.url {
+      // Detect recovery in query or fragment (type/flow)
+      let frag = url.fragment ?? ""
+      let que = url.query ?? ""
+      let hasRecoveryInFrag = frag.contains("type=recovery") || frag.contains("flow=recovery")
+      let hasRecoveryInQuery = que.contains("type=recovery") || que.contains("flow=recovery")
+      isRecoveryLaunch = hasRecoveryInFrag || hasRecoveryInQuery
       didHandleDeepLink = DeepLinkHandler.handle(url: url, in: root)
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
       // Policy: 初回起動かつローカルにSupabaseセッションが存在する場合は、前回インストールの残骸とみなし一度サインアウト
       let firstRun = (UserDefaults.standard.string(forKey: "InstallSentinel") == nil)
-      if firstRun {
+      if firstRun && !isRecoveryLaunch {
         if let _ = try? await SupabaseAuthAdapter.shared.client.auth.session {
           try? await SupabaseAuthAdapter.shared.client.auth.signOut()
           await SupabaseAuthAdapter.shared.updateCachedToken()
