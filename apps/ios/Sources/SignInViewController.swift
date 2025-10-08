@@ -124,9 +124,9 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 let client = SupabaseAuthAdapter.shared.client
                 // Supabase Swift v2 uses signIn(email:password:)
                 try await client.auth.signIn(email: email, password: pass)
-                // ルートをMainへ切替
+                // Mainへ遷移（pop系で戻せるよう push を採用）
                 let main = MainViewController()
-                navigationController?.setViewControllers([main], animated: true)
+                navigationController?.pushViewController(main, animated: true)
                 // サインイン直後にデバイス登録を試行
                 PushRegistrationService.shared.ensureRegisteredIfPossible()
             } catch {
@@ -202,7 +202,7 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 }
                 try await client.auth.signInWithOAuth(provider: prov, redirectTo: redirectURI, scopes: "email profile offline_access")
                 let main = MainViewController()
-                navigationController?.setViewControllers([main], animated: true)
+                navigationController?.pushViewController(main, animated: true)
             } catch {
                 showAlert("サインイン失敗", error.localizedDescription)
             }

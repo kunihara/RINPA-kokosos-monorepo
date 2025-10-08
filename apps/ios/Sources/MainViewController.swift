@@ -381,9 +381,15 @@ final class MainViewController: UIViewController {
             PushRegistrationService.shared.unregisterLastToken()
             try await SupabaseAuthAdapter.shared.client.auth.signOut()
         }
-        // ルートをサインイン画面へ
-        let signin = SignInViewController()
-        navigationController?.setViewControllers([signin], animated: true)
+        // 可能ならサインイン画面へ pop（なければセット）
+        if let nav = navigationController {
+            if let signInVC = nav.viewControllers.first(where: { $0 is SignInViewController }) {
+                nav.popToViewController(signInVC, animated: true)
+            } else {
+                let signin = SignInViewController()
+                nav.setViewControllers([signin], animated: true)
+            }
+        }
     }
 }
 
