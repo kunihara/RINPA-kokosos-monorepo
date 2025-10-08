@@ -47,12 +47,14 @@ enum DeepLinkHandler {
             #if DEBUG
             print("[DEBUG] DeepLink validateOnline=\(ok)")
             #endif
-            if flowType == "recovery" {
+            // Heuristic: treat as recovery if explicit or if we only have a PKCE code in query and no fragment tokens
+            let implicitRecovery = (url.query?.contains("code=") ?? false) && ((url.fragment ?? "").isEmpty)
+            if flowType == "recovery" || implicitRecovery {
                 let reset = ResetPasswordViewController()
                 guard let nav = navigation else { return }
-                #if DEBUG
-                print("[DEBUG] DeepLink push ResetPasswordViewController")
-                #endif
+            #if DEBUG
+                print("[DEBUG] DeepLink push ResetPasswordViewController (implicit=\(implicitRecovery))")
+            #endif
                 nav.pushViewController(reset, animated: true)
                 // After restoring session from deep link, try device registration
                 PushRegistrationService.shared.ensureRegisteredIfPossible()
