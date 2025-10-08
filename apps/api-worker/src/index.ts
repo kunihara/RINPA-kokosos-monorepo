@@ -108,6 +108,10 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/_health$/, handler: handleHealth },
   { method: 'GET', pattern: /^\/_diag\/alert\/([^/]+)$/, handler: handleDiag },
   { method: 'POST', pattern: /^\/_diag\/alert\/([^/]+)\/publish$/, handler: handleDiagPublish },
+  // Diag helpers by token (dev support)
+  { method: 'GET', pattern: /^\/_diag\/resolve\/([^/]+)$/, handler: handleDiagResolveToken },
+  { method: 'GET', pattern: /^\/_diag\/alert\/by-token\/([^/]+)$/, handler: handleDiagAlertByToken },
+  { method: 'POST', pattern: /^\/_diag\/alert\/by-token\/([^/]+)\/publish$/, handler: handleDiagAlertPublishByToken },
   { method: 'GET', pattern: /^\/_diag\/whoami$/, handler: handleWhoAmI },
   // Contacts (sender auth required)
   { method: 'GET', pattern: /^\/contacts$/, handler: handleContactsList },
@@ -183,6 +187,48 @@ async function handleDiagPublish({ req, env }: Parameters<RouteHandler>[0]): Pro
   const payload = body || JSON.stringify({ type: 'diagnostic', ts: Date.now() })
   const res = await stub.fetch('https://do/publish', { method: 'POST', body: payload })
   return new Response(JSON.stringify({ ok: res.ok }), { headers: { 'content-type': 'application/json' } })
+}
+
+// ---- Dev helper: resolve a public token to payload (alert_id/contact_id)
+async function handleDiagResolveToken({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/_diag\/resolve\/([^/]+)/)
+  if (!m) return notFound()
+  const token = decodeURIComponent(m[1])
+  const payload = await verifyJwtHs256(token, env.JWT_SECRET)
+  if (!payload) return json({ ok: false, error: 'invalid_token' }, { status: 400 })
+  const out: any = { ok: true }
+  for (const k of ['alert_id', 'contact_id', 'scope', 'exp']) {
+    if (k in payload) (out as any)[k] = (payload as any)[k]
+  }
+  return json(out)
+}
+
+async function handleDiagAlertByToken({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/_diag\/alert\/by-token\/([^/]+)/)
+  if (!m) return notFound()
+  const token = decodeURIComponent(m[1])
+  const payload = await verifyJwtHs256(token, env.JWT_SECRET)
+  if (!payload) return json({ ok: false, error: 'invalid_token' }, { status: 400 })
+  const alertId = String((payload as any).alert_id || '')
+  if (!alertId) return json({ ok: false, error: 'no_alert_id' }, { status: 400 })
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+  const res = await stub.fetch('https://do/diag')
+  const txt = await res.text()
+  return new Response(txt, { status: res.status, headers: { 'content-type': 'application/json' } })
+}
+
+async function handleDiagAlertPublishByToken({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const m = req.url.match(/\/_diag\/alert\/by-token\/([^/]+)\/publish/)
+  if (!m) return notFound()
+  const token = decodeURIComponent(m[1])
+  const payload = await verifyJwtHs256(token, env.JWT_SECRET)
+  if (!payload) return json({ ok: false, error: 'invalid_token' }, { status: 400 })
+  const alertId = String((payload as any).alert_id || '')
+  if (!alertId) return json({ ok: false, error: 'no_alert_id' }, { status: 400 })
+  const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
+  const body = JSON.stringify({ type: 'diagnostic', via: 'by-token', ts: Date.now() })
+  const r = await stub.fetch('https://do/publish', { method: 'POST', body })
+  return json({ ok: r.ok })
 }
 
 // Quick diagnostic: who am I according to Authorization header?
