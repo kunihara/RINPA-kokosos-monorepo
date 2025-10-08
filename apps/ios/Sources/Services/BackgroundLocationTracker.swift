@@ -6,7 +6,7 @@ final class BackgroundLocationTracker: NSObject, CLLocationManagerDelegate {
     private let api = APIClient()
     private var alertId: String?
     private var lastSentAt: Date?
-    private let minSendInterval: TimeInterval = 60 // 秒間隔の下限（過送信防止）
+    private let minSendInterval: TimeInterval = 30 // 秒間隔の下限（過送信防止）
 
     override init() {
         super.init()
@@ -69,4 +69,3 @@ final class BackgroundLocationTracker: NSObject, CLLocationManagerDelegate {
         }
     }
 }
-

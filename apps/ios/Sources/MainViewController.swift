@@ -23,7 +23,7 @@ final class MainViewController: UIViewController {
     private let recipientsButton = UIButton(type: .system)
     private var session: AlertSession? { didSet { updateControls() } }
     private var didAutoShowOnboarding = false
-    private let updateIntervalSec: TimeInterval = 120 // 1〜5分の範囲で調整可（ここは2分）
+    private let updateIntervalSec: TimeInterval = 60 // 1〜5分の範囲で調整可（ここは1分）
     private var reminderIntervalSec: TimeInterval { TimeInterval(SettingsStore.shared.arrivalReminderMinutes * 60) }
 
     override func viewDidLoad() {
