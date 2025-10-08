@@ -13,6 +13,7 @@ export default function AuthCallbackPage() {
     return 'kokosos://oauth-callback'
   })()
   const hash = typeof window !== 'undefined' ? window.location.hash : ''
+  const search = typeof window !== 'undefined' ? window.location.search : ''
   const params = useMemo(() => (hash && hash.startsWith('#') ? hash : ''), [hash])
   useEffect(() => {
     const url = scheme + (params || '')
@@ -29,12 +30,22 @@ export default function AuthCallbackPage() {
     window.location.href = url
   }
 
-  // Derive flow type from URL hash (e.g., type=recovery)
+  // Derive flow type from URL hash or search (e.g., type=recovery)
   const flow = useMemo(() => {
-    if (!params) return null
-    const q = new URLSearchParams(params.replace(/^#/, ''))
-    return q.get('type')
-  }, [params])
+    // Prefer hash params
+    if (params) {
+      const q = new URLSearchParams(params.replace(/^#/, ''))
+      const t = q.get('type')
+      if (t) return t
+    }
+    // Fallback: query params
+    if (search) {
+      const q2 = new URLSearchParams(search.replace(/^\?/, ''))
+      const t2 = q2.get('type')
+      if (t2) return t2
+    }
+    return null
+  }, [params, search])
 
   return (
     <main style={{ padding: 24, display: 'grid', gap: 16 }}>
