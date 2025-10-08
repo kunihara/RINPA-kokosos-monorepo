@@ -28,8 +28,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         PushRegistrationService.shared.ensureRegisteredIfPossible()
         return
       }
-      // Decide initial root strictly by current Supabase session presence
+      // First-launch adopt gate: if this is the first run AND we have a session, ask user whether to adopt it
+      let firstLaunchKey = "HasLaunchedOnce"
+      let isFirstLaunch = !UserDefaults.standard.bool(forKey: firstLaunchKey)
       let has = (SupabaseAuthAdapter.shared.accessToken != nil)
+      if isFirstLaunch && has {
+        let adopt = SessionAdoptViewController()
+        root.setViewControllers([adopt], animated: false)
+        return
+      }
+      // Otherwise decide initial root by session presence
       let target = has ? MainViewController() : SignInViewController()
       root.setViewControllers([target], animated: false)
       if has { PushRegistrationService.shared.ensureRegisteredIfPossible() }
