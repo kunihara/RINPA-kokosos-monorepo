@@ -35,6 +35,12 @@ final class MainViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        // Guard against phantom sessions: if Supabase session is missing, force back to SignIn
+        if SupabaseAuthAdapter.shared.accessToken == nil {
+            let signin = SignInViewController()
+            navigationController?.setViewControllers([signin], animated: true)
+            return
+        }
         // プロフィールオンボーディング（初回1回だけ）
         if UserDefaults.standard.bool(forKey: "ShouldShowProfileOnboardingOnce"), presentedViewController == nil {
             UserDefaults.standard.set(false, forKey: "ShouldShowProfileOnboardingOnce")
