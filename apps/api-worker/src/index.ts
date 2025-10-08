@@ -658,6 +658,8 @@ async function handleAccountDelete({ req, env }: Parameters<RouteHandler>[0]): P
 
   // Best effort: delete app data (alerts, contacts, users) before Auth user deletion
   try {
+    // Delete devices (FCM tokens) registered for this user
+    await sb.delete('devices', `user_id=eq.${encodeURIComponent(userId)}`)
     // Delete alerts (will cascade locations, deliveries(alert), alert_recipients, reactions(alert), revocations)
     await sb.delete('alerts', `user_id=eq.${encodeURIComponent(userId)}`)
     // Delete contacts (deliveries(contact) will cascade if FK, reactions(alert) already gone)
