@@ -16,18 +16,17 @@ export default function AuthCallbackPage() {
   const search = typeof window !== 'undefined' ? window.location.search : ''
   const params = useMemo(() => (hash && hash.startsWith('#') ? hash : ''), [hash])
   useEffect(() => {
-    const url = scheme + (params || '')
+    const deeplink = buildDeepLink()
     // Try immediate deep-link; if blocked, user can tap the button below.
     try {
-      window.location.href = url
+      window.location.href = deeplink
     } catch {}
     const id = setTimeout(() => setAttempted(true), 800)
-    return () => clearTimeout(id)
-  }, [params])
+    return () => clearInterval(id)
+  }, [params, flow])
 
   const openApp = () => {
-    const url = scheme + (params || '')
-    window.location.href = url
+    window.location.href = buildDeepLink()
   }
 
   // Derive flow type from URL hash or search
@@ -46,6 +45,14 @@ export default function AuthCallbackPage() {
     }
     return null
   }, [params, search])
+
+  function buildDeepLink(): string {
+    // Prefer adding a query 'flow=recovery' for iOS to reliably route to Reset UI
+    // Keep hash params if present (tokens etc.).
+    const q = flow ? `?flow=${encodeURIComponent(flow)}` : ''
+    const h = params || ''
+    return `${scheme}${q}${h}`
+  }
 
   return (
     <main style={{ padding: 24, display: 'grid', gap: 16 }}>
