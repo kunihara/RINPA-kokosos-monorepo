@@ -21,6 +21,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
+      // Policy: 初回起動かつローカルにSupabaseセッションが存在する場合は、前回インストールの残骸とみなし一度サインアウト
+      let firstRun = (UserDefaults.standard.string(forKey: "InstallSentinel") == nil)
+      if firstRun {
+        if let _ = try? await SupabaseAuthAdapter.shared.client.auth.session {
+          try? await SupabaseAuthAdapter.shared.client.auth.signOut()
+          await SupabaseAuthAdapter.shared.updateCachedToken()
+        }
+      }
       // Validate session with server (401/invalid will clear token)
       _ = await SupabaseAuthAdapter.shared.validateOnline()
       // If deep link already pushed ResetPassword, do not override the stack
@@ -33,6 +41,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       let target = has ? MainViewController() : SignInViewController()
       root.setViewControllers([target], animated: false)
       if has { PushRegistrationService.shared.ensureRegisteredIfPossible() }
+      // After routing, align install sentinel across storages
+      InstallGuard.ensureSentinel()
     }
   }
 
