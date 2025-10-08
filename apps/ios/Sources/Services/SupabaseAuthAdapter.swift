@@ -58,4 +58,27 @@ final class SupabaseAuthAdapter {
             return false
         }
     }
+
+    /// Online validation: verifies the current session with Supabase Auth.
+    /// Returns true if a valid user is returned, otherwise clears cached token and returns false.
+    @discardableResult
+    func validateOnline() async -> Bool {
+        do {
+            // If there's no local session, treat as invalid quickly
+            guard let _ = try? await client.auth.session else {
+                cachedAccessToken = nil
+                return false
+            }
+            // Ask server for current user; 401/invalid will throw
+            _ = try await client.auth.getUser()
+            // keep cached token in sync
+            if let s = try? await client.auth.session, !s.accessToken.isEmpty {
+                cachedAccessToken = s.accessToken
+            }
+            return true
+        } catch {
+            cachedAccessToken = nil
+            return false
+        }
+    }
 }

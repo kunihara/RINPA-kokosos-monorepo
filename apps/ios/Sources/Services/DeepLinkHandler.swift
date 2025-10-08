@@ -27,7 +27,8 @@ enum DeepLinkHandler {
             let flowType = (params["type"] ?? params["flow"])?.lowercased()
             // Try to recover session if tokens are present (does nothing if not)
             do { _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url) } catch {}
-            await SupabaseAuthAdapter.shared.updateCachedToken()
+            // Validate session server-side so that stale tokens don't slip through
+            _ = await SupabaseAuthAdapter.shared.validateOnline()
             if flowType == "recovery" {
                 let reset = ResetPasswordViewController()
                 guard let nav = navigation else { return }
