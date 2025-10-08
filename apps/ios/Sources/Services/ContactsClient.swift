@@ -31,8 +31,9 @@ final class ContactsClient {
         var comps = URLComponents(url: api.baseURL, resolvingAgainstBaseURL: false)!
         comps.path = (comps.path as NSString).appendingPathComponent("contacts")
         comps.queryItems = [URLQueryItem(name: "status", value: status)]
+        guard let url = comps.url else { throw URLError(.badURL) }
         let (data, http) = try await execute {
-            var req = URLRequest(url: comps.url!)
+            var req = URLRequest(url: url)
             apiApplyAuth(&req)
             return req
         }
