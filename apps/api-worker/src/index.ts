@@ -965,7 +965,7 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
   try {
     if (env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY) {
       if (!isDuplicateRecent) {
-        await pushNotifySenderForReaction(env, alertId, preset)
+        await pushNotifySenderForReaction(env, alertId, preset, contactId)
         push = 'sent'
       } else {
         push = 'skipped'
@@ -1092,10 +1092,61 @@ async function pushNotifySender(env: Env, alertId: string, msg: PushMessage) {
   await fcmSendToTokens(env, tokens, msg)
 }
 
-async function pushNotifySenderForReaction(env: Env, alertId: string, preset: string) {
+async function pushNotifySenderForReaction(env: Env, alertId: string, preset: string, contactId?: string) {
   const labelMap: Record<string, string> = { ok: 'OK', on_my_way: '向かっています', will_call: '今すぐ連絡します', call_police: '通報しました' }
-  const title = `受信者から『${labelMap[preset] || preset}』`
-  const body = '引き続き見守りをお願いします'
+  let contactLabel: string | null = null
+  let alertType: 'emergency' | 'going_home' = 'emergency'
+  try {
+    // Fetch alert type for mode-specific wording
+    try {
+      const sb = supabase(env)
+      if (sb) {
+        const a = await sb.select('alerts', 'type', `id=eq.${encodeURIComponent(alertId)}`, 1)
+        if (a.ok && a.data.length > 0) {
+          const t = String((a.data[0] as any).type)
+          if (t === 'going_home' || t === 'emergency') alertType = t as any
+        }
+      }
+    } catch {}
+    if (contactId) {
+      const sb = supabase(env)
+      if (sb) {
+        const res = await sb.select('contacts', 'name,email', `id=eq.${encodeURIComponent(contactId)}`, 1)
+        if (res.ok && res.data.length > 0) {
+          const c = res.data[0] as any
+          contactLabel = (c.name && String(c.name).trim().length > 0) ? String(c.name) : (c.email ? String(c.email).split('@')[0] : null)
+        }
+      }
+    }
+  } catch {}
+  const label = labelMap[preset] || preset
+  const who = contactLabel || '見守り相手'
+  // 文言をプリセット別に最適化（送信者アプリでの受け取りを想定し、"共有画面" など送信者が見られないUI言及を避ける）
+  let title: string
+  let body: string
+  switch (preset) {
+    case 'ok':
+      title = `${who} から「OK」の返信`
+      body = (alertType === 'going_home')
+        ? '受信済みです。到着まで無理をせず、安全に移動してください。'
+        : '返信を受け取りました。必要なときは相手から連絡が入ります。'
+      break
+    case 'on_my_way':
+      title = `${who} から「向かっています」の返信`
+      body = '合流予定です。安全な場所でお待ちください。'
+      break
+    case 'will_call':
+      title = `${who} から「今すぐ連絡します」の返信`
+      body = 'まもなく電話が入ります。周囲の安全を確保してください。'
+      break
+    case 'call_police':
+      title = `${who} から「通報しました」の連絡`
+      body = '安全を最優先に。必要なら緊急通報・連絡を行ってください。'
+      break
+    default:
+      title = `${who} から返信: 「${label}」`
+      body = '返信を受け取りました。必要に応じて連絡してください。'
+  }
   await pushNotifySender(env, alertId, { title, body, category: 'reaction', data: { alert_id: alertId, preset } })
 }
 
