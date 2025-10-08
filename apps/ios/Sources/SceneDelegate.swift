@@ -15,12 +15,19 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     self.window = window
 
     // Handle URL if app launched via deep link
+    var didHandleDeepLink = false
     if let url = connectionOptions.urlContexts.first?.url {
-      _ = DeepLinkHandler.handle(url: url, in: root)
+      didHandleDeepLink = DeepLinkHandler.handle(url: url, in: root)
     }
     // Decide initial root after loading persisted session
     Task { @MainActor in
       await SupabaseAuthAdapter.shared.updateCachedToken()
+      // If deep link already pushed ResetPassword, do not override the stack
+      if didHandleDeepLink, let top = root.viewControllers.last, top is ResetPasswordViewController {
+        // still ensure device registration if signed in
+        PushRegistrationService.shared.ensureRegisteredIfPossible()
+        return
+      }
       let has = (SupabaseAuthAdapter.shared.accessToken != nil) || (APIClient().currentAuthToken() != nil)
       let target = has ? MainViewController() : SignInViewController()
       root.setViewControllers([target], animated: false)

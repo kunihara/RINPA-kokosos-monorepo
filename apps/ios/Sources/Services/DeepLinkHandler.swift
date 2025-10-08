@@ -22,40 +22,28 @@ enum DeepLinkHandler {
             }
         }
 
-        // Deep link handling: let Supabase SDK establish session from the URL
+        // Deep link handling: for recovery flow, prioritize showing reset UI even if tokens are absent.
         Task { @MainActor in
-            do {
-                // Supabase Swift v2: recover session from redirect URL
-                _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url)
-                // Refresh cached token for APIClient headers
-                await SupabaseAuthAdapter.shared.updateCachedToken()
-                // Route by flow type
-                let t = (params["type"] ?? params["flow"])?.lowercased()
-                if t == "recovery" {
-                    // Password reset flow: show reset UI
-                    let reset = ResetPasswordViewController()
-                    guard let nav = navigation else { return }
-                    // push to keep back navigation natural
-                    nav.pushViewController(reset, animated: true)
-                } else {
-                    // Signup/email confirmation etc: show main, enable onboarding flags
-                    if t == "signup" || t == "email_confirmation" {
-                        UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
-                        UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
-                    }
-                    let main = MainViewController()
-                    navigation?.setViewControllers([main], animated: true)
-                }
+            let flowType = (params["type"] ?? params["flow"])?.lowercased()
+            // Try to recover session if tokens are present (does nothing if not)
+            do { _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url) } catch {}
+            await SupabaseAuthAdapter.shared.updateCachedToken()
+            if flowType == "recovery" {
+                let reset = ResetPasswordViewController()
+                guard let nav = navigation else { return }
+                nav.pushViewController(reset, animated: true)
                 // After restoring session from deep link, try device registration
                 PushRegistrationService.shared.ensureRegisteredIfPossible()
-            } catch {
-                // Even if session parsing fails, navigate to SignIn screen to avoid being stuck
-                // and let the user proceed manually (e.g., password login after confirmation)
-                let signIn = SignInViewController()
-                if let nav = navigation {
-                    nav.setViewControllers([signIn], animated: true)
-                }
+                return
             }
+            // Non-recovery flows
+            if flowType == "signup" || flowType == "email_confirmation" {
+                UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
+                UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
+            }
+            let main = MainViewController()
+            navigation?.setViewControllers([main], animated: true)
+            PushRegistrationService.shared.ensureRegisteredIfPossible()
         }
         return true
     }

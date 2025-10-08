@@ -57,8 +57,8 @@ export default function AuthCallbackPage() {
         </>
       ) : (
         <>
-          <p>メール確認を完了しました。</p>
-          <p>アプリに戻るを押してください。</p>
+          <p>手続きが完了しました。</p>
+          <p>アプリに戻るを押してください（パスワード再設定の場合もこのまま進めます）。</p>
         </>
       )}
       <button onClick={openApp} style={{ padding: '10px 14px', background: '#111827', color: 'white', borderRadius: 8, border: 'none' }}>アプリに戻る</button>
