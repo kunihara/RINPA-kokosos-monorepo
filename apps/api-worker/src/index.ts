@@ -725,20 +725,31 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
   const ended_at = new Date().toISOString()
   await sb.update('alerts', { status: 'ended', ended_at }, `id=eq.${alertId}`)
+  // Check alert type to decide push behavior on stop
+  let alertType: 'emergency' | 'going_home' | null = null
+  try {
+    const t = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
+    if (t.ok && t.data.length > 0) {
+      const v = String((t.data[0] as any).type)
+      if (v === 'emergency' || v === 'going_home') alertType = v as any
+    }
+  } catch {}
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
   await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
   // Push notify sender about arrival/stop (best-effort)
   try {
-    await pushNotifySender(env, alertId, {
-      title: '到着しました',
-      body: '共有を停止しました。ご安心ください。',
-      category: 'arrival',
-    })
+    // Skip self-push for going_home mode (not meaningful)
+    if (alertType !== 'going_home') {
+      await pushNotifySender(env, alertId, {
+        title: '共有を停止しました',
+        body: '状況の共有を終了しました。',
+        category: 'arrival',
+      })
+    }
   } catch {}
   // Send stop/arrival emails to recipients (both modes)
   try {
-    const a = await sb.select('alerts', 'type', `id=eq.${alertId}`, 1)
-    const aType = (a.ok && a.data.length > 0) ? String((a.data[0] as any).type) : ''
+    const aType = alertType || ''
     if (env.WEB_PUBLIC_BASE) {
       const list = await sb.select('alert_recipients', 'contact_id,email', `alert_id=eq.${alertId}&purpose=eq.start`)
       const emailer = makeEmailProvider(env)
