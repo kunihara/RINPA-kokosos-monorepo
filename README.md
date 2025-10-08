@@ -107,3 +107,13 @@ Security
   - 401 invalid_token: Workersの`SUPABASE_URL`がiOSのプロジェクトと不一致/`REQUIRE_AUTH_SENDER`設定の確認
   - 500 server_misconfig: Workersの`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`未設定
   - 400 invalid_location: `lat/lng`未送信（通常は位置取得完了後に送信）
+
+Push notifications (FCM)
+- Server uses Firebase Cloud Messaging (HTTP v1) to deliver push notifications to the sender’s devices when the receiver reacts (e.g., presses “OK”).
+- Requirements:
+  - Configure these env vars on the API (Workers): `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` (see `.env.example`).
+  - iOS app must include a valid `GoogleService-Info.plist` for the environment and obtain an FCM token.
+  - The signed-in iOS app registers the FCM token via `POST /devices/register` (handled automatically in the app).
+- Diagnostics:
+  - `GET /_health` now shows FCM presence flags.
+  - Pressing a reaction on the receiver page calls `POST /public/alert/:token/react` and the response JSON includes a `push` field: `sent`|`skipped`|`error`.

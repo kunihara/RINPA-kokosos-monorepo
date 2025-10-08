@@ -144,6 +144,9 @@ async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Respo
       JWT_SECRET: !!env.JWT_SECRET,
       SUPABASE_URL: !!env.SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY: !!env.SUPABASE_SERVICE_ROLE_KEY,
+      FCM_PROJECT_ID: !!env.FCM_PROJECT_ID,
+      FCM_CLIENT_EMAIL: !!env.FCM_CLIENT_EMAIL,
+      FCM_PRIVATE_KEY: !!env.FCM_PRIVATE_KEY,
     },
     env: {
       CORS_ALLOW_ORIGIN: env.CORS_ALLOW_ORIGIN || null,
@@ -154,6 +157,9 @@ async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Respo
       SUPABASE_SERVICE_ROLE_KEY_preview: env.SUPABASE_SERVICE_ROLE_KEY ? `${(env.SUPABASE_SERVICE_ROLE_KEY as string).slice(0,4)}…` : null,
       SUPABASE_JWKS_URL: env.SUPABASE_JWKS_URL || (env.SUPABASE_URL ? `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json` : null),
       REQUIRE_AUTH_SENDER: env.REQUIRE_AUTH_SENDER || 'false',
+      FCM_PROJECT_ID_preview: env.FCM_PROJECT_ID || null,
+      FCM_CLIENT_EMAIL_preview: env.FCM_CLIENT_EMAIL ? `${(env.FCM_CLIENT_EMAIL as string).slice(0,6)}…` : null,
+      FCM_PRIVATE_KEY_present: env.FCM_PRIVATE_KEY ? true : false,
     },
   }
   return json(body)
@@ -922,10 +928,18 @@ async function handlePublicAlertReact({ req, env }: Parameters<RouteHandler>[0])
     await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'reaction', preset, ts: Date.now() }) })
   } catch {}
   // Push notify sender devices (best-effort)
+  let push: 'sent' | 'skipped' | 'error' = 'skipped'
   try {
-    await pushNotifySenderForReaction(env, alertId, preset)
-  } catch {}
-  return json({ ok: true })
+    if (env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY) {
+      await pushNotifySenderForReaction(env, alertId, preset)
+      push = 'sent'
+    } else {
+      push = 'skipped'
+    }
+  } catch {
+    push = 'error'
+  }
+  return json({ ok: true, push })
 }
 
 async function signJwtHs256(payload: Record<string, unknown>, secret: string): Promise<string> {
