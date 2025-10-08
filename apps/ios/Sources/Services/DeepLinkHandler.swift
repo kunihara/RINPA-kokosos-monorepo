@@ -70,8 +70,9 @@ enum DeepLinkHandler {
                 let main = MainViewController()
                 navigation?.setViewControllers([main], animated: true)
             } else {
-                let signIn = SignInViewController()
-                navigation?.setViewControllers([signIn], animated: true)
+                if let nav = navigation {
+                    nav.goToSignIn(animated: true)
+                }
             }
             PushRegistrationService.shared.ensureRegisteredIfPossible()
         }

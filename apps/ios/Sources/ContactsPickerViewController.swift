@@ -234,7 +234,7 @@ final class ContactsPickerViewController: UIViewController, UITableViewDataSourc
 
     private func navigateToSignInRoot() {
         let complete: (UINavigationController) -> Void = { nav in
-            nav.setViewControllers([SignInViewController()], animated: true)
+            nav.goToSignIn(animated: true)
         }
         if let rootNav = (self.view.window?.rootViewController as? UINavigationController) {
             if rootNav.presentedViewController != nil {

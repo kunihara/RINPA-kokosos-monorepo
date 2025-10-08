@@ -42,8 +42,7 @@ final class MainViewController: UIViewController {
             print("[DEBUG] MainView appear validateOnline=\(ok)")
             #endif
             if !ok {
-                let signin = SignInViewController()
-                self.navigationController?.setViewControllers([signin], animated: true)
+                self.navigationController?.goToSignIn(animated: true)
                 return
             }
         }

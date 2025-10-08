@@ -77,8 +77,7 @@ final class ResetPasswordViewController: UIViewController, UITextFieldDelegate {
                     Task { @MainActor in
                         try? await SupabaseAuthAdapter.shared.client.auth.signOut()
                         await SupabaseAuthAdapter.shared.updateCachedToken()
-                        let signin = SignInViewController()
-                        self?.navigationController?.setViewControllers([signin], animated: true)
+                        self?.navigationController?.goToSignIn(animated: true)
                     }
                 }
             } catch {

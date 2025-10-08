@@ -183,7 +183,7 @@ final class SettingsViewController: UIViewController {
     private func navigateToSignInRoot() {
         // サインアウトは行わず、サインイン画面へ遷移のみ（インストール毎のセッション消失を避けるため）
         let complete: (UINavigationController) -> Void = { nav in
-            nav.setViewControllers([SignInViewController()], animated: true)
+            nav.goToSignIn(animated: true)
         }
         if let rootNav = (view.window?.rootViewController as? UINavigationController) {
             if rootNav.presentedViewController != nil {
@@ -225,8 +225,7 @@ final class SettingsViewController: UIViewController {
                         if let signInVC = nav.viewControllers.first(where: { $0 is SignInViewController }) {
                             nav.popToViewController(signInVC, animated: true)
                         } else {
-                            let signin = SignInViewController()
-                            nav.setViewControllers([signin], animated: true)
+                            nav.goToSignIn(animated: true)
                         }
                     }
                 } catch {
