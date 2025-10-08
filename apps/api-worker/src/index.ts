@@ -736,17 +736,7 @@ async function handleAlertStop({ req, env }: Parameters<RouteHandler>[0]): Promi
   } catch {}
   const stub = env.ALERT_HUB.get(env.ALERT_HUB.idFromName(alertId))
   await stub.fetch('https://do/publish', { method: 'POST', body: JSON.stringify({ type: 'status', status: 'ended' }) })
-  // Push notify sender about arrival/stop (best-effort)
-  try {
-    // Skip self-push for going_home mode (not meaningful)
-    if (alertType !== 'going_home') {
-      await pushNotifySender(env, alertId, {
-        title: '共有を停止しました',
-        body: '状況の共有を終了しました。',
-        category: 'arrival',
-      })
-    }
-  } catch {}
+  // Push on stop is disabled for both modes (emergency/going_home)
   // Send stop/arrival emails to recipients (both modes)
   try {
     const aType = alertType || ''
