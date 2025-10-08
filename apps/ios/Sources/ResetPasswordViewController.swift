@@ -74,12 +74,14 @@ final class ResetPasswordViewController: UIViewController, UITextFieldDelegate {
                 _ = try await client.auth.update(user: UserAttributes(password: p1))
                 alert("更新しました", "パスワードを更新しました。") { [weak self] in
                     // After reset, go to main if session exists; otherwise to sign-in
-                    if let _ = try? await SupabaseAuthAdapter.shared.client.auth.session {
-                        let main = MainViewController()
-                        self?.navigationController?.setViewControllers([main], animated: true)
-                    } else {
-                        let signin = SignInViewController()
-                        self?.navigationController?.setViewControllers([signin], animated: true)
+                    Task { @MainActor in
+                        if let _ = try? await SupabaseAuthAdapter.shared.client.auth.session {
+                            let main = MainViewController()
+                            self?.navigationController?.setViewControllers([main], animated: true)
+                        } else {
+                            let signin = SignInViewController()
+                            self?.navigationController?.setViewControllers([signin], animated: true)
+                        }
                     }
                 }
             } catch {
