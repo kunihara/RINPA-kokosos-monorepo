@@ -50,6 +50,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       #if DEBUG
       print("[DEBUG] SceneDelegate validateOnline=\(valid)")
       #endif
+      // If this launch is via recovery deep link, let DeepLinkHandler drive navigation.
+      if isRecoveryLaunch {
+        #if DEBUG
+        print("[DEBUG] SceneDelegate recovery launch: skip initial root routing")
+        #endif
+        InstallGuard.ensureSentinel()
+        return
+      }
       // If deep link already pushed ResetPassword, do not override the stack
       if didHandleDeepLink, let top = root.viewControllers.last, top is ResetPasswordViewController {
         #if DEBUG
