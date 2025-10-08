@@ -29,11 +29,27 @@ export default function AuthCallbackPage() {
     window.location.href = url
   }
 
+  // Derive flow type from URL hash (e.g., type=recovery)
+  const flow = useMemo(() => {
+    if (!params) return null
+    const q = new URLSearchParams(params.replace(/^#/, ''))
+    return q.get('type')
+  }, [params])
+
   return (
     <main style={{ padding: 24, display: 'grid', gap: 16 }}>
       <h1>KokoSOS</h1>
-      <p>メール確認を完了しました。</p>
-      <p>アプリに戻るを押してください。</p>
+      {flow === 'recovery' ? (
+        <>
+          <p>パスワード再設定の手続きです。</p>
+          <p>「アプリに戻る」を押して新しいパスワードを設定してください。</p>
+        </>
+      ) : (
+        <>
+          <p>メール確認を完了しました。</p>
+          <p>アプリに戻るを押してください。</p>
+        </>
+      )}
       <button onClick={openApp} style={{ padding: '10px 14px', background: '#111827', color: 'white', borderRadius: 8, border: 'none' }}>アプリに戻る</button>
       {attempted && (
         <p style={{ color: '#6b7280', fontSize: 12 }}>自動で開かない場合は上のボタンをタップしてください。</p>

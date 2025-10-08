@@ -24,15 +24,26 @@ enum DeepLinkHandler {
                 _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url)
                 // Refresh cached token for APIClient headers
                 await SupabaseAuthAdapter.shared.updateCachedToken()
-                // If this was a new signup confirmation, show onboarding once
+                // Route by flow type
                 let t = params["type"]?.lowercased()
-                if t == "signup" || t == "email_confirmation" {
-                    UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
-                    UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
+                if t == "recovery" {
+                    // Password reset flow: show reset UI
+                    let reset = ResetPasswordViewController()
+                    if let nav = navigation {
+                        // push to keep back navigation natural
+                        nav.pushViewController(reset, animated: true)
+                    } else {
+                        UIApplication.shared.keyWindow?.rootViewController?.show(reset, sender: nil)
+                    }
+                } else {
+                    // Signup/email confirmation etc: show main, enable onboarding flags
+                    if t == "signup" || t == "email_confirmation" {
+                        UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
+                        UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
+                    }
+                    let main = MainViewController()
+                    navigation?.setViewControllers([main], animated: true)
                 }
-                // Move to main screen
-                let main = MainViewController()
-                navigation?.setViewControllers([main], animated: true)
                 // After restoring session from deep link, try device registration
                 PushRegistrationService.shared.ensureRegisteredIfPossible()
             } catch {
