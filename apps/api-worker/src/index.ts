@@ -184,6 +184,8 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'POST', pattern: /^\/auth\/email\/change$/, handler: handleAuthEmailChangeEmail },
   // Public endpoint: email/password sign-up via Admin + confirmation email
   { method: 'POST', pattern: /^\/auth\/signup$/, handler: handleAuthSignupPublic },
+  // Ops (admin-only): delete unconfirmed user by email
+  { method: 'POST', pattern: /^\/_diag\/auth\/cleanup_unconfirmed$/, handler: handleAuthDiagCleanupUnconfirmed },
 ]
 
 async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1317,7 +1319,7 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
   } catch { return json({ ok: true }) }
 }
 
-// Public: email/password signup via Admin users + confirmation email
+// Public: email/password signup via confirmation link only (no pre-creation)
 async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
   try {
     const body = await req.json().catch(() => null) as any
@@ -1333,14 +1335,7 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     const okIp = await rateLimitCheck(env, `signup:ip:${ip || 'unknown'}`, 3, 300)
     const okEmail = await rateLimitCheck(env, `signup:email:${email.toLowerCase()}`, 3, 3600)
     if (!okIp || !okEmail) { if (isEmailDebug(env)) console.log('[AUTH-SIGNUP] rate_limited:', { okIp, okEmail }); return json({ ok: true }) }
-    // Create user via Admin API (email not confirmed)
-    const adminUsers = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`
-    await fetch(adminUsers, {
-      method: 'POST',
-      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password, email_confirm: false }),
-    }).catch(() => null)
-    // Send confirmation link
+    // Send confirmation link only (do not pre-create user)
     const payload: any = { type: 'signup', email }
     if (redirect_to) payload.redirect_to = redirect_to
     const g = await supabaseGenerateLink(env, payload)
@@ -1351,6 +1346,41 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     return json({ ok: true })
   } catch {
     return json({ ok: true })
+  }
+}
+
+// Dev/ops: Delete unconfirmed user by email (admin-only, to clean up accidental pre-creation)
+// Authorization: Bearer <SERVICE_ROLE_KEY>
+async function handleAuthDiagCleanupUnconfirmed({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'server_misconfig' }, { status: 500 })
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+    if (authz !== `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`) return json({ error: 'unauthorized' }, { status: 401 })
+    const body = await req.json().catch(() => null) as any
+    const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
+    if (!email) return json({ error: 'invalid_email' }, { status: 400 })
+    const base = env.SUPABASE_URL.replace(/\/$/, '')
+    // Lookup user by email
+    const list = await fetch(`${base}/auth/v1/admin/users?email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+    })
+    if (!list.ok) return json({ ok: false, error: 'lookup_failed', detail: await list.text() }, { status: 500 })
+    const users = await list.json().catch(() => []) as any[]
+    if (!Array.isArray(users) || users.length === 0) return json({ ok: true, removed: 0 })
+    let removed = 0
+    for (const u of users) {
+      const confirmed = Boolean(u.email_confirmed_at)
+      if (!confirmed && u.id) {
+        const del = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(String(u.id))}`, {
+          method: 'DELETE', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+        })
+        if (del.ok) removed++
+      }
+    }
+    return json({ ok: true, removed })
+  } catch (e) {
+    return json({ ok: false, error: 'unexpected', detail: String(e) }, { status: 500 })
   }
 }
 
