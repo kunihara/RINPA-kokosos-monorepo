@@ -141,6 +141,29 @@ SSEイベント（例）
 
 ---
 
+## 仕様補遺（今回の更新点の要約）
+
+- サインアップ確認後の挙動（セキュリティ方針）
+  - signup / email_confirmation / email_change のリンクから復帰しても「自動サインインしない」。明示的にサインイン画面からログインする。
+  - recovery（パスワード再設定）/ magic_link（パスワードレス）/ reauth（再認証）は、リンクから復帰時にセッションを適用して続行可。
+
+- iOS ディープリンク適用ルール
+  - recovery/magic/reauth のときのみ、DeepLink の `#access_token`/`#refresh_token` を `setSession` で適用（PKCEでの `session(from:)` に加えて手動適用を併用）。
+  - signup/email_confirmation/email_change では `setSession` を行わず、サインイン画面へ誘導。
+  - recovery でトークン形式（`token_hash`）の場合は `verifyOTP(email, token, .recovery)` で復旧してから更新。
+
+- 認証メールの文面（到達性配慮）
+  - 件名先頭を【KokoSOS】に統一し、取引型・説明的な文に変更。
+  - 本文に「なぜ届いたか」「宛先」「リンク先ドメイン」を明記。text/HTML 両方で同内容を付与。
+
+- iOS UI 文言（日本語化）
+  - サインイン失敗: 「メールアドレスまたはパスワードが正しくありません」など、列挙を避ける安全な表現に統一。
+  - パスワード再設定: 代表的エラー（セッション欠如/トークン無効/弱いパスワード/旧と同一）を日本語で案内。
+
+- Push 通知（Dev）
+  - Dev 用 Entitlements に `aps-environment=development` を設定。XcodeGen の競合を解消し、構成ごとの `CODE_SIGN_ENTITLEMENTS` で一元管理。
+
+
 ## アカウント削除（追加）
 
 - 目的：ユーザーがアプリ内の「アカウント削除」操作で、本人の認証情報と関連データ（contacts/alerts/locations/deliveries…）を安全に削除できるようにする。
@@ -148,6 +171,8 @@ SSEイベント（例）
 - クライアント（iOS）
   - 設定 > アカウント削除（確認ダイアログ）→ API `DELETE /account` を呼び出し。
   - 成功後はトークンを破棄しサインイン画面へ遷移。
+  - 画面遷移は push ではなく pop 系で行う（`navigationController?.popToRootViewController` / 既存の `goToSignIn` を使用）。
+    - 目的: 戻る履歴を不正に残さない・スタックの破綻を避ける。
 
 - API（Workers）
   - `DELETE /account`（Authorization 必須）
