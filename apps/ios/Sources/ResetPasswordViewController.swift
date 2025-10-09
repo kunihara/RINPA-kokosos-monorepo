@@ -69,13 +69,23 @@ final class ResetPasswordViewController: UIViewController, UITextFieldDelegate {
             updateButton.isEnabled = false
             defer { updateButton.isEnabled = true }
             do {
-                // Supabase Swift v2: update user attributes (password)
                 let client = SupabaseAuthAdapter.shared.client
-                // 事前にセッション有無を確認（ディープリンクでセッションが適用されなかった場合のガード）
-                guard (try? await client.auth.session) != nil else {
-                    alert("更新に失敗", "認証セッションが見つかりません。メールのリンクをもう一度開いてから、再度お試しください。")
-                    return
+                // セッションが無ければ verifyOTP(recovery) で復旧を試みる
+                if (try? await client.auth.session) == nil {
+                    if let email = RecoveryStore.shared.email, let token = RecoveryStore.shared.token, !email.isEmpty, !token.isEmpty {
+                        do {
+                            _ = try await client.auth.verifyOTP(email: email, token: token, type: .recovery)
+                        } catch {
+                            // 続行不可
+                            alert("更新に失敗", "認証情報の適用に失敗しました。メールのリンクをもう一度開いてから、再度お試しください。")
+                            return
+                        }
+                    } else {
+                        alert("更新に失敗", "認証セッションが見つかりません。メールのリンクをもう一度開いてから、再度お試しください。")
+                        return
+                    }
                 }
+                // Supabase Swift v2: update user attributes (password)
                 _ = try await client.auth.update(user: UserAttributes(password: p1))
                 alert("更新しました", "パスワードを更新しました。再度サインインしてください。") { [weak self] in
                     // セキュリティ方針: リセット直後は必ずサインインを要求

@@ -51,6 +51,14 @@ enum DeepLinkHandler {
             #endif
             // Heuristic: treat as recovery if explicit or if we only have a PKCE code in query and no fragment tokens
             let implicitRecovery = (url.query?.contains("code=") ?? false) && ((url.fragment ?? "").isEmpty)
+            // Store possible recovery context (email/token) for fallback (verifyOTP)
+            if (flowType == "recovery" || implicitRecovery) {
+                let recEmail = params["email"] ?? params["user_email"]
+                let recToken = params["token_hash"] ?? params["token"]
+                RecoveryStore.shared.set(email: recEmail, token: recToken)
+            } else {
+                RecoveryStore.shared.clear()
+            }
             if flowType == "recovery" || implicitRecovery {
                 let reset = ResetPasswordViewController()
                 guard let nav = navigation else { return }
