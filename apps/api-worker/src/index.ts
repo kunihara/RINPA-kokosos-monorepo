@@ -1169,15 +1169,9 @@ async function handleAuthEmailSend({ req, env }: Parameters<RouteHandler>[0]): P
     if (redirect_to) payload.redirect_to = redirect_to
     if (kind === 'change_email_new') payload.new_email = new_email
     // Call Supabase Admin generate_link
-    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
-    const res = await fetch(adminURL, {
-      method: 'POST',
-      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) return json({ error: 'generate_link_failed', detail: await res.text() }, { status: 500 })
-    const j = await res.json() as any
-    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+    const { ok, link, detail } = await supabaseGenerateLink(env, payload)
+    if (!ok || !link) return json({ error: 'generate_link_failed', detail }, { status: 500 })
+    const action_link: string = link
     if (!action_link) return json({ error: 'no_action_link' }, { status: 500 })
     // Build email content
     const { subject, html, text } = buildAuthEmail(kind, action_link, email, new_email, env.WEB_PUBLIC_BASE || undefined)
@@ -1212,19 +1206,12 @@ async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>
     const payload: any = { type: 'recovery', email }
     if (redirect_to) payload.redirect_to = redirect_to
     // Call Supabase Admin generate_link
-    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
-    const res = await fetch(adminURL, {
-      method: 'POST',
-      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      // Do not leak; just return ok
+    const { ok, link, detail } = await supabaseGenerateLink(env, payload)
+    if (!ok || !link) {
+      if (isEmailDebug(env)) console.log('[AUTH-RESET] generate_link failed:', detail)
       return json({ ok: true })
     }
-    const j = await res.json() as any
-    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
-    if (!action_link) return json({ ok: true })
+    const action_link: string = link
     const { subject, html, text } = buildAuthEmail('reset_password', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
     try {
       const emailer = makeEmailProvider(env)
@@ -1255,16 +1242,9 @@ async function handleAuthEmailMagicPublic({ req, env }: Parameters<RouteHandler>
     if (!okIp || !okEmail) return json({ ok: true })
     const payload: any = { type: 'magiclink', email }
     if (redirect_to) payload.redirect_to = redirect_to
-    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
-    const res = await fetch(adminURL, {
-      method: 'POST',
-      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) return json({ ok: true })
-    const j = await res.json() as any
-    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
-    if (!action_link) return json({ ok: true })
+    const { ok, link, detail } = await supabaseGenerateLink(env, payload)
+    if (!ok || !link) { if (isEmailDebug(env)) console.log('[AUTH-MAGIC] generate_link failed:', detail); return json({ ok: true }) }
+    const action_link: string = link
     const { subject, html, text } = buildAuthEmail('magic_link', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
     try { await makeEmailProvider(env).send({ to: email, subject, html, text }) } catch {}
     return json({ ok: true })
@@ -1284,16 +1264,9 @@ async function handleAuthEmailReauth({ req, env }: Parameters<RouteHandler>[0]):
     const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined, 'reauth')
     const payload: any = { type: 'magiclink', email }
     if (redirect_to) payload.redirect_to = redirect_to
-    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
-    const res = await fetch(adminURL, {
-      method: 'POST',
-      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) return json({ ok: true })
-    const j = await res.json() as any
-    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
-    if (!action_link) return json({ ok: true })
+    const { ok, link, detail } = await supabaseGenerateLink(env, payload)
+    if (!ok || !link) { if (isEmailDebug(env)) console.log('[AUTH-REAUTH] generate_link failed:', detail); return json({ ok: true }) }
+    const action_link: string = link
     const { subject, html, text } = buildAuthEmail('reauth', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
     try { await makeEmailProvider(env).send({ to: email, subject, html, text }) } catch {}
     return json({ ok: true })
@@ -1317,11 +1290,8 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
     {
       const payload: any = { type: 'email_change_current', email: currentEmail }
       if (redirect_to) payload.redirect_to = redirect_to
-      const res = await fetch(adminURL, { method: 'POST', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(payload) })
-      if (res.ok) {
-        const j = await res.json() as any
-        const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
-        if (link) {
+      const g1 = await supabaseGenerateLink(env, payload)
+      if (g1.ok && g1.link) {
           const mail = buildAuthEmail('change_email_current', link, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
           try { await makeEmailProvider(env).send({ to: currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
         }
@@ -1331,11 +1301,8 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
     {
       const payload: any = { type: 'email_change_new', email: currentEmail, new_email: newEmail }
       if (redirect_to) payload.redirect_to = redirect_to
-      const res = await fetch(adminURL, { method: 'POST', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(payload) })
-      if (res.ok) {
-        const j = await res.json() as any
-        const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
-        if (link) {
+      const g2 = await supabaseGenerateLink(env, payload)
+      if (g2.ok && g2.link) {
           const mail = buildAuthEmail('change_email_new', link, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
           try { await makeEmailProvider(env).send({ to: newEmail || currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
         }
@@ -1369,20 +1336,43 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
       body: JSON.stringify({ email, password, email_confirm: false }),
     }).catch(() => null)
     // Send confirmation link
-    const adminGen = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
-    const payload: any = { type: 'signup', email }
-    if (redirect_to) payload.redirect_to = redirect_to
-    const res = await fetch(adminGen, { method: 'POST', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(payload) })
-    if (res.ok) {
-      const j = await res.json() as any
-      const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
-      if (link) {
+    const g = await supabaseGenerateLink(env, payload)
+    if (g.ok && g.link) {
         const mail = buildAuthEmail('confirm_signup', link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
         try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
       }
     }
     return json({ ok: true })
   } catch { return json({ ok: true }) }
+}
+
+// Helper: call Supabase Admin generate_link with redirect fallback
+async function supabaseGenerateLink(env: Env, payloadIn: any): Promise<{ ok: boolean; link?: string; detail?: string }> {
+  const adminURL = `${env.SUPABASE_URL!.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+  const headers = { apikey: env.SUPABASE_SERVICE_ROLE_KEY!, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY!}`, 'content-type': 'application/json' }
+  // Try with provided redirect_to first
+  let payload = { ...payloadIn }
+  let res = await fetch(adminURL, { method: 'POST', headers, body: JSON.stringify(payload) })
+  let text = ''
+  if (!res.ok) {
+    text = await res.text().catch(() => '')
+    const isRedirectError = /redirect|allow(ed)?\s*url|not\s*in\s*(the\s*)?list/i.test(text)
+    if (isRedirectError && 'redirect_to' in payload) {
+      // Retry without redirect_to (fallback to Supabase Site URL)
+      try { delete (payload as any).redirect_to } catch {}
+      res = await fetch(adminURL, { method: 'POST', headers, body: JSON.stringify(payload) })
+      if (!res.ok) {
+        const t2 = await res.text().catch(() => '')
+        return { ok: false, detail: t2 || text }
+      }
+    } else if (!res.ok) {
+      return { ok: false, detail: text }
+    }
+  }
+  const j = await res.json().catch(() => null) as any
+  const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+  if (!link) return { ok: false, detail: 'no_action_link' }
+  return { ok: true, link }
 }
 
 // Sanitize redirect_to to prevent open redirect and scheme abuse
