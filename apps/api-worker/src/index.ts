@@ -1120,7 +1120,7 @@ async function handleAuthEmailSend({ req, env }: Parameters<RouteHandler>[0]): P
     if (!body || typeof body.kind !== 'string' || typeof body.email !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
     const kind = body.kind as AuthEmailKind
     const email = String(body.email).trim()
-    const redirect_to = typeof body.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const redirect_to = sanitizeRedirect(env, typeof body.redirect_to === 'string' ? String(body.redirect_to) : undefined)
     const new_email = typeof body.new_email === 'string' ? String(body.new_email).trim() : undefined
     const mapping: Record<AuthEmailKind, string> = {
       confirm_signup: 'signup',
@@ -1168,7 +1168,7 @@ async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>
     const body = await req.json().catch(() => null) as any
     const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
     if (!email) return json({ ok: true })
-    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
     const payload: any = { type: 'recovery', email }
     if (redirect_to) payload.redirect_to = redirect_to
     // Call Supabase Admin generate_link
@@ -1205,7 +1205,7 @@ async function handleAuthEmailMagicPublic({ req, env }: Parameters<RouteHandler>
     const body = await req.json().catch(() => null) as any
     const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
     if (!email) return json({ ok: true })
-    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
     const payload: any = { type: 'magiclink', email }
     if (redirect_to) payload.redirect_to = redirect_to
     const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
@@ -1234,7 +1234,7 @@ async function handleAuthEmailReauth({ req, env }: Parameters<RouteHandler>[0]):
     const email = supa.email || ''
     if (!email) return json({ ok: true })
     const body = await req.json().catch(() => null) as any
-    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback?flow=reauth` : undefined)
+    const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined, 'reauth')
     const payload: any = { type: 'magiclink', email }
     if (redirect_to) payload.redirect_to = redirect_to
     const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
@@ -1264,7 +1264,7 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
     const body = await req.json().catch(() => null) as any
     const newEmail = typeof body?.new_email === 'string' ? String(body.new_email).trim() : ''
     if (!currentEmail || !newEmail) return json({ ok: true })
-    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
     const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
     // 1) Current email confirmation
     {
@@ -1306,7 +1306,7 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     const password = typeof body?.password === 'string' ? String(body.password) : ''
     if (!email || !password) return json({ ok: true })
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: true })
-    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
     // Create user via Admin API (email not confirmed)
     const adminUsers = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`
     await fetch(adminUsers, {
@@ -1329,6 +1329,28 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     }
     return json({ ok: true })
   } catch { return json({ ok: true }) }
+}
+
+// Sanitize redirect_to to prevent open redirect and scheme abuse
+function sanitizeRedirect(env: Env, provided?: string, flow?: 'reauth'): string | undefined {
+  const webBase = env.WEB_PUBLIC_BASE ? String(env.WEB_PUBLIC_BASE) : null
+  const defaultWeb = webBase ? `${webBase.replace(/\/$/, '')}/auth/callback${flow === 'reauth' ? '?flow=reauth' : ''}` : undefined
+  // Allow custom app schemes configured via APP_SCHEMES (CSV) or default to 'kokosos'
+  const allowedSchemes = String(env.APP_SCHEMES || 'kokosos').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+  const allowAppScheme = (url: URL) => allowedSchemes.includes(url.protocol.replace(':', '').toLowerCase()) && url.host.toLowerCase() === 'oauth-callback'
+  if (provided) {
+    try {
+      const u = new URL(provided)
+      // Accept allowed app scheme callback
+      if (allowAppScheme(u)) return u.toString()
+      // Accept https with same host as WEB_PUBLIC_BASE
+      if (u.protocol === 'https:' && webBase) {
+        const wb = new URL(webBase)
+        if (u.host.toLowerCase() === wb.host.toLowerCase()) return u.toString()
+      }
+    } catch {}
+  }
+  return defaultWeb
 }
 
 function buildAuthEmail(kind: AuthEmailKind, link: string, email: string, newEmail?: string, webBase?: string) {
