@@ -1335,14 +1335,17 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
       body: JSON.stringify({ email, password, email_confirm: false }),
     }).catch(() => null)
     // Send confirmation link
+    const payload: any = { type: 'signup', email }
+    if (redirect_to) payload.redirect_to = redirect_to
     const g = await supabaseGenerateLink(env, payload)
     if (g.ok && g.link) {
-        const mail = buildAuthEmail('confirm_signup', link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
-        try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
-      }
+      const mail = buildAuthEmail('confirm_signup', g.link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
+      try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
     }
     return json({ ok: true })
-  } catch { return json({ ok: true }) }
+  } catch {
+    return json({ ok: true })
+  }
 }
 
 // Helper: call Supabase Admin generate_link with redirect fallback
