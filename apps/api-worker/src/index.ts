@@ -1399,12 +1399,23 @@ async function supabaseGenerateLink(env: Env, payloadIn: any): Promise<{ ok: boo
     text = await res.text().catch(() => '')
     const isRedirectError = /redirect|allow(ed)?\s*url|not\s*in\s*(the\s*)?list/i.test(text)
     if (isRedirectError && 'redirect_to' in payload) {
-      // Retry without redirect_to (fallback to Supabase Site URL)
-      try { delete (payload as any).redirect_to } catch {}
-      res = await fetch(adminURL, { method: 'POST', headers, body: JSON.stringify(payload) })
+      // Retry via web callback to preserve tokens and forward to app
+      try {
+        const original = String((payload as any).redirect_to || '')
+        if (env.WEB_PUBLIC_BASE) {
+          const webCb = `${String(env.WEB_PUBLIC_BASE).replace(/\/$/, '')}/auth/confirm?type=${encodeURIComponent(String((payload as any).type || ''))}&next=${encodeURIComponent(original)}`
+          ;(payload as any).redirect_to = webCb
+          res = await fetch(adminURL, { method: 'POST', headers, body: JSON.stringify(payload) })
+        }
+      } catch {}
       if (!res.ok) {
-        const t2 = await res.text().catch(() => '')
-        return { ok: false, detail: t2 || text }
+        // Final fallback: try without redirect_to (Supabase Site URL)
+        try { delete (payload as any).redirect_to } catch {}
+        res = await fetch(adminURL, { method: 'POST', headers, body: JSON.stringify(payload) })
+        if (!res.ok) {
+          const t2 = await res.text().catch(() => '')
+          return { ok: false, detail: t2 || text }
+        }
       }
     } else if (!res.ok) {
       return { ok: false, detail: text }

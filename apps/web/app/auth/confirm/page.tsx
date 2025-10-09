@@ -10,15 +10,16 @@ export default function AuthConfirmPage() {
   const params = useMemo(() => new URLSearchParams((search || '').replace(/^\?/, '')), [search])
   const type = (params.get('type') || '').toLowerCase()
   const next = params.get('next') || ''
+  const hash = typeof window !== 'undefined' ? (window.location.hash || '') : ''
 
   useEffect(() => {
     if (!next) return
-    try { window.location.href = next } catch {}
+    try { window.location.href = next + (hash || '') } catch {}
     const id = setTimeout(() => setAttempted(true), 800)
     return () => clearTimeout(id)
   }, [next])
 
-  const openApp = () => { if (next) window.location.href = next }
+  const openApp = () => { if (next) window.location.href = next + (hash || '') }
 
   return (
     <main style={{ padding: 24, display: 'grid', gap: 16 }}>
@@ -55,4 +56,3 @@ export default function AuthConfirmPage() {
     </main>
   )
 }
-
