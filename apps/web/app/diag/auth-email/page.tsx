@@ -11,6 +11,7 @@ export default function AuthEmailDiag() {
   const [kind, setKind] = useState<'reset' | 'magic' | 'signup'>('reset')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [mode, setMode] = useState<'managed' | 'non-interactive' | 'invisible'>('non-interactive')
 
   const endpoint = useMemo(() => {
     switch (kind) {
@@ -63,9 +64,17 @@ export default function AuthEmailDiag() {
           <label><input type="radio" name="kind" checked={kind === 'magic'} onChange={() => setKind('magic')} /> マジックリンク</label>
           <label><input type="radio" name="kind" checked={kind === 'signup'} onChange={() => setKind('signup')} /> サインアップ</label>
         </div>
-        <div>
-          <Turnstile onToken={setToken} />
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>ウィジェットを完了すると送信できます。</div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#374151' }}>ウィジェット モード:</span>
+            <label><input type="radio" name="mode" checked={mode==='managed'} onChange={() => setMode('managed')} /> 管理対象</label>
+            <label><input type="radio" name="mode" checked={mode==='non-interactive'} onChange={() => setMode('non-interactive')} /> 非インタラクティブ</label>
+            <label><input type="radio" name="mode" checked={mode==='invisible'} onChange={() => setMode('invisible')} /> 非表示</label>
+          </div>
+          <Turnstile onToken={setToken} mode={mode} />
+          <div style={{ fontSize: 12, color: token ? '#065f46' : '#6b7280', marginTop: 4 }}>
+            {token ? 'Turnstileトークン取得済み' : 'ウィジェットを完了すると送信できます。'}
+          </div>
         </div>
         <button onClick={submit} disabled={btnDisabled} style={btn()}>送信</button>
         {msg && <div style={{ color: '#111827', fontSize: 14 }}>{msg}</div>}
