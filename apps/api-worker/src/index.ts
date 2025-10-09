@@ -1450,29 +1450,40 @@ function sanitizeRedirect(env: Env, provided?: string, flow?: 'reauth'): string 
 }
 
 function buildAuthEmail(kind: AuthEmailKind, link: string, email: string, newEmail?: string, webBase?: string) {
+  const safeDomainText = (() => {
+    try { const u = new URL(link); return u.host } catch { return '' }
+  })()
   const wrap = (title: string, body: string, btn: string) => {
+    const reason = `このメールは KokoSOS (${webBase || 'https://kokosos.com'}) で “${title}” の操作が行われたため送信されています。`;
+    const who = `宛先: ${email}`
     const btnHtml = `<p style="margin:16px 0"><a href="${link}" style="display:inline-block;background:#111827;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none">${btn}</a></p>`
     const footer = `<p style="color:#6b7280;font-size:12px">このリンクは一定時間で無効になります。覚えがない場合は本メールを破棄してください。</p>`
+    const whitelist = safeDomainText ? `<p style="color:#6b7280;font-size:12px">リンク先ドメイン: ${safeDomainText}</p>` : ''
     const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.7">
       <h2 style="margin:0 0 8px 0">KokoSOS</h2>
+      <p style="margin:0 0 6px 0">${reason}</p>
+      <p style="margin:0 0 12px 0;color:#374151;font-size:14px">${who}</p>
       <p>${body}</p>
       ${btnHtml}
+      ${whitelist}
       ${footer}
     </div>`
-    return { subject: `KokoSOS ${title}`, html, text: `${title}\n${body}\n${link}` }
+    const text = `${title}\n${reason}\n${who}\n\n${body}\n${link}${safeDomainText ? `\nリンク先ドメイン: ${safeDomainText}` : ''}`
+    return { subject: `【KokoSOS】${title}`, html, text }
   }
   switch (kind) {
     case 'confirm_signup':
-      return wrap('登録のご確認', '下のボタンからメールアドレスの確認を完了してください。', 'メールアドレスを確認')
+      return wrap('ご本人確認のお願い（登録手続き）', '下のボタンからメールアドレスの確認を完了してください。', 'メールアドレスを確認')
     case 'invite':
-      return wrap('ご招待', 'KokoSOS への招待が届いています。下のボタンからアカウントを有効化してください。', '招待を受ける')
+      return wrap('ご招待のご案内', 'KokoSOS への招待が届いています。下のボタンからアカウントを有効化してください。', '招待を受ける')
     case 'magic_link':
+      return wrap('サインインのご案内', '下のボタンからサインインを完了してください。', 'サインイン')
     case 'reauth':
-      return wrap('かんたんサインイン', '下のボタンからサインインしてください。', 'サインイン')
+      return wrap('再認証のご案内', '下のボタンから認証の確認を完了してください。', '再認証する')
     case 'change_email_current':
-      return wrap('メール変更の確認', 'メール変更の手続きを受け付けました。下のボタンから変更を確定してください。', '変更を確定')
+      return wrap('メール変更のご確認（現在のメール）', '下のボタンから変更の確認を完了してください。', '変更を確定')
     case 'change_email_new':
-      return wrap('新しいメールの確認', '新しいメールアドレスの確認が必要です。下のボタンから確認を完了してください。', '新しいメールを確認')
+      return wrap('メール変更のご確認（新しいメール）', '下のボタンから新しいメールアドレスの確認を完了してください。', '新しいメールを確認')
     case 'reset_password':
       return wrap('パスワード再設定のご案内', '下のボタンからパスワードの再設定を完了してください。', 'パスワードを再設定')
   }
