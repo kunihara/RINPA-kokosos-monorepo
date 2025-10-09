@@ -1,10 +1,21 @@
 "use client"
 
+import { Suspense } from 'react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Turnstile from '../../components/Turnstile'
 
-export default function AuthEmailDiag() {
+export const dynamic = 'force-dynamic'
+
+export default function Page() {
+  return (
+    <Suspense fallback={<main style={{ padding: 16 }}><div>Loading…</div></main>}>
+      <AuthEmailDiagInner />
+    </Suspense>
+  )
+}
+
+function AuthEmailDiagInner() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || ''
   const sp = useSearchParams()
   const siteKeyOverride = sp.get('site_key') || undefined
