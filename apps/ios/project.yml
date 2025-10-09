@@ -155,8 +155,6 @@ targets:
           CODE_SIGN_ENTITLEMENTS: Resources/KokoSOS-Prod.entitlements
     info:
       path: Resources/Info.plist
-    entitlements:
-      path: Resources/KokoSOS-Dev.entitlements
     capabilities:
       - pushNotifications: true
       - backgroundModes:

@@ -4,5 +4,6 @@
 <dict>
   <key>aps-environment</key>
   <string>development</string>
+  <!-- Add other Dev entitlements here as needed -->
 </dict>
 </plist>
