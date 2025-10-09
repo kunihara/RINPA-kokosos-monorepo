@@ -1,10 +1,13 @@
-'use client'
+"use client"
 
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Turnstile from '../../components/Turnstile'
 
 export default function AuthEmailDiag() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || ''
+  const sp = useSearchParams()
+  const siteKeyOverride = sp.get('site_key') || undefined
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [token, setToken] = useState<string | null>(null)
@@ -71,7 +74,7 @@ export default function AuthEmailDiag() {
             <label><input type="radio" name="mode" checked={mode==='non-interactive'} onChange={() => setMode('non-interactive')} /> 非インタラクティブ</label>
             <label><input type="radio" name="mode" checked={mode==='invisible'} onChange={() => setMode('invisible')} /> 非表示</label>
           </div>
-          <Turnstile onToken={setToken} mode={mode} />
+          <Turnstile onToken={setToken} mode={mode} siteKey={siteKeyOverride || undefined} />
           <div style={{ fontSize: 12, color: token ? '#065f46' : '#6b7280', marginTop: 4 }}>
             {token ? 'Turnstileトークン取得済み' : 'ウィジェットを完了すると送信できます。'}
           </div>
