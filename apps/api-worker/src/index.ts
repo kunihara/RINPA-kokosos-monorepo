@@ -1216,8 +1216,9 @@ async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>
     try {
       const emailer = makeEmailProvider(env)
       await emailer.send({ to: email, subject, html, text })
+      if (isEmailDebug(env)) console.log('[AUTH-RESET] sent ok ->', maskEmail(email))
     } catch (e) {
-      // swallow
+      if (isEmailDebug(env)) console.log('[EMAIL][auth.reset] failed:', String(e).slice(0,200))
     }
     return json({ ok: true })
   } catch {
@@ -1246,7 +1247,7 @@ async function handleAuthEmailMagicPublic({ req, env }: Parameters<RouteHandler>
     if (!ok || !link) { if (isEmailDebug(env)) console.log('[AUTH-MAGIC] generate_link failed:', detail); return json({ ok: true }) }
     const action_link: string = link
     const { subject, html, text } = buildAuthEmail('magic_link', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
-    try { await makeEmailProvider(env).send({ to: email, subject, html, text }) } catch {}
+    try { await makeEmailProvider(env).send({ to: email, subject, html, text }); if (isEmailDebug(env)) console.log('[AUTH-MAGIC] sent ok ->', maskEmail(email)) } catch (e) { if (isEmailDebug(env)) console.log('[EMAIL][auth.magic] failed:', String(e).slice(0,200)) }
     return json({ ok: true })
   } catch { return json({ ok: true }) }
 }
@@ -1268,7 +1269,7 @@ async function handleAuthEmailReauth({ req, env }: Parameters<RouteHandler>[0]):
     if (!ok || !link) { if (isEmailDebug(env)) console.log('[AUTH-REAUTH] generate_link failed:', detail); return json({ ok: true }) }
     const action_link: string = link
     const { subject, html, text } = buildAuthEmail('reauth', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
-    try { await makeEmailProvider(env).send({ to: email, subject, html, text }) } catch {}
+    try { await makeEmailProvider(env).send({ to: email, subject, html, text }); if (isEmailDebug(env)) console.log('[AUTH-REAUTH] sent ok ->', maskEmail(email)) } catch (e) { if (isEmailDebug(env)) console.log('[EMAIL][auth.reauth] failed:', String(e).slice(0,200)) }
     return json({ ok: true })
   } catch { return json({ ok: true }) }
 }
@@ -1293,7 +1294,7 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
       if (g1.ok && g1.link) {
         const link1 = g1.link
         const mail = buildAuthEmail('change_email_current', link1, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
-        try { await makeEmailProvider(env).send({ to: currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
+        try { await makeEmailProvider(env).send({ to: currentEmail, subject: mail.subject, html: mail.html, text: mail.text }); if (isEmailDebug(env)) console.log('[AUTH-EMAIL-CHANGE current] sent ok ->', maskEmail(currentEmail)) } catch (e) { if (isEmailDebug(env)) console.log('[EMAIL][auth.email_change_current] failed:', String(e).slice(0,200)) }
       }
     }
     // 2) New email confirmation
@@ -1304,7 +1305,7 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
       if (g2.ok && g2.link) {
         const link2 = g2.link
         const mail = buildAuthEmail('change_email_new', link2, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
-        try { await makeEmailProvider(env).send({ to: newEmail || currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
+        try { await makeEmailProvider(env).send({ to: newEmail || currentEmail, subject: mail.subject, html: mail.html, text: mail.text }); if (isEmailDebug(env)) console.log('[AUTH-EMAIL-CHANGE new] sent ok ->', maskEmail(newEmail || currentEmail)) } catch (e) { if (isEmailDebug(env)) console.log('[EMAIL][auth.email_change_new] failed:', String(e).slice(0,200)) }
       }
     }
     return json({ ok: true })
@@ -1340,7 +1341,7 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     const g = await supabaseGenerateLink(env, payload)
     if (g.ok && g.link) {
       const mail = buildAuthEmail('confirm_signup', g.link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
-      try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
+      try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }); if (isEmailDebug(env)) console.log('[AUTH-SIGNUP] sent ok ->', maskEmail(email)) } catch (e) { if (isEmailDebug(env)) console.log('[EMAIL][auth.signup] failed:', String(e).slice(0,200)) }
     }
     return json({ ok: true })
   } catch {
