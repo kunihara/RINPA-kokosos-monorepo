@@ -138,6 +138,8 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/stream$/, handler: handlePublicAlertStream },
   { method: 'GET', pattern: /^\/public\/alert\/([^/]+)\/locations$/, handler: handlePublicAlertLocations },
   { method: 'POST', pattern: /^\/public\/alert\/([^/]+)\/react$/, handler: handlePublicAlertReact },
+  // Auth emails (generate + send via provider)
+  { method: 'POST', pattern: /^\/auth\/email\/send$/, handler: handleAuthEmailSend },
 ]
 
 async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1096,6 +1098,84 @@ async function getFcmAccessToken(env: Env): Promise<string> {
   return fcmCachedToken.token
 }
 
+// -------- Auth email: generate_link + send
+type AuthEmailKind = 'confirm_signup' | 'invite' | 'magic_link' | 'change_email_current' | 'change_email_new' | 'reset_password' | 'reauth'
+
+async function handleAuthEmailSend({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'server_misconfig' }, { status: 500 })
+    const authz = req.headers.get('authorization') || req.headers.get('Authorization') || ''
+    const okAdmin = authz === `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
+    if (!okAdmin) return json({ error: 'unauthorized' }, { status: 401 })
+    const body = await req.json().catch(() => null) as any
+    if (!body || typeof body.kind !== 'string' || typeof body.email !== 'string') return json({ error: 'invalid_body' }, { status: 400 })
+    const kind = body.kind as AuthEmailKind
+    const email = String(body.email).trim()
+    const redirect_to = typeof body.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const new_email = typeof body.new_email === 'string' ? String(body.new_email).trim() : undefined
+    const mapping: Record<AuthEmailKind, string> = {
+      confirm_signup: 'signup',
+      invite: 'invite',
+      magic_link: 'magiclink',
+      change_email_current: 'email_change_current',
+      change_email_new: 'email_change_new',
+      reset_password: 'recovery',
+      reauth: 'magiclink',
+    }
+    const type = mapping[kind]
+    const payload: any = { type, email }
+    if (redirect_to) payload.redirect_to = redirect_to
+    if (kind === 'change_email_new') payload.new_email = new_email
+    // Call Supabase Admin generate_link
+    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+    const res = await fetch(adminURL, {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) return json({ error: 'generate_link_failed', detail: await res.text() }, { status: 500 })
+    const j = await res.json() as any
+    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+    if (!action_link) return json({ error: 'no_action_link' }, { status: 500 })
+    // Build email content
+    const { subject, html, text } = buildAuthEmail(kind, action_link, email, new_email, env.WEB_PUBLIC_BASE || undefined)
+    const emailer = makeEmailProvider(env)
+    await emailer.send({ to: email, subject, html, text })
+    return json({ ok: true })
+  } catch (e) {
+    return json({ error: 'unexpected', detail: String(e) }, { status: 500 })
+  }
+}
+
+function buildAuthEmail(kind: AuthEmailKind, link: string, email: string, newEmail?: string, webBase?: string) {
+  const wrap = (title: string, body: string, btn: string) => {
+    const btnHtml = `<p style="margin:16px 0"><a href="${link}" style="display:inline-block;background:#111827;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none">${btn}</a></p>`
+    const footer = `<p style="color:#6b7280;font-size:12px">このリンクは一定時間で無効になります。覚えがない場合は本メールを破棄してください。</p>`
+    const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.7">
+      <h2 style="margin:0 0 8px 0">KokoSOS</h2>
+      <p>${body}</p>
+      ${btnHtml}
+      ${footer}
+    </div>`
+    return { subject: `KokoSOS ${title}`, html, text: `${title}\n${body}\n${link}` }
+  }
+  switch (kind) {
+    case 'confirm_signup':
+      return wrap('登録のご確認', '下のボタンからメールアドレスの確認を完了してください。', 'メールアドレスを確認')
+    case 'invite':
+      return wrap('ご招待', 'KokoSOS への招待が届いています。下のボタンからアカウントを有効化してください。', '招待を受ける')
+    case 'magic_link':
+    case 'reauth':
+      return wrap('かんたんサインイン', '下のボタンからサインインしてください。', 'サインイン')
+    case 'change_email_current':
+      return wrap('メール変更の確認', 'メール変更の手続きを受け付けました。下のボタンから変更を確定してください。', '変更を確定')
+    case 'change_email_new':
+      return wrap('新しいメールの確認', '新しいメールアドレスの確認が必要です。下のボタンから確認を完了してください。', '新しいメールを確認')
+    case 'reset_password':
+      return wrap('パスワード再設定のご案内', '下のボタンからパスワードの再設定を完了してください。', 'パスワードを再設定')
+  }
+}
+
 function pemToPkcs8(pem: string): ArrayBuffer {
   const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')
   const bin = atob(b64)
@@ -1388,7 +1468,7 @@ interface EmailProvider {
 }
 
 function makeEmailProvider(env: Env): EmailProvider {
-  if (env.EMAIL_PROVIDER === 'ses') return new SESEmailProvider(env)
+  if ((env.EMAIL_PROVIDER || '').toLowerCase() === 'ses') return new SESEmailProvider(env)
   return new LogEmailProvider()
 }
 
@@ -1450,6 +1530,7 @@ class SESEmailProvider implements EmailProvider {
     }
   }
 }
+
 
 function toAmzDate(d: Date) {
   const pad = (n: number, w = 2) => String(n).padStart(w, '0')
