@@ -87,64 +87,21 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
             signUpButton.isEnabled = false
             defer { signUpButton.isEnabled = true }
             do {
-                // email_redirect_to を構築
+                // Workers経由でユーザー作成 + 確認メール送信
                 let info = Bundle.main.infoDictionary
                 let base = (info?["EmailRedirectBase"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let host = (info?["EmailRedirectHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
-                let redirect: String
-                if let b = base, !b.isEmpty {
-                    redirect = b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback"
-                } else if let h = host, !h.isEmpty {
-                    redirect = "https://\(h)/auth/callback"
+                let redirectURL: URL
+                if let b = base, !b.isEmpty, let u = URL(string: b.replacingOccurrences(of: "/$", with: "", options: .regularExpression) + "/auth/callback") {
+                    redirectURL = u
+                } else if let h = host, !h.isEmpty, let u = URL(string: "https://\(h)/auth/callback") {
+                    redirectURL = u
                 } else {
-                    redirect = "\(scheme)://oauth-callback"
+                    redirectURL = URL(string: "\(scheme)://oauth-callback")!
                 }
-                let client = SupabaseAuthAdapter.shared.client
-                let res = try await client.auth.signUp(email: email, password: pass)
-                if res.session != nil {
-                    UserDefaults.standard.set(true, forKey: "ShouldShowRecipientsOnboardingOnce")
-                    UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
-                    let main = MainViewController()
-                    navigationController?.setViewControllers([main], animated: true)
-                    // サインアップ成功時にデバイス登録を試行
-                    PushRegistrationService.shared.ensureRegisteredIfPossible()
-                } else {
-                    // セッションが返らない場合は、既存アカウントの可能性を検証（弾くための確認）
-                    do {
-                        try await client.auth.signIn(email: email, password: pass)
-                        // ここに到達 = 既存アカウントでパスワード一致
-                        // サインアップ導線ではロールを分けるため弾く。即サインアウトして誘導のみ行う。
-                        try? await client.auth.signOut()
-                        let a = UIAlertController(title: "すでにアカウントが存在します", message: "このメールアドレスは登録済みです。サインインしてください。", preferredStyle: .alert)
-                        a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-                        a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
-                            self?.goBackToSignIn()
-                        }))
-                        self.presentAlertController(a)
-                    } catch {
-                        let raw2 = error.localizedDescription
-                        let lower2 = raw2.lowercased()
-                        if lower2.contains("invalid login") || lower2.contains("invalid credentials") || raw2.contains("無効") {
-                            // 既存アカウントでパスワード不一致の可能性が高い
-                            let a = UIAlertController(title: "すでにアカウントが存在します", message: "このメールアドレスは登録済みの可能性があります。サインインするか、パスワード再設定を行ってください。", preferredStyle: .alert)
-                            a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-                            a.addAction(UIAlertAction(title: "サインインへ", style: .default, handler: { [weak self] _ in
-                                self?.goBackToSignIn()
-                            }))
-                            a.addAction(UIAlertAction(title: "パスワード再設定", style: .default, handler: { [weak self] _ in
-                                self?.goBackToSignIn()
-                            }))
-                            self.presentAlertController(a)
-                        } else if lower2.contains("not confirmed") || lower2.contains("confirm") || raw2.contains("確認") {
-                            // 未確認アカウント
-                            showAlert("メール確認が未完了", "このメールアドレスは登録済みですが、確認が完了していません。受信トレイや迷惑メールをご確認のうえ、サインイン画面から再設定メールの送信もお試しください。")
-                        } else {
-                            // 既存でない/判別不能 → 従来案内
-                            showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、ログインしてください。")
-                        }
-                    }
-                }
+                try await AuthEmailClient().signUp(email: email, password: pass, redirectTo: redirectURL)
+                showAlert("確認メールを送信", "メールのリンクを開いて登録を完了してください。完了後、サインインしてください。")
             } catch {
                 let raw = error.localizedDescription
                 let lower = raw.lowercased()

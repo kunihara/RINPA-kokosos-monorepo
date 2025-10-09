@@ -142,6 +142,13 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'POST', pattern: /^\/auth\/email\/send$/, handler: handleAuthEmailSend },
   // Public endpoint for password reset email (no admin auth; return generic response to avoid user enumeration)
   { method: 'POST', pattern: /^\/auth\/email\/reset$/, handler: handleAuthEmailResetPublic },
+  // Public endpoint: magic link sign-in
+  { method: 'POST', pattern: /^\/auth\/email\/magic$/, handler: handleAuthEmailMagicPublic },
+  // Authed endpoints: reauth and change email (current/new)
+  { method: 'POST', pattern: /^\/auth\/email\/reauth$/, handler: handleAuthEmailReauth },
+  { method: 'POST', pattern: /^\/auth\/email\/change$/, handler: handleAuthEmailChangeEmail },
+  // Public endpoint: email/password sign-up via Admin + confirmation email
+  { method: 'POST', pattern: /^\/auth\/signup$/, handler: handleAuthSignupPublic },
 ]
 
 async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1142,7 +1149,8 @@ async function handleAuthEmailSend({ req, env }: Parameters<RouteHandler>[0]): P
     // Build email content
     const { subject, html, text } = buildAuthEmail(kind, action_link, email, new_email, env.WEB_PUBLIC_BASE || undefined)
     const emailer = makeEmailProvider(env)
-    await emailer.send({ to: email, subject, html, text })
+    const to = (kind === 'change_email_new' && new_email) ? new_email : email
+    await emailer.send({ to, subject, html, text })
     return json({ ok: true })
   } catch (e) {
     return json({ error: 'unexpected', detail: String(e) }, { status: 500 })
@@ -1188,6 +1196,139 @@ async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>
   } catch {
     return json({ ok: true })
   }
+}
+
+// Public magic link sender
+async function handleAuthEmailMagicPublic({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: true })
+    const body = await req.json().catch(() => null) as any
+    const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
+    if (!email) return json({ ok: true })
+    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const payload: any = { type: 'magiclink', email }
+    if (redirect_to) payload.redirect_to = redirect_to
+    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+    const res = await fetch(adminURL, {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) return json({ ok: true })
+    const j = await res.json() as any
+    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+    if (!action_link) return json({ ok: true })
+    const { subject, html, text } = buildAuthEmail('magic_link', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
+    try { await makeEmailProvider(env).send({ to: email, subject, html, text }) } catch {}
+    return json({ ok: true })
+  } catch { return json({ ok: true }) }
+}
+
+// Signed-in user: send reauth magic link
+async function handleAuthEmailReauth({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok || !(user as any).userId) return json({ error: 'unauthorized' }, { status: 401 })
+  try {
+    const token = (req.headers.get('authorization') || req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+    const supa = await fetchSupabaseUser(env, token)
+    const email = supa.email || ''
+    if (!email) return json({ ok: true })
+    const body = await req.json().catch(() => null) as any
+    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback?flow=reauth` : undefined)
+    const payload: any = { type: 'magiclink', email }
+    if (redirect_to) payload.redirect_to = redirect_to
+    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+    const res = await fetch(adminURL, {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) return json({ ok: true })
+    const j = await res.json() as any
+    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+    if (!action_link) return json({ ok: true })
+    const { subject, html, text } = buildAuthEmail('reauth', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
+    try { await makeEmailProvider(env).send({ to: email, subject, html, text }) } catch {}
+    return json({ ok: true })
+  } catch { return json({ ok: true }) }
+}
+
+// Signed-in user: change email (send to current and new)
+async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  const user = await getSenderFromAuth(req, env)
+  if (!user.ok || !(user as any).userId) return json({ error: 'unauthorized' }, { status: 401 })
+  try {
+    const token = (req.headers.get('authorization') || req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+    const supa = await fetchSupabaseUser(env, token)
+    const currentEmail = supa.email || ''
+    const body = await req.json().catch(() => null) as any
+    const newEmail = typeof body?.new_email === 'string' ? String(body.new_email).trim() : ''
+    if (!currentEmail || !newEmail) return json({ ok: true })
+    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+    // 1) Current email confirmation
+    {
+      const payload: any = { type: 'email_change_current', email: currentEmail }
+      if (redirect_to) payload.redirect_to = redirect_to
+      const res = await fetch(adminURL, { method: 'POST', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+      if (res.ok) {
+        const j = await res.json() as any
+        const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+        if (link) {
+          const mail = buildAuthEmail('change_email_current', link, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
+          try { await makeEmailProvider(env).send({ to: currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
+        }
+      }
+    }
+    // 2) New email confirmation
+    {
+      const payload: any = { type: 'email_change_new', email: currentEmail, new_email: newEmail }
+      if (redirect_to) payload.redirect_to = redirect_to
+      const res = await fetch(adminURL, { method: 'POST', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+      if (res.ok) {
+        const j = await res.json() as any
+        const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+        if (link) {
+          const mail = buildAuthEmail('change_email_new', link, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
+          try { await makeEmailProvider(env).send({ to: newEmail || currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
+        }
+      }
+    }
+    return json({ ok: true })
+  } catch { return json({ ok: true }) }
+}
+
+// Public: email/password signup via Admin users + confirmation email
+async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => null) as any
+    const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
+    const password = typeof body?.password === 'string' ? String(body.password) : ''
+    if (!email || !password) return json({ ok: true })
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: true })
+    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    // Create user via Admin API (email not confirmed)
+    const adminUsers = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`
+    await fetch(adminUsers, {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password, email_confirm: false }),
+    }).catch(() => null)
+    // Send confirmation link
+    const adminGen = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+    const payload: any = { type: 'signup', email }
+    if (redirect_to) payload.redirect_to = redirect_to
+    const res = await fetch(adminGen, { method: 'POST', headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+    if (res.ok) {
+      const j = await res.json() as any
+      const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+      if (link) {
+        const mail = buildAuthEmail('confirm_signup', link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
+        try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
+      }
+    }
+    return json({ ok: true })
+  } catch { return json({ ok: true }) }
 }
 
 function buildAuthEmail(kind: AuthEmailKind, link: string, email: string, newEmail?: string, webBase?: string) {
