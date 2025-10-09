@@ -51,6 +51,14 @@
 - POST `/devices/register` … FCMトークン登録（platform, fcm_token）
 - POST `/devices/unregister` … FCMトークン解除
 
+### 認証メール（Workers, 追加）
+- POST `/auth/email/reset` … パスワード再設定メール送信（公開）
+- POST `/auth/email/magic` … マジックリンク送信（公開）
+- POST `/auth/email/reauth` … 再認証リンク送信（要認証）
+- POST `/auth/email/change` … メール変更（現在/新メールへ送信、要認証）
+- POST `/auth/signup` … サインアップ確認リンク発行（事前ユーザー作成はしない／generate_link('signup') を使用）
+- POST `/_diag/auth/cleanup_unconfirmed` … 未確認ユーザーのクリーンアップ（管理者専用: Authorization=Bearer <Service Role>）
+
 ### 受信者用 (Web公開API・JWT必須)
 - GET `/public/alert/:token` … 初期データ（種別type・状態・最新位置・残り時間・権限）
 - GET `/public/alert/:token/stream` … SSEによるライブ更新
@@ -78,6 +86,12 @@ SSEイベント（例）
 - データ最小化：名前や電話番号は受信者権限に応じて制御。
 - 権限（受信者）：JWTに`contact_id`がある個別招待リンクのみ返信可（`can_reply=true`）。汎用共有トークンは返信不可。
 - ヘルスチェック：`GET /_health` で FCM 設定有無を確認可能（`has.FCM_*`）。
+
+認証メールまわりの対策（追加）
+- redirect_to のホワイトリスト検証：`APP_SCHEMES`（CSV例: `kokosos,kokosos-dev`）と `WEB_PUBLIC_BASE` と同一ホストのみ許可。未許可は既定にフォールバック。
+- generate_link フォールバック：redirect不一致時は `WEB_PUBLIC_BASE/auth/confirm?type=...&next=<appスキーム>` に差し替え再試行。最終手段として redirect_to を外してSite URLへ。
+- 列挙防止：公開エンドポイントは常に `{ ok: true }` を返す。
+- ログ：`EMAIL_DEBUG=true` で送信成功/失敗・generate_link失敗を明示出力（dev向け）。
 
 ---
 
@@ -107,6 +121,23 @@ SSEイベント（例）
 
 - 開発用診断
   - Workers: `GET /_diag/whoami` で Authorization の検証結果（JWKS/フォールバック）を返却。401切り分けに使用。
+
+---
+
+## 認証メール/ディープリンク（更新）
+
+- 送信はWorkersが担当（Supabase Admin generate_link を使用）。`/auth/signup` はリンク発行のみで、事前ユーザー作成は行わない。
+- iOSは `kokosos(-dev)://oauth-callback` を受け、`DeepLinkHandler` が `session(from:)` を適用。種別（signup/invite/magic/email_change/reauth/recovery）に応じて成功/失敗メッセージを表示。
+- パスワード再設定は `ResetPasswordViewController` で更新。セッション未適用時はガードして、リンク再オープンを促す案内を表示（Auth session missing 回避）。
+- Supabase Allowed Redirect URLs に各環境のアプリスキーム（例: `kokosos-dev://oauth-callback`）と Web の `https://<appドメイン>/auth/callback` を登録。
+
+## Turnstile / レート制限（追加）
+- Turnstile（Cloudflare）
+  - サーバ：`TURNSTILE_SECRET_KEY` を設定、`REQUIRE_TURNSTILE_PUBLIC=true` で強制（devはオフ可）
+  - クライアント：トークンを `turnstile_token`（または `cf-turnstile-response`）として `/auth/email/reset` `/auth/email/magic` `/auth/signup` に送付
+- レート制限（Workers Durable Object: RateLimiter）
+  - 既定: reset/magic は IP 5/分・メール 5/時、signup は IP 3/5分・メール 3/時
+  - 開発用に `RATE_LIMIT_OFF=true` で一時無効化可（検証後は必ず戻す）
 
 ---
 
@@ -145,6 +176,7 @@ SSEイベント（例）
 - 初期表示：ローディングUI
 - 初期Fetch: `/public/alert/:token` → 状態, 位置, 残り時間
 - SSE購読: `/public/alert/:token/stream` → ライブ更新（延長・返信も即時反映）
+- 認証確認ブリッジ: `/auth/confirm` … Supabaseのリダイレクトを受けて URL フラグメント（`#access_token=...` 等）を `next=<appスキーム>` に連結し、アプリへ転送（Web経由でもトークンを確実に橋渡し）。
 - UI要素：
   - ステータス（共有中/終了/期限切れ）
   - 地図（現在地ピン＋精度円、簡易履歴）※ going_home では非表示
@@ -152,6 +184,9 @@ SSEイベント（例）
   - 延長トースト（例: 「+X分延長されました」）
   - 返信トースト（例: 「返信: OK」）
 - CTAボタン：電話・プリセット返信（複数プリセット）・110へ電話（権限に応じて制御）
+
+開発者用診断（追加）
+- Web: `/diag/auth-email` … Turnstileウィジェット付きで reset/magic/signup をテスト送信。
 
 開発者向けSSE診断（追加）
 - `/_diag/resolve/:token` … トークンから `alert_id` を解決
