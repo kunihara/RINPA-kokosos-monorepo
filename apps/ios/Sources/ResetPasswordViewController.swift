@@ -96,7 +96,8 @@ final class ResetPasswordViewController: UIViewController, UITextFieldDelegate {
                     }
                 }
             } catch {
-                alert("更新に失敗", error.localizedDescription)
+                let msg = translateAuthError(error.localizedDescription)
+                alert("更新に失敗", msg)
             }
         }
     }
@@ -105,5 +106,24 @@ final class ResetPasswordViewController: UIViewController, UITextFieldDelegate {
         let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in completion?() }))
         present(a, animated: true)
+    }
+
+    private func translateAuthError(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        // よくあるSupabase系の文言を日本語に置換
+        if lower.contains("new password should be different") || lower.contains("different from the old password") {
+            return "新しいパスワードは以前と異なる必要があります。別のパスワードを入力してください。"
+        }
+        if lower.contains("auth session missing") || lower.contains("session missing") {
+            return "認証セッションが見つかりません。メールのリンクをもう一度開いてから、再度お試しください。"
+        }
+        if lower.contains("invalid token") || lower.contains("token is expired") {
+            return "リンクが無効または期限切れです。もう一度パスワード再設定をやり直してください。"
+        }
+        if lower.contains("weak password") || lower.contains("password should be") {
+            return "パスワードが弱すぎます。要件を満たすパスワードを入力してください。"
+        }
+        // 既定はそのまま返す
+        return raw
     }
 }
