@@ -33,16 +33,17 @@ enum DeepLinkHandler {
             let queryStr = url.query ?? ""
             print("[DEBUG] DeepLink type=\(tt) urlFrag=#\(fragStr) query=?\(queryStr)")
             #endif
-            // Try to recover session if tokens are present (does nothing if not)
+            // Apply session from URL
             do {
-                _ = try await SupabaseAuthAdapter.shared.client.auth.session(from: url)
-                #if DEBUG
-                print("[DEBUG] DeepLink session(from:) applied")
-                #endif
-            } catch {
-                #if DEBUG
-                print("[DEBUG] DeepLink session(from:) failed: \(error.localizedDescription)")
-                #endif
+                // 1) Try SDK helper (PKCE用). リカバリ等では失敗するため例外は握りつぶす
+                try? await SupabaseAuthAdapter.shared.client.auth.session(from: url)
+                // 2) Fragmentに access_token / refresh_token がある場合は手動で適用
+                if let at = params["access_token"], let rt = params["refresh_token"], !at.isEmpty, !rt.isEmpty {
+                    try? await SupabaseAuthAdapter.shared.client.auth.setSession(accessToken: at, refreshToken: rt)
+                    #if DEBUG
+                    print("[DEBUG] DeepLink setSession(access_token, refresh_token) applied (at.len=\(at.count), rt.len=\(rt.count))")
+                    #endif
+                }
             }
             // Validate session server-side so that stale tokens don't slip through
             let ok = await SupabaseAuthAdapter.shared.validateOnline()
