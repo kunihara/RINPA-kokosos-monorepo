@@ -33,8 +33,14 @@ enum DeepLinkHandler {
             let queryStr = url.query ?? ""
             print("[DEBUG] DeepLink type=\(tt) urlFrag=#\(fragStr) query=?\(queryStr)")
             #endif
-            // Apply session from URL
-            do {
+            // Apply session from URL only for interactive flows (recovery/magic/reauth)
+            let canApplySession: Bool = {
+                switch (flowType ?? "") {
+                    case "recovery", "magic_link", "magiclink", "reauthentication", "reauth": return true
+                    default: return false
+                }
+            }()
+            if canApplySession {
                 // 1) Try SDK helper (PKCE用). リカバリ等では失敗するため例外は握りつぶす
                 try? await SupabaseAuthAdapter.shared.client.auth.session(from: url)
                 // 2) Fragmentに access_token / refresh_token がある場合は手動で適用
@@ -44,6 +50,10 @@ enum DeepLinkHandler {
                     print("[DEBUG] DeepLink setSession(access_token, refresh_token) applied (at.len=\(at.count), rt.len=\(rt.count))")
                     #endif
                 }
+            } else {
+                #if DEBUG
+                print("[DEBUG] DeepLink skip applying session for flow=\(flowType ?? "nil")")
+                #endif
             }
             // Validate session server-side so that stale tokens don't slip through
             let ok = await SupabaseAuthAdapter.shared.validateOnline()
