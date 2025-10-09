@@ -71,6 +71,11 @@ final class ResetPasswordViewController: UIViewController, UITextFieldDelegate {
             do {
                 // Supabase Swift v2: update user attributes (password)
                 let client = SupabaseAuthAdapter.shared.client
+                // 事前にセッション有無を確認（ディープリンクでセッションが適用されなかった場合のガード）
+                guard (try? await client.auth.session) != nil else {
+                    alert("更新に失敗", "認証セッションが見つかりません。メールのリンクをもう一度開いてから、再度お試しください。")
+                    return
+                }
                 _ = try await client.auth.update(user: UserAttributes(password: p1))
                 alert("更新しました", "パスワードを更新しました。再度サインインしてください。") { [weak self] in
                     // セキュリティ方針: リセット直後は必ずサインインを要求
