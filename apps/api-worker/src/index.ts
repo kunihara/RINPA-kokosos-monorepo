@@ -24,6 +24,7 @@ export interface Env {
   // Security helpers
   TURNSTILE_SECRET_KEY?: string
   APP_SCHEMES?: string
+  RATE_LIMIT_OFF?: string
 }
 
 type Method = 'GET' | 'POST'
@@ -107,6 +108,7 @@ async function verifyTurnstile(env: Env, token?: string, ip?: string): Promise<b
 
 // ---- Simple rate limit helper via Durable Object
 async function rateLimitCheck(env: Env, key: string, limit: number, windowSec: number): Promise<boolean> {
+  if ((env.RATE_LIMIT_OFF || '').toLowerCase() === 'true') return true
   try {
     const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(key))
     const res = await stub.fetch(`https://rl/check?limit=${limit}&window=${windowSec}`)
@@ -1202,7 +1204,10 @@ async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>
     // Basic rate limits: IP 5/min, Email 5/hour
     const okIp = await rateLimitCheck(env, `reset:ip:${ip || 'unknown'}`, 5, 60)
     const okEmail = await rateLimitCheck(env, `reset:email:${email.toLowerCase()}`, 5, 3600)
-    if (!okIp || !okEmail) return json({ ok: true })
+    if (!okIp || !okEmail) {
+      if (isEmailDebug(env)) console.log('[AUTH-RESET] rate_limited:', { okIp, okEmail })
+      return json({ ok: true })
+    }
     const payload: any = { type: 'recovery', email }
     if (redirect_to) payload.redirect_to = redirect_to
     // Call Supabase Admin generate_link
@@ -1240,7 +1245,7 @@ async function handleAuthEmailMagicPublic({ req, env }: Parameters<RouteHandler>
     // Rate limit
     const okIp = await rateLimitCheck(env, `magic:ip:${ip || 'unknown'}`, 5, 60)
     const okEmail = await rateLimitCheck(env, `magic:email:${email.toLowerCase()}`, 5, 3600)
-    if (!okIp || !okEmail) return json({ ok: true })
+    if (!okIp || !okEmail) { if (isEmailDebug(env)) console.log('[AUTH-MAGIC] rate_limited:', { okIp, okEmail }); return json({ ok: true }) }
     const payload: any = { type: 'magiclink', email }
     if (redirect_to) payload.redirect_to = redirect_to
     const { ok, link, detail } = await supabaseGenerateLink(env, payload)
@@ -1327,7 +1332,7 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     // Rate limit (more strict for signup)
     const okIp = await rateLimitCheck(env, `signup:ip:${ip || 'unknown'}`, 3, 300)
     const okEmail = await rateLimitCheck(env, `signup:email:${email.toLowerCase()}`, 3, 3600)
-    if (!okIp || !okEmail) return json({ ok: true })
+    if (!okIp || !okEmail) { if (isEmailDebug(env)) console.log('[AUTH-SIGNUP] rate_limited:', { okIp, okEmail }); return json({ ok: true }) }
     // Create user via Admin API (email not confirmed)
     const adminUsers = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`
     await fetch(adminUsers, {
