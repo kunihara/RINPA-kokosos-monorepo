@@ -1411,7 +1411,7 @@ async function supabaseGenerateLink(env: Env, payloadIn: any): Promise<{ ok: boo
     }
   }
   const j = await res.json().catch(() => null) as any
-  const link = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+  const link = j?.action_link || j?.properties?.action_link || j?.properties?.email_otp_link || ''
   if (!link) return { ok: false, detail: 'no_action_link' }
   return { ok: true, link }
 }
