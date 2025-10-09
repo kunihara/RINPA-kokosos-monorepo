@@ -130,7 +130,8 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 // サインイン直後にデバイス登録を試行
                 PushRegistrationService.shared.ensureRegisteredIfPossible()
             } catch {
-                showAlert("サインイン失敗", error.localizedDescription)
+                let msg = AuthErrorTranslator.message(for: error.localizedDescription)
+                showAlert("サインイン失敗", msg)
             }
         }
     }
@@ -159,7 +160,8 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 try await AuthEmailClient().sendPasswordReset(email: email, redirectTo: redirect)
                 showAlert("送信しました", "パスワード再設定メールを送信しました。メール内の手順に従ってください。")
             } catch {
-                showAlert("送信失敗", error.localizedDescription)
+                let msg = AuthErrorTranslator.message(for: error.localizedDescription)
+                showAlert("送信失敗", msg)
             }
         }
     }
@@ -194,7 +196,8 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
                 let main = MainViewController()
                 navigationController?.pushViewController(main, animated: true)
             } catch {
-                showAlert("サインイン失敗", error.localizedDescription)
+                let msg = AuthErrorTranslator.message(for: error.localizedDescription)
+                showAlert("サインイン失敗", msg)
             }
         }
     }

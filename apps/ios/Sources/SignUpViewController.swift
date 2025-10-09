@@ -118,7 +118,8 @@ final class SignUpViewController: UIViewController, UITextFieldDelegate {
                 else if lower.contains("once every") || lower.contains("60 seconds") || lower.contains("too many requests") {
                     showAlert("しばらく待ってから再試行", "短時間に複数回リクエストされました。1分ほど待ってからもう一度お試しください。")
                 } else {
-                    showAlert("サインアップ失敗", raw)
+                    let msg = AuthErrorTranslator.message(for: raw)
+                    showAlert("サインアップ失敗", msg)
                 }
             }
         }
