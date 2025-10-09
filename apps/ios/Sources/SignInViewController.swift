@@ -152,14 +152,11 @@ final class SignInViewController: UIViewController, UITextFieldDelegate {
             resetButton.isEnabled = false
             defer { resetButton.isEnabled = true }
             do {
-                // パスワード再設定はアプリのディープリンクへ直接戻す
-                // Supabase(GoTrue) が #access_token 等のフラグメントを付与して返すため
-                // ここではクエリは付けず、純粋なスキームURLにする
+                // Workers経由で送信（Supabase Admin generate_link -> SES）
                 let info = Bundle.main.infoDictionary
                 let scheme = (info?["OAuthRedirectScheme"] as? String) ?? "kokosos"
-                let redirect = "\(scheme)://oauth-callback"
-                let client = SupabaseAuthAdapter.shared.client
-                try await client.auth.resetPasswordForEmail(email, redirectTo: URL(string: redirect)!)
+                let redirect = URL(string: "\(scheme)://oauth-callback")!
+                try await AuthEmailClient().sendPasswordReset(email: email, redirectTo: redirect)
                 showAlert("送信しました", "パスワード再設定メールを送信しました。メール内の手順に従ってください。")
             } catch {
                 showAlert("送信失敗", error.localizedDescription)

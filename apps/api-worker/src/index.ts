@@ -140,6 +140,8 @@ const routes: Array<{ method: Method; pattern: RegExp; handler: RouteHandler }> 
   { method: 'POST', pattern: /^\/public\/alert\/([^/]+)\/react$/, handler: handlePublicAlertReact },
   // Auth emails (generate + send via provider)
   { method: 'POST', pattern: /^\/auth\/email\/send$/, handler: handleAuthEmailSend },
+  // Public endpoint for password reset email (no admin auth; return generic response to avoid user enumeration)
+  { method: 'POST', pattern: /^\/auth\/email\/reset$/, handler: handleAuthEmailResetPublic },
 ]
 
 async function handleHealth({ env }: Parameters<RouteHandler>[0]): Promise<Response> {
@@ -1144,6 +1146,47 @@ async function handleAuthEmailSend({ req, env }: Parameters<RouteHandler>[0]): P
     return json({ ok: true })
   } catch (e) {
     return json({ error: 'unexpected', detail: String(e) }, { status: 500 })
+  }
+}
+
+// Public handler: send password reset email via Supabase Admin generate_link and SES
+// Security notes:
+// - No Authorization required (user may be signed out when requesting reset)
+// - Always return { ok: true } to avoid user enumeration
+// - Server logs keep details; consider adding rate limiting in front (e.g., Cloudflare Rules)
+async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>[0]): Promise<Response> {
+  try {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: true })
+    const body = await req.json().catch(() => null) as any
+    const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
+    if (!email) return json({ ok: true })
+    const redirect_to = typeof body?.redirect_to === 'string' ? String(body.redirect_to) : (env.WEB_PUBLIC_BASE ? `${env.WEB_PUBLIC_BASE.replace(/\/$/, '')}/auth/callback` : undefined)
+    const payload: any = { type: 'recovery', email }
+    if (redirect_to) payload.redirect_to = redirect_to
+    // Call Supabase Admin generate_link
+    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
+    const res = await fetch(adminURL, {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      // Do not leak; just return ok
+      return json({ ok: true })
+    }
+    const j = await res.json() as any
+    const action_link: string = j?.properties?.action_link || j?.properties?.email_otp_link || ''
+    if (!action_link) return json({ ok: true })
+    const { subject, html, text } = buildAuthEmail('reset_password', action_link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
+    try {
+      const emailer = makeEmailProvider(env)
+      await emailer.send({ to: email, subject, html, text })
+    } catch (e) {
+      // swallow
+    }
+    return json({ ok: true })
+  } catch {
+    return json({ ok: true })
   }
 }
 
