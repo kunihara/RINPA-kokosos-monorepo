@@ -48,11 +48,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install XcodeGen
+      - name: Install XcodeGen (resilient)
         run: |
           set -euo pipefail
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_CURL_RETRIES=5
           brew update
-          brew install xcodegen jq
+          brew install jq || brew reinstall jq
+          brew install xcodegen || brew install --build-from-source xcodegen || \
+            (curl -L https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen-2.44.1.pkg -o /tmp/xcodegen.pkg && sudo installer -pkg /tmp/xcodegen.pkg -target /)
+          xcodegen --version
 
       - name: Xcode environment (versions/sdks)
         run: |
@@ -223,11 +228,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install XcodeGen
+      - name: Install XcodeGen (resilient)
         run: |
           set -euo pipefail
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_CURL_RETRIES=5
           brew update
-          brew install xcodegen jq
+          brew install jq || brew reinstall jq
+          brew install xcodegen || brew install --build-from-source xcodegen || \
+            (curl -L https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen-2.44.1.pkg -o /tmp/xcodegen.pkg && sudo installer -pkg /tmp/xcodegen.pkg -target /)
+          xcodegen --version
 
       - name: Write iOS Secrets xcconfig (matrix=${{ matrix.cfg_suffix }})
         working-directory: apps/ios
