@@ -1285,16 +1285,15 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
     const newEmail = typeof body?.new_email === 'string' ? String(body.new_email).trim() : ''
     if (!currentEmail || !newEmail) return json({ ok: true })
     const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
-    const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
     // 1) Current email confirmation
     {
       const payload: any = { type: 'email_change_current', email: currentEmail }
       if (redirect_to) payload.redirect_to = redirect_to
       const g1 = await supabaseGenerateLink(env, payload)
       if (g1.ok && g1.link) {
-          const mail = buildAuthEmail('change_email_current', link, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
-          try { await makeEmailProvider(env).send({ to: currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
-        }
+        const link1 = g1.link
+        const mail = buildAuthEmail('change_email_current', link1, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
+        try { await makeEmailProvider(env).send({ to: currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
       }
     }
     // 2) New email confirmation
@@ -1303,9 +1302,9 @@ async function handleAuthEmailChangeEmail({ req, env }: Parameters<RouteHandler>
       if (redirect_to) payload.redirect_to = redirect_to
       const g2 = await supabaseGenerateLink(env, payload)
       if (g2.ok && g2.link) {
-          const mail = buildAuthEmail('change_email_new', link, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
-          try { await makeEmailProvider(env).send({ to: newEmail || currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
-        }
+        const link2 = g2.link
+        const mail = buildAuthEmail('change_email_new', link2, currentEmail, newEmail, env.WEB_PUBLIC_BASE || undefined)
+        try { await makeEmailProvider(env).send({ to: newEmail || currentEmail, subject: mail.subject, html: mail.html, text: mail.text }) } catch {}
       }
     }
     return json({ ok: true })
