@@ -43,6 +43,11 @@ export default function AuthEmailDiag() {
     <main style={{ padding: 16, display: 'grid', gap: 12 }}>
       <h1 style={{ margin: 0, fontSize: 20 }}>Auth Email Diagnostics</h1>
       <div style={{ display: 'grid', gap: 8, maxWidth: 460 }}>
+        {!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
+          <div style={{ padding: 8, border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e', borderRadius: 6, fontSize: 13 }}>
+            NEXT_PUBLIC_TURNSTILE_SITE_KEY が未設定です。Cloudflare Pagesの環境変数に設定した後、再デプロイしてください。
+          </div>
+        )}
         <label style={{ display: 'grid', gap: 4 }}>
           <span style={{ fontSize: 13, color: '#374151' }}>メールアドレス</span>
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={input()} />
@@ -75,4 +80,3 @@ function input() {
 function btn() {
   return { background: '#111827', color: 'white', border: 0, borderRadius: 6, padding: '10px 14px', cursor: 'pointer' } as React.CSSProperties
 }
-

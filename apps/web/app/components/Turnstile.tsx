@@ -33,7 +33,13 @@ export default function Turnstile({ siteKey, onToken, mode = 'managed' }: Props)
   useEffect(() => {
     if (!ready) return
     const el = rootRef.current
-    if (!el || !key || !window.turnstile) return
+    if (!el || !window.turnstile) return
+    if (!key) {
+      // No site key provided; show a hint box for diagnostics
+      el.innerHTML = '<div style="padding:8px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:6px;font-size:13px">Turnstileのサイトキーが未設定です（NEXT_PUBLIC_TURNSTILE_SITE_KEY）。Cloudflare Pagesの環境変数に設定して再デプロイしてください。</div>'
+      onToken?.(null)
+      return
+    }
     // Clear previous if any
     try { if (widgetId) window.turnstile?.remove(widgetId) } catch {}
     const id = window.turnstile.render(el, {
@@ -60,4 +66,3 @@ export default function Turnstile({ siteKey, onToken, mode = 'managed' }: Props)
     </>
   )
 }
-
