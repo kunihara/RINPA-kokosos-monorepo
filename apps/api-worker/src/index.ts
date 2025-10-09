@@ -1336,12 +1336,15 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     const okEmail = await rateLimitCheck(env, `signup:email:${email.toLowerCase()}`, 3, 3600)
     if (!okIp || !okEmail) { if (isEmailDebug(env)) console.log('[AUTH-SIGNUP] rate_limited:', { okIp, okEmail }); return json({ ok: true }) }
     // Send confirmation link only (do not pre-create user)
-    const payload: any = { type: 'signup', email }
+    // Note: Supabase Admin generate_link('signup') requires password when creating signup link
+    const payload: any = { type: 'signup', email, password }
     if (redirect_to) payload.redirect_to = redirect_to
     const g = await supabaseGenerateLink(env, payload)
     if (g.ok && g.link) {
       const mail = buildAuthEmail('confirm_signup', g.link, email, undefined, env.WEB_PUBLIC_BASE || undefined)
       try { await makeEmailProvider(env).send({ to: email, subject: mail.subject, html: mail.html, text: mail.text }); if (isEmailDebug(env)) console.log('[AUTH-SIGNUP] sent ok ->', maskEmail(email)) } catch (e) { if (isEmailDebug(env)) console.log('[EMAIL][auth.signup] failed:', String(e).slice(0,200)) }
+    } else {
+      if (isEmailDebug(env)) console.log('[AUTH-SIGNUP] generate_link failed:', g.detail || 'unknown')
     }
     return json({ ok: true })
   } catch {
