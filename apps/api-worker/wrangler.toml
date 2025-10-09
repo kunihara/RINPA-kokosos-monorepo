@@ -7,23 +7,36 @@ legacy_env = true
 tag = "v1-alert-hub-sqlite"
 new_sqlite_classes = ["AlertHub"]
 
+[[migrations]]
+tag = "v2-rate-limiter"
+new_sqlite_classes = ["RateLimiter"]
+
 [env.dev]
 name = "kokosos-api-dev"
 route = "api-dev.kokosos.com/*"
 [env.dev.durable_objects]
-bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
+bindings = [
+  { name = "ALERT_HUB", class_name = "AlertHub" },
+  { name = "RATE_LIMITER", class_name = "RateLimiter" },
+]
 
 [env.stage]
 name = "kokosos-api-stage"
 route = "api-stage.kokosos.com/*"
 [env.stage.durable_objects]
-bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
+bindings = [
+  { name = "ALERT_HUB", class_name = "AlertHub" },
+  { name = "RATE_LIMITER", class_name = "RateLimiter" },
+]
 
 [env.prod]
 name = "kokosos-api-prod"
 route = "api.kokosos.com/*"
 [env.prod.durable_objects]
-bindings = [{ name = "ALERT_HUB", class_name = "AlertHub" }]
+bindings = [
+  { name = "ALERT_HUB", class_name = "AlertHub" },
+  { name = "RATE_LIMITER", class_name = "RateLimiter" },
+]
 
 #[vars]
 # Placeholders for local dev; production uses Secrets

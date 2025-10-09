@@ -4,6 +4,7 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY?: string
   SUPABASE_JWKS_URL?: string
   REQUIRE_AUTH_SENDER?: string
+  REQUIRE_TURNSTILE_PUBLIC?: string
   SES_REGION?: string
   SES_ACCESS_KEY_ID?: string
   SES_SECRET_ACCESS_KEY?: string
@@ -15,10 +16,14 @@ export interface Env {
   EMAIL_DEBUG?: string
   DEFAULT_USER_EMAIL?: string
   ALERT_HUB: DurableObjectNamespace
+  RATE_LIMITER: DurableObjectNamespace
   // FCM (HTTP v1) credentials for push notifications
   FCM_PROJECT_ID?: string
   FCM_CLIENT_EMAIL?: string
   FCM_PRIVATE_KEY?: string
+  // Security helpers
+  TURNSTILE_SECRET_KEY?: string
+  APP_SCHEMES?: string
 }
 
 type Method = 'GET' | 'POST'
@@ -82,6 +87,34 @@ function corsHeaders(origin?: string): HeadersInit {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
     'Access-Control-Max-Age': '600',
+  }
+}
+
+// ---- Turnstile verification (optional)
+async function verifyTurnstile(env: Env, token?: string, ip?: string): Promise<boolean> {
+  if (!env.REQUIRE_TURNSTILE_PUBLIC || env.REQUIRE_TURNSTILE_PUBLIC.toLowerCase() !== 'true') return true
+  if (!env.TURNSTILE_SECRET_KEY) return false
+  if (!token) return false
+  const form = new URLSearchParams()
+  form.set('secret', env.TURNSTILE_SECRET_KEY)
+  form.set('response', token)
+  if (ip) form.set('remoteip', ip)
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })
+  if (!res.ok) return false
+  const j = await res.json().catch(() => null) as any
+  return Boolean(j && j.success)
+}
+
+// ---- Simple rate limit helper via Durable Object
+async function rateLimitCheck(env: Env, key: string, limit: number, windowSec: number): Promise<boolean> {
+  try {
+    const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(key))
+    const res = await stub.fetch(`https://rl/check?limit=${limit}&window=${windowSec}`)
+    if (!res.ok) return true // fail-open to avoid false negatives
+    const j = await res.json().catch(() => null) as any
+    return Boolean(j && j.allow)
+  } catch {
+    return true
   }
 }
 
@@ -1169,6 +1202,13 @@ async function handleAuthEmailResetPublic({ req, env }: Parameters<RouteHandler>
     const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
     if (!email) return json({ ok: true })
     const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
+    const ip = (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+    const tsToken = String(body?.turnstile_token || body?.['cf-turnstile-response'] || '')
+    if (!(await verifyTurnstile(env, tsToken, ip))) return json({ ok: true })
+    // Basic rate limits: IP 5/min, Email 5/hour
+    const okIp = await rateLimitCheck(env, `reset:ip:${ip || 'unknown'}`, 5, 60)
+    const okEmail = await rateLimitCheck(env, `reset:email:${email.toLowerCase()}`, 5, 3600)
+    if (!okIp || !okEmail) return json({ ok: true })
     const payload: any = { type: 'recovery', email }
     if (redirect_to) payload.redirect_to = redirect_to
     // Call Supabase Admin generate_link
@@ -1206,6 +1246,13 @@ async function handleAuthEmailMagicPublic({ req, env }: Parameters<RouteHandler>
     const email = typeof body?.email === 'string' ? String(body.email).trim() : ''
     if (!email) return json({ ok: true })
     const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
+    const ip = (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+    const tsToken = String(body?.turnstile_token || body?.['cf-turnstile-response'] || '')
+    if (!(await verifyTurnstile(env, tsToken, ip))) return json({ ok: true })
+    // Rate limit
+    const okIp = await rateLimitCheck(env, `magic:ip:${ip || 'unknown'}`, 5, 60)
+    const okEmail = await rateLimitCheck(env, `magic:email:${email.toLowerCase()}`, 5, 3600)
+    if (!okIp || !okEmail) return json({ ok: true })
     const payload: any = { type: 'magiclink', email }
     if (redirect_to) payload.redirect_to = redirect_to
     const adminURL = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/generate_link`
@@ -1307,6 +1354,13 @@ async function handleAuthSignupPublic({ req, env }: Parameters<RouteHandler>[0])
     if (!email || !password) return json({ ok: true })
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ ok: true })
     const redirect_to = sanitizeRedirect(env, typeof body?.redirect_to === 'string' ? String(body.redirect_to) : undefined)
+    const ip = (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+    const tsToken = String(body?.turnstile_token || body?.['cf-turnstile-response'] || '')
+    if (!(await verifyTurnstile(env, tsToken, ip))) return json({ ok: true })
+    // Rate limit (more strict for signup)
+    const okIp = await rateLimitCheck(env, `signup:ip:${ip || 'unknown'}`, 3, 300)
+    const okEmail = await rateLimitCheck(env, `signup:email:${email.toLowerCase()}`, 3, 3600)
+    if (!okIp || !okEmail) return json({ ok: true })
     // Create user via Admin API (email not confirmed)
     const adminUsers = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`
     await fetch(adminUsers, {
@@ -1555,6 +1609,30 @@ export class AlertHub {
       return new Response(body, { headers: { 'content-type': 'application/json' } })
     }
     return new Response('Not Found', { status: 404 })
+  }
+}
+
+// -------- Durable Object: RateLimiter (fixed-window counters)
+export class RateLimiter {
+  state: DurableObjectState
+  constructor(state: DurableObjectState, _env: Env) {
+    this.state = state
+  }
+  async fetch(req: Request): Promise<Response> {
+    const url = new URL(req.url)
+    if (url.pathname === '/check') {
+      const limit = Number(url.searchParams.get('limit') || '5')
+      const windowSec = Number(url.searchParams.get('window') || '60')
+      const now = Math.floor(Date.now() / 1000)
+      const windowStart = now - (now % windowSec)
+      const key = `w:${windowStart}`
+      // Use atomic alarm barrier: read-modify-write
+      const current = (await this.state.storage.get<number>(key)) || 0
+      if (current >= limit) return new Response(JSON.stringify({ allow: false }), { headers: { 'content-type': 'application/json' } })
+      await this.state.storage.put(key, current + 1, { expirationTtl: windowSec + 5 })
+      return new Response(JSON.stringify({ allow: true }), { headers: { 'content-type': 'application/json' } })
+    }
+    return new Response('not found', { status: 404 })
   }
 }
 

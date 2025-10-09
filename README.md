@@ -74,6 +74,18 @@ Security
 
 - Email sending uses AWS SES (local dev may use MailHog).
 - SSE broadcasting is stubbed; connect to storage/pubsub as you wire Supabase/Workers Durable Objects.
+
+Hardening (optional but recommended)
+- Turnstile (Cloudflare CAPTCHA)
+  - Server: set `TURNSTILE_SECRET_KEY` and `REQUIRE_TURNSTILE_PUBLIC=true` on Workers. Optionally set `APP_SCHEMES` (CSV, e.g., `kokosos,kokosos-dev`) to allow native app deep-link callbacks.
+  - Client: include Turnstile widget and send token as `turnstile_token` (or `cf-turnstile-response`) in body to these endpoints: `POST /auth/email/reset`, `/auth/email/magic`, `/auth/signup`.
+  - If verification fails, the server rejects without sending email.
+- Rate limiting (Workers Durable Object)
+  - Built-in fixed-window counters via a `RateLimiter` Durable Object.
+  - Applied to the public auth email endpoints (per-IP and per-email). Default thresholds:
+    - Reset/Magic: IP 5/min, Email 5/hour
+    - SignUp: IP 3/5min, Email 3/hour
+  - For additional protection, also enable Cloudflare WAF/Rate Limiting rules at the edge.
 - iOS（UIKit / XcodeGen）
 - 生成: `brew install xcodegen` 後、`cd apps/ios && xcodegen generate && open KokoSOS.xcodeproj`
 - ビルド構成: Debug/Release × Dev/Stage/Prod（6構成）。`apps/ios/Configs/*.xcconfig`で `API_BASE_URL` を環境ごとに設定。
