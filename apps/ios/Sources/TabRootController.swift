@@ -17,20 +17,12 @@ final class TabRootController: UITabBarController {
         // 調整: 文字位置をわずかに下げ、アイコンが高く見えないようにする
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        // アイコン/タイトルをまとめて下方向へオフセット（白背景内に収める）
+        // タイトルのみAppearanceで下げる（iconのオフセットはAPIに無いため個別にimageInsetsで対応）
         let offsetY: CGFloat = 5
-        // stacked（通常のタブ表示）
-        appearance.stackedLayoutAppearance.normal.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.stackedLayoutAppearance.selected.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        // inline/compactInline（iPadや横向きなど）にも適用
-        appearance.inlineLayoutAppearance.normal.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.inlineLayoutAppearance.selected.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.inlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.inlineLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.compactInlineLayoutAppearance.normal.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.compactInlineLayoutAppearance.selected.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.compactInlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.compactInlineLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         self.tabBar.standardAppearance = appearance
@@ -40,12 +32,15 @@ final class TabRootController: UITabBarController {
 
         let home = UINavigationController(rootViewController: HomeModeViewController())
         home.tabBarItem = UITabBarItem(title: "帰るモード", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
+        home.tabBarItem.imageInsets = UIEdgeInsets(top: 3, left: 0, bottom: -3, right: 0)
 
         let emergency = UINavigationController(rootViewController: MainViewController())
         emergency.tabBarItem = UITabBarItem(title: "緊急モード", image: UIImage(systemName: "phone.down.circle"), selectedImage: UIImage(systemName: "phone.down.circle.fill"))
+        emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 3, left: 0, bottom: -3, right: 0)
 
         let settings = UINavigationController(rootViewController: SettingsViewController())
         settings.tabBarItem = UITabBarItem(title: "設定", image: UIImage(systemName: "bell.badge"), selectedImage: UIImage(systemName: "bell.badge.fill"))
+        settings.tabBarItem.imageInsets = UIEdgeInsets(top: 3, left: 0, bottom: -3, right: 0)
 
         viewControllers = [home, emergency, settings]
 
