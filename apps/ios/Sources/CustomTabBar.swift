@@ -10,7 +10,7 @@ final class CustomTabBar: UITabBar {
     var barHeightExtra: CGFloat = 0
     // 望ましいタブバー高さ（SafeArea下端を含めて計算）
     // 白背景をさらに広げる
-    var desiredBarHeight: CGFloat = 74
+    var desiredBarHeight: CGFloat = 80
 
     override init(frame: CGRect) {
         super.init(frame: frame)
