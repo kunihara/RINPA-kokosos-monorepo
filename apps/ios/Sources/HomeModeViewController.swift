@@ -18,6 +18,14 @@ final class HomeModeViewController: UIViewController {
     private let contactsClient = ContactsClient()
     private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
     private let recipientsButton = UIButton(type: .system)
+    // Animation (B案: ソリッド・ニュートラル)
+    private var overlayView: UIView?
+    private var fullView: UIView?
+    #if DEBUG
+    private let debugAnimateOnlyHome = true
+    #else
+    private let debugAnimateOnlyHome = false
+    #endif
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -160,7 +168,13 @@ final class HomeModeViewController: UIViewController {
         present(nav, animated: true)
     }
 
-    @objc private func tapStart() { presentCountdown(seconds: 3) { [weak self] in self?.kickoff() } }
+    @objc private func tapStart() {
+        // B案のフルスクリーン拡大演出を開始
+        animateExpand()
+        // アニメーション確認モードでは機能をオフ（ネットワーク/ロジックを呼ばない）
+        if debugAnimateOnlyHome { return }
+        presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
+    }
 
     private func presentCountdown(seconds: Int, completion: @escaping () -> Void) {
         remaining = seconds
@@ -181,6 +195,7 @@ final class HomeModeViewController: UIViewController {
     }
 
     private func kickoff() {
+        if debugAnimateOnlyHome { return }
         guard !selectedRecipients.isEmpty else {
             let a = UIAlertController(title: "受信者未選択", message: "まず『受信者』をタップして、送信先を選択してください。", preferredStyle: .alert)
             a.addAction(UIAlertAction(title: "OK", style: .default))
@@ -237,5 +252,171 @@ final class HomeModeViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         if let pop = sheet.popoverPresentationController { pop.sourceView = extendButton; pop.sourceRect = extendButton.bounds }
         present(sheet, animated: true)
+    }
+}
+
+// MARK: - B案: ソリッド・ニュートラルの拡大/縮小演出
+extension HomeModeViewController {
+    private func animateExpand() {
+        guard let container = view.window ?? view.superview ?? view else { return }
+        // ボタン中心（コンテナ座標）
+        let btnCenter: CGPoint = {
+            if startButton.superview != nil {
+                return startButton.superview!.convert(startButton.center, to: container)
+            } else {
+                return container.center
+            }
+        }()
+        // 初期サイズはボタン直径
+        let d = max(startButton.bounds.width, startButton.bounds.height)
+        let ov = UIView(frame: CGRect(x: 0, y: 0, width: d, height: d))
+        ov.backgroundColor = UIColor.secondarySystemBackground
+        ov.layer.cornerRadius = d/2
+        if #available(iOS 13.0, *) { ov.layer.cornerCurve = .continuous }
+        ov.center = btnCenter
+        ov.alpha = 1.0
+        container.addSubview(ov)
+        container.bringSubviewToFront(ov)
+        overlayView = ov
+
+        // 画面対角に十分広がるスケール
+        let w = container.bounds.width
+        let h = container.bounds.height
+        let target = sqrt(w*w + h*h) * 1.15
+        let scale = max(1.0, target / max(d, 1))
+        UIView.animate(withDuration: 0.5, delay: 0, options: [.curveEaseInOut], animations: {
+            ov.transform = CGAffineTransform(scaleX: scale, y: scale)
+        }, completion: { _ in
+            self.presentFullScreen(on: container)
+        })
+    }
+
+    private func presentFullScreen(on container: UIView) {
+        if fullView != nil { return }
+        let full = UIView()
+        full.translatesAutoresizingMaskIntoConstraints = false
+        full.backgroundColor = UIColor.secondarySystemBackground
+        full.alpha = 0.0
+        container.addSubview(full)
+        NSLayoutConstraint.activate([
+            full.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            full.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            full.topAnchor.constraint(equalTo: container.topAnchor),
+            full.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        self.fullView = full
+
+        // アイコン/タイトル/説明（SOSと同様の文面。ただしモノトーンに合わせてlabel色）
+        let icon = UIImageView()
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.image = (UIImage(systemName: "bell.and.waveform") ?? UIImage(systemName: "bell.fill"))?.withRenderingMode(.alwaysTemplate)
+        icon.tintColor = .label
+
+        let title = UILabel()
+        title.translatesAutoresizingMaskIntoConstraints = false
+        title.text = "SOS"
+        title.textColor = .label
+        title.font = .systemFont(ofSize: 28, weight: .heavy)
+        title.textAlignment = .center
+
+        let desc = UILabel()
+        desc.translatesAutoresizingMaskIntoConstraints = false
+        desc.text = "SOS alert has been sent to\nyour companions."
+        desc.textColor = .label
+        desc.numberOfLines = 0
+        desc.textAlignment = .center
+        desc.font = .systemFont(ofSize: 14, weight: .regular)
+
+        full.addSubview(icon)
+        full.addSubview(title)
+        full.addSubview(desc)
+
+        // 中央白丸ボタン（I'm Safe と同様の見た目。演出確認用で閉じるのみ）
+        let safeBtn = UIButton(type: .system)
+        safeBtn.translatesAutoresizingMaskIntoConstraints = false
+        safeBtn.backgroundColor = .white
+        safeBtn.setTitle("I'm Safe", for: .normal)
+        safeBtn.setTitleColor(.label, for: .normal)
+        safeBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        safeBtn.layer.cornerRadius = 44
+        if #available(iOS 13.0, *) { safeBtn.layer.cornerCurve = .continuous }
+        safeBtn.addTarget(self, action: #selector(closeFullScreen), for: .touchUpInside)
+        full.addSubview(safeBtn)
+
+        // 下部: 延長/即時失効（モノトーン）
+        let extendBtn = UIButton(type: .system)
+        extendBtn.translatesAutoresizingMaskIntoConstraints = false
+        extendBtn.setTitle("  延長  ", for: .normal)
+        extendBtn.setTitleColor(.label, for: .normal)
+        extendBtn.layer.cornerRadius = 20
+        extendBtn.layer.borderWidth = 1
+        extendBtn.layer.borderColor = UIColor.separator.cgColor
+        extendBtn.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
+
+        let revokeBtn = UIButton(type: .system)
+        revokeBtn.translatesAutoresizingMaskIntoConstraints = false
+        revokeBtn.setTitle("  即時失効  ", for: .normal)
+        revokeBtn.setTitleColor(.label, for: .normal)
+        revokeBtn.layer.cornerRadius = 20
+        revokeBtn.layer.borderWidth = 1
+        revokeBtn.layer.borderColor = UIColor.separator.cgColor
+        revokeBtn.addTarget(self, action: #selector(tapRevokeFromFull), for: .touchUpInside)
+
+        let bottom = UIStackView(arrangedSubviews: [extendBtn, revokeBtn])
+        bottom.translatesAutoresizingMaskIntoConstraints = false
+        bottom.axis = .horizontal
+        bottom.alignment = .center
+        bottom.distribution = .fillEqually
+        bottom.spacing = 16
+        full.addSubview(bottom)
+
+        let g = full.layoutMarginsGuide
+        NSLayoutConstraint.activate([
+            icon.topAnchor.constraint(equalTo: full.safeAreaLayoutGuide.topAnchor, constant: 40),
+            icon.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+            icon.heightAnchor.constraint(equalToConstant: 44),
+            icon.widthAnchor.constraint(equalToConstant: 44),
+
+            title.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
+            title.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+
+            desc.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
+            desc.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+
+            safeBtn.topAnchor.constraint(equalTo: desc.bottomAnchor, constant: 28),
+            safeBtn.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+            safeBtn.heightAnchor.constraint(equalToConstant: 88),
+            safeBtn.widthAnchor.constraint(equalToConstant: 88),
+
+            bottom.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
+            bottom.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
+            bottom.bottomAnchor.constraint(equalTo: full.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            extendBtn.heightAnchor.constraint(equalToConstant: 40),
+            revokeBtn.heightAnchor.constraint(equalToConstant: 40)
+        ])
+
+        UIView.animate(withDuration: 0.22) { full.alpha = 1.0 }
+    }
+
+    @objc private func closeFullScreen() {
+        // 完全な対称: オーバーレイのみで縮小し、終わったら消す
+        guard let container = view.window ?? view.superview ?? view else { return }
+        guard let ov = overlayView else { return }
+        // フル画面は先にフェード
+        if let full = fullView {
+            UIView.animate(withDuration: 0.18, animations: { full.alpha = 0 }) { _ in
+                full.removeFromSuperview(); self.fullView = nil
+            }
+        }
+        UIView.animate(withDuration: 0.5, delay: 0, options: [.curveEaseInOut], animations: {
+            ov.transform = .identity
+        }, completion: { _ in
+            ov.removeFromSuperview(); self.overlayView = nil
+        })
+    }
+
+    @objc private func tapRevokeFromFull() {
+        // 既存の revoke と同等の動作（UI上は閉じずに維持）
+        self.tapRevoke()
     }
 }
