@@ -110,9 +110,9 @@ final class TabRootController: UITabBarController {
         leftItem.normalTintColor = .secondaryLabel
         rightItem.selectedTintColor = .label
         rightItem.normalTintColor = .secondaryLabel
-        // ヒット領域は広いが、中央ボタンを侵害しない程度に調整
-        leftItem.extraHitOutset = 14
-        rightItem.extraHitOutset = 14
+        // ヒット領域は中央側を小さく、外側を大きく（中央ボタンとの競合回避）
+        leftItem.hitOutsets = UIEdgeInsets(top: 16, left: 20, bottom: 16, right: 6)
+        rightItem.hitOutsets = UIEdgeInsets(top: 16, left: 6, bottom: 16, right: 20)
 
         leftItem.translatesAutoresizingMaskIntoConstraints = false
         rightItem.translatesAutoresizingMaskIntoConstraints = false

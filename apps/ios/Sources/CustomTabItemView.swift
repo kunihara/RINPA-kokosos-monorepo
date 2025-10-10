@@ -8,8 +8,9 @@ final class CustomTabItemView: UIControl {
 
     var selectedTintColor: UIColor = .label { didSet { applyStyle() } }
     var normalTintColor: UIColor = .secondaryLabel { didSet { applyStyle() } }
-    // タップしやすさ向上のためのヒット拡張
-    var extraHitOutset: CGFloat = 20
+    // タップしやすさ向上のためのヒット拡張（非対称対応）
+    var extraHitOutset: CGFloat = 20 { didSet { hitOutsets = UIEdgeInsets(top: extraHitOutset, left: extraHitOutset, bottom: extraHitOutset, right: extraHitOutset) } }
+    var hitOutsets: UIEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
 
     override var isSelected: Bool { didSet { applyStyle() } }
 
@@ -62,9 +63,9 @@ final class CustomTabItemView: UIControl {
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // コントロールの周囲にヒット領域を拡張（最小56pt四方を目標）
+        // コントロールの周囲にヒット領域を拡張（最小56pt四方を目標）。非対称拡張に対応。
         let minSide: CGFloat = 56
-        var bounds = self.bounds.insetBy(dx: -extraHitOutset, dy: -extraHitOutset)
+        var bounds = self.bounds.inset(by: UIEdgeInsets(top: -hitOutsets.top, left: -hitOutsets.left, bottom: -hitOutsets.bottom, right: -hitOutsets.right))
         let addW = max(0, (minSide - bounds.width) / 2)
         let addH = max(0, (minSide - bounds.height) / 2)
         bounds = bounds.insetBy(dx: -addW, dy: -addH)
