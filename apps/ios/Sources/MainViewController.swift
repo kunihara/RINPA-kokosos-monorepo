@@ -17,6 +17,7 @@ final class MainViewController: UIViewController {
     #endif
     // Fallback overlay for robust animation (frame-based)
     private var sosOverlay: UIView?
+    private var sosFullView: UIView?
     private var sosLayer: CAShapeLayer?
     private let statusLabel = UILabel()
     private let controlsStack = UIStackView()
@@ -308,6 +309,14 @@ final class MainViewController: UIViewController {
                 self.sosOverlay = nil
             })
         }
+        if let full = sosFullView {
+            UIView.animate(withDuration: 0.2, animations: {
+                full.alpha = 0.0
+            }, completion: { _ in
+                full.removeFromSuperview()
+                self.sosFullView = nil
+            })
+        }
         sosBackdropW.constant = sosInitialSize
         sosBackdropH.constant = sosInitialSize
         UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
@@ -342,7 +351,7 @@ final class MainViewController: UIViewController {
         }()
 
         let overlay = UIView(frame: CGRect(x: 0, y: 0, width: sosInitialSize, height: sosInitialSize))
-        overlay.backgroundColor = UIColor.systemRed.withAlphaComponent(0.35)
+        overlay.backgroundColor = UIColor.systemRed
         overlay.layer.cornerRadius = sosInitialSize / 2
         overlay.center = btnCenter
         overlay.alpha = 0.0
@@ -359,7 +368,157 @@ final class MainViewController: UIViewController {
         UIView.animate(withDuration: 0.5 as TimeInterval, delay: 0, options: [.curveEaseInOut], animations: {
             overlay.alpha = 1.0
             overlay.transform = CGAffineTransform(scaleX: scale, y: scale)
+        }, completion: { _ in
+            self.presentSOSFullScreen(on: container)
         })
+    }
+
+    // 画面いっぱいになった後のフルスクリーンSOS画面
+    private func presentSOSFullScreen(on container: UIView) {
+        // 既に表示済みならスキップ
+        if sosFullView != nil { return }
+
+        let full = UIView()
+        full.translatesAutoresizingMaskIntoConstraints = false
+        full.backgroundColor = UIColor.systemRed
+        full.alpha = 0.0
+        container.addSubview(full)
+        NSLayoutConstraint.activate([
+            full.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            full.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            full.topAnchor.constraint(equalTo: container.topAnchor),
+            full.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+
+        // 上部：閉じる(X) と Call 112
+        let closeBtn = UIButton(type: .system)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        closeBtn.setTitle("✕", for: .normal)
+        closeBtn.setTitleColor(.white, for: .normal)
+        closeBtn.titleLabel?.font = .systemFont(ofSize: 22, weight: .semibold)
+        closeBtn.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
+
+        let callTopBtn = UIButton(type: .system)
+        callTopBtn.translatesAutoresizingMaskIntoConstraints = false
+        callTopBtn.setTitle("Call 112", for: .normal)
+        callTopBtn.setTitleColor(.white, for: .normal)
+        callTopBtn.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        callTopBtn.addTarget(self, action: #selector(tapCall112), for: .touchUpInside)
+
+        full.addSubview(closeBtn)
+        full.addSubview(callTopBtn)
+
+        // 中央：アイコン、SOSタイトル、説明
+        let icon = UIImageView()
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        if let bell = UIImage(systemName: "bell.and.waveform") ?? UIImage(systemName: "bell.fill") {
+            icon.image = bell.withRenderingMode(.alwaysTemplate)
+            icon.tintColor = .white
+        }
+        let title = UILabel()
+        title.translatesAutoresizingMaskIntoConstraints = false
+        title.text = "SOS"
+        title.textColor = .white
+        title.font = .systemFont(ofSize: 28, weight: .heavy)
+        title.textAlignment = .center
+
+        let desc = UILabel()
+        desc.translatesAutoresizingMaskIntoConstraints = false
+        desc.text = "SOS alert has been sent to\nyour companions."
+        desc.textColor = .white
+        desc.numberOfLines = 0
+        desc.textAlignment = .center
+        desc.font = .systemFont(ofSize: 14, weight: .regular)
+
+        full.addSubview(icon)
+        full.addSubview(title)
+        full.addSubview(desc)
+
+        // 中央の白丸 "I'm Safe"
+        let safeBtn = UIButton(type: .system)
+        safeBtn.translatesAutoresizingMaskIntoConstraints = false
+        safeBtn.backgroundColor = .white
+        safeBtn.setTitle("I'm Safe", for: .normal)
+        safeBtn.setTitleColor(.systemRed, for: .normal)
+        safeBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        safeBtn.layer.cornerRadius = 44
+        safeBtn.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
+        full.addSubview(safeBtn)
+
+        // 下部の Message / Call ボタン（アウトライン）
+        let msgBtn = UIButton(type: .system)
+        msgBtn.translatesAutoresizingMaskIntoConstraints = false
+        msgBtn.setTitle("  Message  ", for: .normal)
+        msgBtn.setTitleColor(.white, for: .normal)
+        msgBtn.layer.cornerRadius = 20
+        msgBtn.layer.borderWidth = 1
+        msgBtn.layer.borderColor = UIColor.white.cgColor
+        msgBtn.addTarget(self, action: #selector(tapMessage), for: .touchUpInside)
+
+        let callBtn = UIButton(type: .system)
+        callBtn.translatesAutoresizingMaskIntoConstraints = false
+        callBtn.setTitle("  Call  ", for: .normal)
+        callBtn.setTitleColor(.white, for: .normal)
+        callBtn.layer.cornerRadius = 20
+        callBtn.layer.borderWidth = 1
+        callBtn.layer.borderColor = UIColor.white.cgColor
+        callBtn.addTarget(self, action: #selector(tapCall112), for: .touchUpInside)
+
+        let bottomStack = UIStackView(arrangedSubviews: [msgBtn, callBtn])
+        bottomStack.translatesAutoresizingMaskIntoConstraints = false
+        bottomStack.axis = .horizontal
+        bottomStack.alignment = .center
+        bottomStack.distribution = .fillEqually
+        bottomStack.spacing = 16
+        full.addSubview(bottomStack)
+
+        // レイアウト制約
+        let g = full.layoutMarginsGuide
+        NSLayoutConstraint.activate([
+            closeBtn.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 8),
+            closeBtn.topAnchor.constraint(equalTo: full.safeAreaLayoutGuide.topAnchor, constant: 8),
+
+            callTopBtn.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -8),
+            callTopBtn.centerYAnchor.constraint(equalTo: closeBtn.centerYAnchor),
+
+            icon.topAnchor.constraint(equalTo: closeBtn.bottomAnchor, constant: 32),
+            icon.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+            icon.heightAnchor.constraint(equalToConstant: 44),
+            icon.widthAnchor.constraint(equalToConstant: 44),
+
+            title.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
+            title.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+
+            desc.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
+            desc.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+
+            safeBtn.topAnchor.constraint(equalTo: desc.bottomAnchor, constant: 28),
+            safeBtn.centerXAnchor.constraint(equalTo: full.centerXAnchor),
+            safeBtn.heightAnchor.constraint(equalToConstant: 88),
+            safeBtn.widthAnchor.constraint(equalToConstant: 88),
+
+            bottomStack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
+            bottomStack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
+            bottomStack.bottomAnchor.constraint(equalTo: full.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            msgBtn.heightAnchor.constraint(equalToConstant: 40),
+            callBtn.heightAnchor.constraint(equalToConstant: 40)
+        ])
+
+        self.sosFullView = full
+        UIView.animate(withDuration: 0.22, animations: {
+            full.alpha = 1.0
+        })
+    }
+
+    @objc private func tapMessage() {
+        // TODO: メッセージ送信UIへ遷移（現状はプレースホルダー）
+        showAlert("Message", "このボタンの挙動は後で接続します。")
+    }
+
+    @objc private func tapCall112() {
+        if let url = URL(string: "tel://112") {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        }
     }
 
     private func animateSOSExpandLayer() {
