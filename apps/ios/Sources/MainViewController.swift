@@ -3,7 +3,10 @@ import CoreLocation
 
 final class MainViewController: UIViewController {
     private let titleLabel = UILabel()
+    private let headlineLabel = UILabel()
+    private let subLabel = UILabel()
     private let startEmergencyButton = UIButton(type: .system)
+    private let sosBackdrop = UIView()
     private let statusLabel = UILabel()
     private let controlsStack = UIStackView()
     private let stopButton = UIButton(type: .system)
@@ -83,13 +86,39 @@ final class MainViewController: UIViewController {
     }
 
     private func setupUI() {
-        titleLabel.text = "KokoSOS"
-        titleLabel.font = .boldSystemFont(ofSize: 24)
+        titleLabel.text = "Home"
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        startEmergencyButton.setTitle("緊急モード開始", for: .normal)
+        // Headline
+        headlineLabel.text = "Are you in an\nemergency?"
+        headlineLabel.numberOfLines = 0
+        headlineLabel.textAlignment = .center
+        headlineLabel.font = .systemFont(ofSize: 24, weight: .heavy)
+        headlineLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        subLabel.text = "Press the button below and help will\nreach you shortly."
+        subLabel.numberOfLines = 0
+        subLabel.textAlignment = .center
+        subLabel.textColor = .secondaryLabel
+        subLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        subLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // SOS button (large circle)
+        startEmergencyButton.setTitle("SOS", for: .normal)
         startEmergencyButton.addTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
         startEmergencyButton.translatesAutoresizingMaskIntoConstraints = false
+        startEmergencyButton.titleLabel?.font = .boldSystemFont(ofSize: 40)
+        startEmergencyButton.setTitleColor(.white, for: .normal)
+        startEmergencyButton.backgroundColor = UIColor.systemRed
+        startEmergencyButton.layer.shadowColor = UIColor.systemRed.cgColor
+        startEmergencyButton.layer.shadowOpacity = 0.35
+        startEmergencyButton.layer.shadowRadius = 16
+        startEmergencyButton.layer.shadowOffset = CGSize(width: 0, height: 8)
+
+        sosBackdrop.translatesAutoresizingMaskIntoConstraints = false
+        sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
+        sosBackdrop.layer.cornerRadius = 140
 
         // 帰るモード開始は緊急タブから削除（帰るモードは専用タブへ）
 
@@ -107,8 +136,10 @@ final class MainViewController: UIViewController {
         countdownView.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(titleLabel)
+        view.addSubview(headlineLabel)
+        view.addSubview(subLabel)
+        view.addSubview(sosBackdrop)
         view.addSubview(startEmergencyButton)
-        view.addSubview(startHomeButton)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
         recipientsButton.setTitle("受信者: 0名", for: .normal)
@@ -135,10 +166,22 @@ final class MainViewController: UIViewController {
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            startEmergencyButton.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 32),
-            startEmergencyButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            headlineLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 18),
+            headlineLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            subLabel.topAnchor.constraint(equalTo: headlineLabel.bottomAnchor, constant: 8),
+            subLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            recipientsButton.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 16),
+            sosBackdrop.widthAnchor.constraint(equalToConstant: 280),
+            sosBackdrop.heightAnchor.constraint(equalToConstant: 280),
+            sosBackdrop.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            sosBackdrop.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
+
+            startEmergencyButton.widthAnchor.constraint(equalToConstant: 220),
+            startEmergencyButton.heightAnchor.constraint(equalToConstant: 220),
+            startEmergencyButton.centerXAnchor.constraint(equalTo: sosBackdrop.centerXAnchor),
+            startEmergencyButton.centerYAnchor.constraint(equalTo: sosBackdrop.centerYAnchor),
+
+            recipientsButton.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 20),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 24),
@@ -194,6 +237,13 @@ final class MainViewController: UIViewController {
                 countdownView.text = "開始まで: \(remaining)"
             }
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // 丸ボタンの角丸をレイアウト後に適用
+        startEmergencyButton.layer.cornerRadius = startEmergencyButton.bounds.height / 2
+        sosBackdrop.layer.cornerRadius = sosBackdrop.bounds.height / 2
     }
 
     private func kickoff(type: String) {
