@@ -7,6 +7,11 @@ final class CustomTabBar: UITabBar {
     var archRadius: CGFloat = 48
     // SOSの赤アーチのみを下方向にオフセット
     var archYOffset: CGFloat = 12
+
+    // カスタムヒット優先（中央SOS/左右項目へタッチを振り分ける）
+    weak var centerHitView: UIView?
+    weak var leftHitView: UIView?
+    weak var rightHitView: UIView?
     var barCorner: CGFloat = 16
     // 追加の高さは最小に（全体を薄く）
     var barHeightExtra: CGFloat = 0
@@ -88,5 +93,23 @@ final class CustomTabBar: UITabBar {
         let bottom = safeAreaInsets.bottom
         s.height = desiredBarHeight + bottom
         return s
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // 最優先: 中央SOSボタン
+        if let v = centerHitView, v.isUserInteractionEnabled, !v.isHidden, v.alpha > 0.01 {
+            let p = v.convert(point, from: self)
+            if v.point(inside: p, with: event) { return v.hitTest(p, with: event) ?? v }
+        }
+        // 次に左右のカスタム項目
+        if let v = leftHitView, v.isUserInteractionEnabled, !v.isHidden, v.alpha > 0.01 {
+            let p = v.convert(point, from: self)
+            if v.point(inside: p, with: event) { return v.hitTest(p, with: event) ?? v }
+        }
+        if let v = rightHitView, v.isUserInteractionEnabled, !v.isHidden, v.alpha > 0.01 {
+            let p = v.convert(point, from: self)
+            if v.point(inside: p, with: event) { return v.hitTest(p, with: event) ?? v }
+        }
+        return super.hitTest(point, with: event)
     }
 }

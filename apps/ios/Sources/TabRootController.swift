@@ -49,6 +49,10 @@ final class TabRootController: UITabBarController {
 
         setupCenterButton()
         setupCustomItems()
+        // TabBarへヒット優先ビューを通知
+        customBar.centerHitView = centerButton
+        customBar.leftHitView = leftItem
+        customBar.rightHitView = rightItem
         updateCustomSelection()
     }
 
@@ -127,12 +131,12 @@ final class TabRootController: UITabBarController {
         // 中央SOSボタンのヒット領域を確保するため、左右は中心から十分離す
         NSLayoutConstraint.activate([
             leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
-            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -56),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -64),
             leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             // 少し上方向へ（-24pt）
             leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
 
-            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 56),
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 64),
             rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
             rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
