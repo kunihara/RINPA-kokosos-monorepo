@@ -221,13 +221,8 @@ final class SettingsViewController: UIViewController {
                     // Pushトークン解除→サインアウト
                     PushRegistrationService.shared.unregisterLastToken()
                     try? await SupabaseAuthAdapter.shared.client.auth.signOut()
-                    if let nav = self.navigationController {
-                        if let signInVC = nav.viewControllers.first(where: { $0 is SignInViewController }) {
-                            nav.popToViewController(signInVC, animated: true)
-                        } else {
-                            nav.goToSignIn(animated: true)
-                        }
-                    }
+                    // 仕様: pushではなくpopで戻る（必要に応じてpresentedを解消）
+                    self.navigateToSignInRoot()
                 } catch {
                     #if DEBUG
                     print("[DeleteAccount] error=\(error)")
