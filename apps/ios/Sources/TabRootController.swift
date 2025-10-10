@@ -12,36 +12,36 @@ final class TabRootController: UITabBarController {
         // Replace default tab bar with custom one
         let customBar = CustomTabBar()
         setValue(customBar, forKey: "tabBar")
-        tabBar.tintColor = .label
-        tabBar.unselectedItemTintColor = .secondaryLabel
+        // 標準アイテムは見せないため、色はクリア（オーバーレイで表示）
+        tabBar.tintColor = .clear
+        tabBar.unselectedItemTintColor = .clear
         tabBar.clipsToBounds = false
 
-        // 調整: 文字位置をわずかに下げ、アイコンが高く見えないようにする
+        // 調整: 標準タイトルは描画しない（オーバーレイで表示）
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        // アイコンとタイトルを同時にさらに下へ移動（相対距離は維持）
-        let offsetY: CGFloat = 2
-        appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.inlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.inlineLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.compactInlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
-        appearance.compactInlineLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        let clearAttrs: [NSAttributedString.Key: Any] = [.foregroundColor: UIColor.clear]
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = clearAttrs
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = clearAttrs
+        appearance.inlineLayoutAppearance.normal.titleTextAttributes = clearAttrs
+        appearance.inlineLayoutAppearance.selected.titleTextAttributes = clearAttrs
+        appearance.compactInlineLayoutAppearance.normal.titleTextAttributes = clearAttrs
+        appearance.compactInlineLayoutAppearance.selected.titleTextAttributes = clearAttrs
         self.tabBar.standardAppearance = appearance
         if #available(iOS 15.0, *) {
             self.tabBar.scrollEdgeAppearance = appearance
         }
 
         let home = UINavigationController(rootViewController: HomeModeViewController())
-        // 標準のタイトルは空にして、見た目はカスタム項目で表示
-        home.tabBarItem = UITabBarItem(title: "", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
+        // 標準表示は完全に透過（重複を避ける）
+        home.tabBarItem = UITabBarItem(title: "", image: clearImage(), selectedImage: clearImage())
 
         let emergency = UINavigationController(rootViewController: MainViewController())
         emergency.tabBarItem = UITabBarItem(title: "緊急モード", image: UIImage(systemName: "phone.down.circle"), selectedImage: UIImage(systemName: "phone.down.circle.fill"))
         emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 30, left: 0, bottom: -30, right: 0)
 
         let settings = UINavigationController(rootViewController: SettingsViewController())
-        settings.tabBarItem = UITabBarItem(title: "", image: UIImage(systemName: "bell.badge"), selectedImage: UIImage(systemName: "bell.badge.fill"))
+        settings.tabBarItem = UITabBarItem(title: "", image: clearImage(), selectedImage: clearImage())
 
         viewControllers = [home, emergency, settings]
 
@@ -133,5 +133,14 @@ final class TabRootController: UITabBarController {
     private func updateCustomSelection() {
         leftItem.isSelected = (selectedIndex == 0)
         rightItem.isSelected = (selectedIndex == 2)
+    }
+
+    // 1x1の透明画像（標準アイコンを不可視化するために使用）
+    private func clearImage() -> UIImage {
+        let size = CGSize(width: 1, height: 1)
+        UIGraphicsBeginImageContextWithOptions(size, false, 0)
+        let img = UIGraphicsGetImageFromCurrentImageContext() ?? UIImage()
+        UIGraphicsEndImageContext()
+        return img
     }
 }
