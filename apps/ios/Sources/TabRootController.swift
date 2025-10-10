@@ -4,6 +4,7 @@ final class TabRootController: UITabBarController {
     private let centerButton = UIButton(type: .system)
     private let leftItem = CustomTabItemView(title: "帰るモード", image: UIImage(systemName: "location.circle"))
     private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "gearshape"))
+    private let overlay = UIView()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,21 +48,29 @@ final class TabRootController: UITabBarController {
 
         viewControllers = [home, emergency, settings]
 
+        setupOverlay()
         setupCenterButton()
         setupCustomItems()
-        // TabBarへヒット優先ビューを通知
-        customBar.centerHitView = centerButton
-        customBar.leftHitView = leftItem
-        customBar.rightHitView = rightItem
         updateCustomSelection()
+    }
+
+    private func setupOverlay() {
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.backgroundColor = .clear
+        view.addSubview(overlay)
+        NSLayoutConstraint.activate([
+            overlay.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: tabBar.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor)
+        ])
+        view.bringSubviewToFront(overlay)
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
-        tabBar.bringSubviewToFront(leftItem)
-        tabBar.bringSubviewToFront(rightItem)
-        tabBar.bringSubviewToFront(centerButton) // 最前面にSOSボタン
+        view.bringSubviewToFront(overlay)
         // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
         for v in tabBar.subviews {
             if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
@@ -83,16 +92,16 @@ final class TabRootController: UITabBarController {
         centerButton.layer.shadowRadius = 8
         centerButton.layer.shadowOffset = CGSize(width: 0, height: 4)
         centerButton.addTarget(self, action: #selector(tapCenter), for: .touchUpInside)
-        tabBar.addSubview(centerButton)
-        tabBar.bringSubviewToFront(centerButton)
-        tabBar.clipsToBounds = false
+        overlay.addSubview(centerButton)
+        overlay.bringSubviewToFront(centerButton)
+        overlay.clipsToBounds = false
         centerButton.isUserInteractionEnabled = true
         centerButton.layer.zPosition = 100
 
         NSLayoutConstraint.activate([
-            centerButton.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
+            centerButton.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
             // SOSボタンもさらに下げてアーチと整合
-            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 20),
+            centerButton.centerYAnchor.constraint(equalTo: overlay.topAnchor, constant: 20),
             centerButton.widthAnchor.constraint(equalToConstant: 56),
             centerButton.heightAnchor.constraint(equalToConstant: 56),
         ])
@@ -129,23 +138,22 @@ final class TabRootController: UITabBarController {
 
         leftItem.translatesAutoresizingMaskIntoConstraints = false
         rightItem.translatesAutoresizingMaskIntoConstraints = false
-        tabBar.addSubview(leftItem)
-        tabBar.addSubview(rightItem)
-        tabBar.bringSubviewToFront(leftItem)
-        tabBar.bringSubviewToFront(rightItem)
+        overlay.addSubview(leftItem)
+        overlay.addSubview(rightItem)
+        overlay.bringSubviewToFront(leftItem)
+        overlay.bringSubviewToFront(rightItem)
 
         // 中央SOSボタンのヒット領域を確保するため、左右は中心から十分離す
         NSLayoutConstraint.activate([
-            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
-            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -64),
-            leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
-            // 少し上方向へ（-24pt）
-            leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
+            leftItem.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 8),
+            leftItem.trailingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: -64),
+            leftItem.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 0),
+            leftItem.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -24),
 
-            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 64),
-            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
-            rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
-            rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
+            rightItem.leadingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: 64),
+            rightItem.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -8),
+            rightItem.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 0),
+            rightItem.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -24),
         ])
 
         leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
