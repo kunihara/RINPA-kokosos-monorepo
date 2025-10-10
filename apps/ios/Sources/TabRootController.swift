@@ -12,6 +12,8 @@ final class TabRootController: UITabBarController {
         // Replace default tab bar with custom one
         let customBar = CustomTabBar()
         setValue(customBar, forKey: "tabBar")
+        // SOSの赤アーチだけを下げる
+        customBar.archYOffset = 16
         // 標準アイテムは見せないため、色はクリア（オーバーレイで表示）
         tabBar.tintColor = .clear
         tabBar.unselectedItemTintColor = .clear
@@ -69,8 +71,8 @@ final class TabRootController: UITabBarController {
 
         NSLayoutConstraint.activate([
             centerButton.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
-            // タブ全体を高くしたので突出量をさらに抑制
-            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 10),
+            // 赤アーチを下げた分だけボタンも下げて整合
+            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 16),
             centerButton.widthAnchor.constraint(equalToConstant: 56),
             centerButton.heightAnchor.constraint(equalToConstant: 56),
         ])

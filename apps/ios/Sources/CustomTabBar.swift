@@ -5,6 +5,8 @@ final class CustomTabBar: UITabBar {
     private let archLayer = CAShapeLayer()
     // アーチをさらに広げる（セミサークル半径）
     var archRadius: CGFloat = 48
+    // SOSの赤アーチのみを下方向にオフセット
+    var archYOffset: CGFloat = 12
     var barCorner: CGFloat = 16
     // 追加の高さは最小に（全体を薄く）
     var barHeightExtra: CGFloat = 0
@@ -61,16 +63,17 @@ final class CustomTabBar: UITabBar {
         barLayer.shadowOffset = CGSize(width: 0, height: -2)
         barLayer.frame = bounds
 
-        // Red arch behind the center button
+        // Red arch behind the center button（下方向へオフセット可能）
         // Ensure symmetry: the rectangular sides align exactly under the semicircle endpoints.
         let cx = w / 2
+        let archTop = topY + archYOffset
         let leftX = cx - archRadius
         let rightX = cx + archRadius
         let archPath = UIBezierPath()
         // Start at left arc endpoint
-        archPath.move(to: CGPoint(x: leftX, y: topY))
+        archPath.move(to: CGPoint(x: leftX, y: archTop))
         // Draw upper semicircle
-        archPath.addArc(withCenter: CGPoint(x: cx, y: topY), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
+        archPath.addArc(withCenter: CGPoint(x: cx, y: archTop), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
         // Extend straight down to the bottom of the bar, then across, then back up
         archPath.addLine(to: CGPoint(x: rightX, y: h))
         archPath.addLine(to: CGPoint(x: leftX, y: h))
