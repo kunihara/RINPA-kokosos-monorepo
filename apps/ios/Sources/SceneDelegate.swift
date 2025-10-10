@@ -10,6 +10,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     let placeholder = UIViewController()
     placeholder.view.backgroundColor = .systemBackground
     let root = UINavigationController(rootViewController: placeholder)
+    // タブ配下でさらにNavを持つため、外側のNavBarは表示しない（余白回避）
+    root.isNavigationBarHidden = true
     window.rootViewController = root
     window.makeKeyAndVisible()
     self.window = window
