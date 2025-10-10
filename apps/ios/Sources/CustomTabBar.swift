@@ -9,8 +9,8 @@ final class CustomTabBar: UITabBar {
     // 追加の高さは最小に（全体を薄く）
     var barHeightExtra: CGFloat = 0
     // 望ましいタブバー高さ（SafeArea下端を含めて計算）
-    // 左右のアイコンが枠から飛び出さない余裕を確保
-    var desiredBarHeight: CGFloat = 60
+    // 白背景をしっかり見せるため高めに確保
+    var desiredBarHeight: CGFloat = 68
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -40,8 +40,8 @@ final class CustomTabBar: UITabBar {
     private func layoutLayers() {
         let w = bounds.width
         let h = bounds.height + barHeightExtra
-        // アーチはやや抑えつつ、白背景の高さは十分に確保
-        let topY: CGFloat = 6
+        // 白背景を最大化（最上部から描画）
+        let topY: CGFloat = 0
 
         // Bar background (rounded top corners)
         let barPath = UIBezierPath()

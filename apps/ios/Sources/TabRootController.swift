@@ -57,8 +57,8 @@ final class TabRootController: UITabBarController {
 
         NSLayoutConstraint.activate([
             centerButton.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
-            // わずかに下げて飛び出しを抑える
-            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 6),
+            // タブ全体を高くしたので突出量をさらに抑制
+            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 10),
             centerButton.widthAnchor.constraint(equalToConstant: 56),
             centerButton.heightAnchor.constraint(equalToConstant: 56),
         ])
