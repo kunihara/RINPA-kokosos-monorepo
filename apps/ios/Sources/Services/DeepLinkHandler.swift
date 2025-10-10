@@ -95,8 +95,8 @@ enum DeepLinkHandler {
                 UserDefaults.standard.set(true, forKey: "ShouldShowProfileOnboardingOnce")
             }
             if hasSession {
-                let main = MainViewController()
-                navigation?.setViewControllers([main], animated: true)
+                let tabs = TabRootController()
+                navigation?.setViewControllers([tabs], animated: true)
             } else {
                 if let nav = navigation {
                     nav.goToSignIn(animated: true)
