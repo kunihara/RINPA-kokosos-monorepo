@@ -71,7 +71,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       #if DEBUG
       print("[DEBUG] SceneDelegate routeInitial hasSession=\(has)")
       #endif
-      let target = has ? MainViewController() : SignInViewController()
+      let target = has ? TabRootController() : SignInViewController()
       root.setViewControllers([target], animated: false)
       if has { PushRegistrationService.shared.ensureRegisteredIfPossible() }
       // After routing, align install sentinel across storages
