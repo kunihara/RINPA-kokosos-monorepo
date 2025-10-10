@@ -300,34 +300,53 @@ final class MainViewController: UIViewController {
         #if DEBUG
         print("[DEBUG] animateSOSCollapse")
         #endif
-        if let overlay = sosOverlay, let win = view.window ?? UIApplication.shared.windows.first {
-            UIView.animate(withDuration: 0.3, animations: {
-                overlay.alpha = 0.0
-                overlay.transform = .identity
-            }, completion: { _ in
-                overlay.removeFromSuperview()
-                self.sosOverlay = nil
+
+        // 3段階: 1) フル画面UIをフェード → 2) 赤オーバーレイを縮小しながらフェード → 3) 元の背景/ボタンに戻す
+
+        func restoreBackgroundAndButton() {
+            self.sosBackdropW.constant = self.sosInitialSize
+            self.sosBackdropH.constant = self.sosInitialSize
+            UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
+                self.view.layoutIfNeeded()
+                self.sosBackdrop.alpha = 0.3
+                self.sosBackdrop.layer.cornerRadius = self.sosInitialSize / 2
             })
+            self.animateSOSCollapseLayer()
+            self.startEmergencyButton.setTitle("SOS", for: .normal)
+            self.startEmergencyButton.removeTarget(self, action: #selector(self.tapStop), for: .touchUpInside)
+            self.startEmergencyButton.addTarget(self, action: #selector(self.tapStartEmergency), for: .touchUpInside)
         }
+
+        func collapseOverlayThenRestore() {
+            if let overlay = self.sosOverlay {
+                UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
+                    // 赤い画面を少し保ったまま、縮小しつつフェードアウト
+                    overlay.transform = .identity
+                    overlay.alpha = 0.0
+                }, completion: { _ in
+                    overlay.removeFromSuperview()
+                    self.sosOverlay = nil
+                    restoreBackgroundAndButton()
+                })
+            } else {
+                restoreBackgroundAndButton()
+            }
+        }
+
         if let full = sosFullView {
-            UIView.animate(withDuration: 0.2, animations: {
+            UIView.animate(withDuration: 0.22, animations: {
+                // まず文言やボタンをフェードアウト
                 full.alpha = 0.0
             }, completion: { _ in
                 full.removeFromSuperview()
                 self.sosFullView = nil
+                // 次に赤オーバーレイを縮小
+                collapseOverlayThenRestore()
             })
+        } else {
+            // フル画面がなければ、すぐに赤オーバーレイ縮小へ
+            collapseOverlayThenRestore()
         }
-        sosBackdropW.constant = sosInitialSize
-        sosBackdropH.constant = sosInitialSize
-        UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
-            self.view.layoutIfNeeded()
-            self.sosBackdrop.alpha = 0.3
-            self.sosBackdrop.layer.cornerRadius = self.sosInitialSize / 2
-        })
-        animateSOSCollapseLayer()
-        startEmergencyButton.setTitle("SOS", for: .normal)
-        startEmergencyButton.removeTarget(self, action: #selector(tapStop), for: .touchUpInside)
-        startEmergencyButton.addTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
     }
 
     private func animateSOSExpandOverlay() {
