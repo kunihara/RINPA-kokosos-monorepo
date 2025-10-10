@@ -185,8 +185,9 @@ final class TabRootController: UITabBarController {
             rightItem.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -24),
         ])
 
-        leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
-        rightItem.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
+        // 表示専用（タップは透明パッドで処理）
+        leftItem.isUserInteractionEnabled = false
+        rightItem.isUserInteractionEnabled = false
     }
 
     @objc private func tapLeft() {

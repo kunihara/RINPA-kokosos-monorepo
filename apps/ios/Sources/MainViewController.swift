@@ -441,7 +441,7 @@ final class MainViewController: UIViewController {
 
         let full = UIView()
         full.translatesAutoresizingMaskIntoConstraints = false
-        full.backgroundColor = UIColor.systemRed
+        full.backgroundColor = UIColor.kokoRed
         full.alpha = 0.0
         container.addSubview(full)
         NSLayoutConstraint.activate([
