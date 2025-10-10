@@ -387,19 +387,20 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapSignOut() {
-        // SDKサインアウト
+        // SDKサインアウト（失敗は黙許）
         try? awaitTask {
             PushRegistrationService.shared.unregisterLastToken()
             try await SupabaseAuthAdapter.shared.client.auth.signOut()
         }
-        // 可能ならサインイン画面へ pop（なければセット）
-        if let nav = navigationController {
-            if let signInVC = nav.viewControllers.first(where: { $0 is SignInViewController }) {
-                nav.popToViewController(signInVC, animated: true)
+        // 仕様: pushではなくpop系でサインインに戻す（presentedも解消）
+        if let nav = navigationController ?? (view.window?.rootViewController as? UINavigationController) {
+            if nav.presentedViewController != nil {
+                nav.dismiss(animated: true) { nav.goToSignIn(animated: true) }
             } else {
-                let signin = SignInViewController()
-                nav.setViewControllers([signin], animated: true)
+                nav.goToSignIn(animated: true)
             }
+        } else {
+            dismiss(animated: true)
         }
     }
 }
