@@ -54,11 +54,24 @@ extension AppDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let cat = notification.request.content.categoryIdentifier
+        if cat == "contacts" {
+            NotificationCenter.default.post(name: .ContactsShouldRefresh, object: nil)
+        }
         if #available(iOS 14.0, *) {
             completionHandler([.banner, .sound, .list])
         } else {
             completionHandler([.alert, .sound])
         }
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let cat = response.notification.request.content.categoryIdentifier
+        if cat == "contacts" {
+            NotificationCenter.default.post(name: .ContactsShouldRefresh, object: nil)
+        }
+        completionHandler()
     }
 }
 

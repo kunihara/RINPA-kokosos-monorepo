@@ -7,6 +7,9 @@ final class MainViewController: UIViewController {
     private let subLabel = UILabel()
     private let startEmergencyButton = UIButton(type: .system)
     private let sosBackdrop = UIView()
+    private var sosBackdropW: NSLayoutConstraint!
+    private var sosBackdropH: NSLayoutConstraint!
+    private let sosInitialSize: CGFloat = 280
     private let statusLabel = UILabel()
     private let controlsStack = UIStackView()
     private let stopButton = UIButton(type: .system)
@@ -118,7 +121,6 @@ final class MainViewController: UIViewController {
 
         sosBackdrop.translatesAutoresizingMaskIntoConstraints = false
         sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
-        sosBackdrop.layer.cornerRadius = 140
 
         // 帰るモード開始は緊急タブから削除（帰るモードは専用タブへ）
 
@@ -162,6 +164,10 @@ final class MainViewController: UIViewController {
         view.addSubview(controlsStack)
         // 設定はタブで提供、サインアウトは設定タブに移動（本画面のバーアイテムは設置しない）
 
+        // Prepare constraints for animated sizing of SOS backdrop
+        sosBackdropW = sosBackdrop.widthAnchor.constraint(equalToConstant: sosInitialSize)
+        sosBackdropH = sosBackdrop.heightAnchor.constraint(equalToConstant: sosInitialSize)
+
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -171,8 +177,9 @@ final class MainViewController: UIViewController {
             subLabel.topAnchor.constraint(equalTo: headlineLabel.bottomAnchor, constant: 8),
             subLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            sosBackdrop.widthAnchor.constraint(equalToConstant: 280),
-            sosBackdrop.heightAnchor.constraint(equalToConstant: 280),
+            // keep references to animate size
+            sosBackdropW,
+            sosBackdropH,
             sosBackdrop.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             sosBackdrop.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
 
@@ -244,6 +251,35 @@ final class MainViewController: UIViewController {
         // 丸ボタンの角丸をレイアウト後に適用
         startEmergencyButton.layer.cornerRadius = startEmergencyButton.bounds.height / 2
         sosBackdrop.layer.cornerRadius = sosBackdrop.bounds.height / 2
+    }
+
+    // MARK: - SOS Animation
+    private func animateSOSExpand() {
+        view.layoutIfNeeded()
+        let w = view.bounds.width
+        let h = view.bounds.height
+        let target = sqrt(w*w + h*h) * 1.1 // cover diagonal
+        sosBackdropW.constant = target
+        sosBackdropH.constant = target
+        UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0.3, options: [.curveEaseInOut]) {
+            self.view.layoutIfNeeded()
+            self.sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.25)
+        }
+        startEmergencyButton.setTitle("停止", for: .normal)
+        startEmergencyButton.removeTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
+        startEmergencyButton.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
+    }
+
+    private func animateSOSCollapse() {
+        sosBackdropW.constant = sosInitialSize
+        sosBackdropH.constant = sosInitialSize
+        UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut]) {
+            self.view.layoutIfNeeded()
+            self.sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
+        }
+        startEmergencyButton.setTitle("SOS", for: .normal)
+        startEmergencyButton.removeTarget(self, action: #selector(tapStop), for: .touchUpInside)
+        startEmergencyButton.addTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
     }
 
     private func kickoff(type: String) {
@@ -339,8 +375,14 @@ final class MainViewController: UIViewController {
     @objc private func tapStop() {
         guard let session else { return }
         Task { @MainActor in
-            do { try await self.api.stopAlert(id: session.id); self.session?.status = .ended; self.teardownActiveSession(with: "共有を停止しました") }
-            catch { self.statusLabel.text = "停止に失敗: \(error.localizedDescription)" }
+            do {
+                try await self.api.stopAlert(id: session.id)
+                self.session?.status = .ended
+                self.teardownActiveSession(with: "共有を停止しました")
+                self.animateSOSCollapse()
+            } catch {
+                self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
+            }
         }
     }
 

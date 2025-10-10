@@ -675,8 +675,33 @@ async function handleVerifyContact({ req, env }: Parameters<RouteHandler>[0]): P
   if (!contactId) return json({ ok: false, error: 'invalid_contact' }, { status: 400 })
   const sb = supabase(env)
   if (!sb) return json({ error: 'server_misconfig' }, { status: 500 })
+  // mark verified
   await sb.update('contacts', { verified_at: new Date().toISOString() }, `id=eq.${contactId}`)
+  // notify sender (user) via FCM so iOS can refresh recipients
+  try {
+    const q = await sb.select('contacts', 'user_id,name', `id=eq.${contactId}`, 1)
+    if (q.ok && q.data.length > 0) {
+      const uid = String((q.data[0] as any).user_id || '')
+      if (uid) {
+        await pushNotifyUser(env, uid, {
+          title: '受信者が登録を完了しました',
+          body: '受信者一覧を更新しました。',
+          category: 'contacts',
+          data: { event: 'contact_verified', contact_id: contactId },
+        })
+      }
+    }
+  } catch {}
   return json({ ok: true })
+}
+
+async function pushNotifyUser(env: Env, userId: string, msg: PushMessage) {
+  const sb = supabase(env)
+  if (!sb) return
+  const devs = await sb.select('devices', 'fcm_token,platform,valid', `user_id=eq.${encodeURIComponent(userId)}&valid=is.true`)
+  if (!devs.ok) return
+  const tokens = Array.from(new Set((devs.data as any[]).map((d) => String(d.fcm_token)).filter(Boolean)))
+  await fcmSendToTokens(env, tokens, msg)
 }
 
 // ---------- Account deletion (caller = authenticated sender)

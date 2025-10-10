@@ -52,6 +52,7 @@ final class OnboardingRecipientsViewController: UIViewController, UITableViewDat
             table.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
+        NotificationCenter.default.addObserver(self, selector: #selector(onContactsRefresh), name: .ContactsShouldRefresh, object: nil)
         Task { await refreshList() }
     }
 
@@ -98,6 +99,7 @@ final class OnboardingRecipientsViewController: UIViewController, UITableViewDat
             }
         } catch { /* noop */ }
     }
+    @objc private func onContactsRefresh() { Task { await refreshList() } }
 
     // MARK: Table
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { items.count }
