@@ -32,15 +32,16 @@ final class TabRootController: UITabBarController {
 
         let home = UINavigationController(rootViewController: HomeModeViewController())
         home.tabBarItem = UITabBarItem(title: "帰るモード", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
-        home.tabBarItem.imageInsets = UIEdgeInsets(top: 8, left: 0, bottom: -8, right: 0)
+        // アイコンを文字に近づける（上下の間隔を詰める）
+        home.tabBarItem.imageInsets = UIEdgeInsets(top: 10, left: 0, bottom: -10, right: 0)
 
         let emergency = UINavigationController(rootViewController: MainViewController())
         emergency.tabBarItem = UITabBarItem(title: "緊急モード", image: UIImage(systemName: "phone.down.circle"), selectedImage: UIImage(systemName: "phone.down.circle.fill"))
-        emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 8, left: 0, bottom: -8, right: 0)
+        emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 10, left: 0, bottom: -10, right: 0)
 
         let settings = UINavigationController(rootViewController: SettingsViewController())
         settings.tabBarItem = UITabBarItem(title: "設定", image: UIImage(systemName: "bell.badge"), selectedImage: UIImage(systemName: "bell.badge.fill"))
-        settings.tabBarItem.imageInsets = UIEdgeInsets(top: 8, left: 0, bottom: -8, right: 0)
+        settings.tabBarItem.imageInsets = UIEdgeInsets(top: 10, left: 0, bottom: -10, right: 0)
 
         viewControllers = [home, emergency, settings]
 
