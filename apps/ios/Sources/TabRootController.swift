@@ -14,6 +14,16 @@ final class TabRootController: UITabBarController {
         tabBar.unselectedItemTintColor = .secondaryLabel
         tabBar.clipsToBounds = false
 
+        // 調整: 文字位置をわずかに下げ、アイコンが高く見えないようにする
+        let appearance = UITabBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 2)
+        appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 2)
+        self.tabBar.standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            self.tabBar.scrollEdgeAppearance = appearance
+        }
+
         let home = UINavigationController(rootViewController: HomeModeViewController())
         home.tabBarItem = UITabBarItem(title: "帰るモード", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
 

@@ -40,18 +40,19 @@ final class CustomTabBar: UITabBar {
     private func layoutLayers() {
         let w = bounds.width
         let h = bounds.height + barHeightExtra
-        // アーチを少し下げて、飛び出しを抑える
+        // アーチはやや抑えつつ、白背景の高さは十分に確保
         let topY: CGFloat = 6
 
         // Bar background (rounded top corners)
         let barPath = UIBezierPath()
-        barPath.move(to: CGPoint(x: 0, y: topY + archRadius))
+        // 白背景の角丸は archRadius ではなく barCorner を使用
+        barPath.move(to: CGPoint(x: 0, y: topY + barCorner))
         barPath.addLine(to: CGPoint(x: 0, y: h))
         barPath.addLine(to: CGPoint(x: w, y: h))
-        barPath.addLine(to: CGPoint(x: w, y: topY + archRadius))
+        barPath.addLine(to: CGPoint(x: w, y: topY + barCorner))
         barPath.addQuadCurve(to: CGPoint(x: w - barCorner, y: topY), controlPoint: CGPoint(x: w, y: topY))
         barPath.addLine(to: CGPoint(x: barCorner, y: topY))
-        barPath.addQuadCurve(to: CGPoint(x: 0, y: topY + archRadius), controlPoint: CGPoint(x: 0, y: topY))
+        barPath.addQuadCurve(to: CGPoint(x: 0, y: topY + barCorner), controlPoint: CGPoint(x: 0, y: topY))
         barLayer.path = barPath.cgPath
         barLayer.fillColor = UIColor.systemBackground.cgColor
         barLayer.shadowColor = UIColor.black.cgColor
