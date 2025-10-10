@@ -206,6 +206,7 @@ final class TabRootController: UITabBarController {
         // SOS(中央)の見た目: アクティブ時=赤ベタ+白アイコン / 非アクティブ時=白ベタ+赤アウトライン
         let isActive = (selectedIndex == 1)
         styleCenterButton(isActive: isActive)
+        if let bar = self.tabBar as? CustomTabBar { bar.isCenterActive = isActive }
     }
 
     private func styleCenterButton(isActive: Bool) {

@@ -7,6 +7,8 @@ final class CustomTabBar: UITabBar {
     var archRadius: CGFloat = 48
     // SOSの赤アーチのみを下方向にオフセット
     var archYOffset: CGFloat = 12
+    // 緊急タブがアクティブかどうか（見た目切替に使用）
+    var isCenterActive: Bool = false { didSet { applyArchStyle() } }
 
     // カスタムヒット優先（中央SOS/左右項目へタッチを振り分ける）
     weak var centerHitView: UIView?
@@ -84,8 +86,8 @@ final class CustomTabBar: UITabBar {
         archPath.addLine(to: CGPoint(x: leftX, y: h))
         archPath.close()
         archLayer.path = archPath.cgPath
-        archLayer.fillColor = UIColor.kokoRed.cgColor
         archLayer.frame = bounds
+        applyArchStyle()
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -93,6 +95,18 @@ final class CustomTabBar: UITabBar {
         let bottom = safeAreaInsets.bottom
         s.height = desiredBarHeight + bottom
         return s
+    }
+
+    private func applyArchStyle() {
+        if isCenterActive {
+            archLayer.fillColor = UIColor.kokoRed.cgColor
+            archLayer.strokeColor = UIColor.clear.cgColor
+            archLayer.lineWidth = 0
+        } else {
+            archLayer.fillColor = UIColor.white.cgColor
+            archLayer.strokeColor = UIColor.kokoRed.cgColor
+            archLayer.lineWidth = 2
+        }
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
