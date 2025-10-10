@@ -52,6 +52,14 @@ final class TabRootController: UITabBarController {
         updateCustomSelection()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
+        tabBar.bringSubviewToFront(centerButton)
+        tabBar.bringSubviewToFront(leftItem)
+        tabBar.bringSubviewToFront(rightItem)
+    }
+
     private func setupCenterButton() {
         centerButton.translatesAutoresizingMaskIntoConstraints = false
         centerButton.backgroundColor = .white
@@ -100,6 +108,9 @@ final class TabRootController: UITabBarController {
         leftItem.normalTintColor = .secondaryLabel
         rightItem.selectedTintColor = .label
         rightItem.normalTintColor = .secondaryLabel
+        // ヒット領域をさらに広げる
+        leftItem.extraHitOutset = 24
+        rightItem.extraHitOutset = 24
 
         leftItem.translatesAutoresizingMaskIntoConstraints = false
         rightItem.translatesAutoresizingMaskIntoConstraints = false
@@ -108,15 +119,16 @@ final class TabRootController: UITabBarController {
         tabBar.bringSubviewToFront(leftItem)
         tabBar.bringSubviewToFront(rightItem)
 
+        // 横幅をさらに拡大（中央との隙間を詰める）
         NSLayoutConstraint.activate([
-            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
-            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -28),
+            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 6),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -20),
             leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             // さらに上げる（-18pt）
             leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
 
-            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 28),
-            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 20),
+            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -6),
             rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
         ])
