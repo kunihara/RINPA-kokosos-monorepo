@@ -5,6 +5,8 @@ final class TabRootController: UITabBarController {
     private let leftItem = CustomTabItemView(title: "帰るモード", image: UIImage(systemName: "location.circle"))
     private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "gearshape"))
     private let overlay = UIView()
+    private let leftPad = UIControl()
+    private let rightPad = UIControl()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -57,6 +59,7 @@ final class TabRootController: UITabBarController {
     private func setupOverlay() {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         overlay.backgroundColor = .clear
+        overlay.isUserInteractionEnabled = true
         view.addSubview(overlay)
         NSLayoutConstraint.activate([
             overlay.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor),
@@ -65,6 +68,28 @@ final class TabRootController: UITabBarController {
             overlay.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor)
         ])
         view.bringSubviewToFront(overlay)
+
+        // 広いヒットエリアの透明パッドを左右に配置（中央SOSとのギャップを確保）
+        leftPad.translatesAutoresizingMaskIntoConstraints = false
+        rightPad.translatesAutoresizingMaskIntoConstraints = false
+        overlay.addSubview(leftPad)
+        overlay.addSubview(rightPad)
+        leftPad.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
+        rightPad.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
+        NSLayoutConstraint.activate([
+            leftPad.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
+            leftPad.trailingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: -64),
+            leftPad.topAnchor.constraint(equalTo: overlay.topAnchor),
+            leftPad.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
+
+            rightPad.leadingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: 64),
+            rightPad.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
+            rightPad.topAnchor.constraint(equalTo: overlay.topAnchor),
+            rightPad.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
+        ])
+        overlay.bringSubviewToFront(centerButton)
+        overlay.bringSubviewToFront(leftItem)
+        overlay.bringSubviewToFront(rightItem)
     }
 
     override func viewDidLayoutSubviews() {
