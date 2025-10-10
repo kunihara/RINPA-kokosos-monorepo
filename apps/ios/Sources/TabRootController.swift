@@ -129,8 +129,8 @@ final class TabRootController: UITabBarController {
 
         NSLayoutConstraint.activate([
             centerButton.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            // SOSボタンもさらに下げてアーチと整合
-            centerButton.centerYAnchor.constraint(equalTo: overlay.topAnchor, constant: 20),
+            // SOSボタンをわずかに下げる
+            centerButton.centerYAnchor.constraint(equalTo: overlay.topAnchor, constant: 24),
             centerButton.widthAnchor.constraint(equalToConstant: 64),
             centerButton.heightAnchor.constraint(equalToConstant: 64),
         ])
