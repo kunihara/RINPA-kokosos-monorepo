@@ -277,12 +277,8 @@ final class MainViewController: UIViewController {
         #endif
         // Haptic feedback for emphasis
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        // 1) Path-based layer or overlay（より確実に視覚変化させる）
-        animateSOSExpandLayer()
-        // デバッグ中はオーバーレイでも強制表示
-        #if DEBUG
+        // 単一方式で描画の競合を避けるため、オーバーレイ方式のみを使用
         animateSOSExpandOverlay()
-        #endif
         // ボタン自体の軽いスケールで押下感を出す
         UIView.animate(withDuration: 0.12, animations: {
             self.startEmergencyButton.transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
@@ -304,14 +300,14 @@ final class MainViewController: UIViewController {
         // 3段階: 1) フル画面UIをフェード → 2) 赤オーバーレイを縮小しながらフェード → 3) 元の背景/ボタンに戻す
 
         func restoreBackgroundAndButton() {
+            // 背景円は一気に元のサイズへ（重ねアニメでのカクつきを避ける）
             self.sosBackdropW.constant = self.sosInitialSize
             self.sosBackdropH.constant = self.sosInitialSize
-            UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
+            UIView.performWithoutAnimation {
                 self.view.layoutIfNeeded()
                 self.sosBackdrop.alpha = 0.3
                 self.sosBackdrop.layer.cornerRadius = self.sosInitialSize / 2
-            })
-            self.animateSOSCollapseLayer()
+            }
             self.startEmergencyButton.setTitle("SOS", for: .normal)
             self.startEmergencyButton.removeTarget(self, action: #selector(self.tapStop), for: .touchUpInside)
             self.startEmergencyButton.addTarget(self, action: #selector(self.tapStartEmergency), for: .touchUpInside)
