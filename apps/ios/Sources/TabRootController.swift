@@ -203,6 +203,23 @@ final class TabRootController: UITabBarController {
     private func updateCustomSelection() {
         leftItem.isSelected = (selectedIndex == 0)
         rightItem.isSelected = (selectedIndex == 2)
+        // SOS(中央)の見た目: アクティブ時=赤ベタ+白アイコン / 非アクティブ時=白ベタ+赤アウトライン
+        let isActive = (selectedIndex == 1)
+        styleCenterButton(isActive: isActive)
+    }
+
+    private func styleCenterButton(isActive: Bool) {
+        if isActive {
+            centerButton.backgroundColor = .kokoRed
+            centerButton.tintColor = .white
+            centerButton.layer.borderWidth = 0
+            centerButton.layer.borderColor = UIColor.clear.cgColor
+        } else {
+            centerButton.backgroundColor = .white
+            centerButton.tintColor = .kokoRed
+            centerButton.layer.borderWidth = 2
+            centerButton.layer.borderColor = UIColor.kokoRed.cgColor
+        }
     }
 
     // 1x1の透明画像（標準アイコンを不可視化するために使用）
