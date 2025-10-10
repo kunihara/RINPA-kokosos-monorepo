@@ -7,6 +7,10 @@ final class HomeModeViewController: UIViewController {
     private let statusLabel = UILabel()
     private let extendButton = UIButton(type: .system)
     private let countdownView = UILabel()
+    // 受信者表示バッジ
+    private let recipientsBadge = UIView()
+    private let recipientsBadgeIcon = UIImageView()
+    private let recipientsBadgeLabel = UILabel()
     private var countdownTimer: Timer?
     private var remaining = 0
     private let locationService = LocationService()
@@ -20,6 +24,28 @@ final class HomeModeViewController: UIViewController {
         view.backgroundColor = .systemBackground
         title = "帰るモード"
         setupUI()
+        // 保存された受信者を反映
+        if let saved = UserDefaults.standard.stringArray(forKey: "SelectedRecipientsEmails"), !saved.isEmpty {
+            selectedRecipients = saved
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // 空なら保存値を再読込、それでも空なら検証済みから自動選択
+        if selectedRecipients.isEmpty, let saved = UserDefaults.standard.stringArray(forKey: "SelectedRecipientsEmails"), !saved.isEmpty {
+            selectedRecipients = saved
+        }
+        if selectedRecipients.isEmpty {
+            Task { @MainActor in
+                do {
+                    let items = try await ContactsClient().list(status: "verified")
+                    if !items.isEmpty {
+                        self.selectedRecipients = items.map { $0.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                    }
+                } catch { /* ignore */ }
+            }
+        }
     }
 
     private func setupUI() {
@@ -48,12 +74,33 @@ final class HomeModeViewController: UIViewController {
         countdownView.isHidden = true
         countdownView.translatesAutoresizingMaskIntoConstraints = false
 
+        // 受信者バッジ
+        recipientsBadge.translatesAutoresizingMaskIntoConstraints = false
+        recipientsBadge.backgroundColor = .systemBackground
+        recipientsBadge.layer.cornerRadius = 14
+        recipientsBadge.layer.shadowColor = UIColor.black.cgColor
+        recipientsBadge.layer.shadowOpacity = 0.12
+        recipientsBadge.layer.shadowRadius = 8
+        recipientsBadge.layer.shadowOffset = CGSize(width: 0, height: 4)
+        recipientsBadge.isHidden = true
+        recipientsBadgeIcon.translatesAutoresizingMaskIntoConstraints = false
+        recipientsBadgeIcon.image = UIImage(systemName: "person.crop.circle")
+        recipientsBadgeIcon.tintColor = .systemGray
+        recipientsBadgeIcon.contentMode = .scaleAspectFit
+        recipientsBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        recipientsBadgeLabel.text = "受信者: 0名"
+        recipientsBadgeLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        recipientsBadgeLabel.textColor = .label
+        recipientsBadge.addSubview(recipientsBadgeIcon)
+        recipientsBadge.addSubview(recipientsBadgeLabel)
+
         view.addSubview(titleLabel)
         view.addSubview(startButton)
         view.addSubview(recipientsButton)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
         view.addSubview(extendButton)
+        view.addSubview(recipientsBadge)
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
@@ -75,18 +122,39 @@ final class HomeModeViewController: UIViewController {
             countdownView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             countdownView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             countdownView.widthAnchor.constraint(equalToConstant: 160),
-            countdownView.heightAnchor.constraint(equalToConstant: 100)
+            countdownView.heightAnchor.constraint(equalToConstant: 100),
+
+            recipientsBadge.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
+            recipientsBadge.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            recipientsBadgeIcon.leadingAnchor.constraint(equalTo: recipientsBadge.leadingAnchor, constant: 10),
+            recipientsBadgeIcon.centerYAnchor.constraint(equalTo: recipientsBadge.centerYAnchor),
+            recipientsBadgeIcon.widthAnchor.constraint(equalToConstant: 24),
+            recipientsBadgeIcon.heightAnchor.constraint(equalToConstant: 24),
+            recipientsBadgeLabel.leadingAnchor.constraint(equalTo: recipientsBadgeIcon.trailingAnchor, constant: 8),
+            recipientsBadgeLabel.trailingAnchor.constraint(equalTo: recipientsBadge.trailingAnchor, constant: -12),
+            recipientsBadgeLabel.topAnchor.constraint(equalTo: recipientsBadge.topAnchor, constant: 8),
+            recipientsBadgeLabel.bottomAnchor.constraint(equalTo: recipientsBadge.bottomAnchor, constant: -8)
         ])
     }
 
     private func updateRecipientsChip() {
-        recipientsButton.setTitle("受信者: \(selectedRecipients.count)名", for: .normal)
+        let count = selectedRecipients.count
+        recipientsButton.setTitle("受信者: \(count)名", for: .normal)
+        UserDefaults.standard.set(selectedRecipients, forKey: "SelectedRecipientsEmails")
+        if count > 0 {
+            recipientsBadge.isHidden = false
+            let first = selectedRecipients.first ?? ""
+            recipientsBadgeLabel.text = (count == 1) ? first : "\(first) ほか\(count-1)人"
+        } else {
+            recipientsBadge.isHidden = true
+        }
     }
 
     @objc private func tapRecipients() {
         let picker = ContactsPickerViewController()
         picker.onDone = { [weak self] emails in
             self?.selectedRecipients = emails
+            UserDefaults.standard.set(emails, forKey: "SelectedRecipientsEmails")
         }
         let nav = UINavigationController(rootViewController: picker)
         present(nav, animated: true)

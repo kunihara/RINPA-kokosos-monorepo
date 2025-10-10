@@ -258,6 +258,8 @@ final class MainViewController: UIViewController {
     private func updateRecipientsChip() {
         let count = selectedRecipients.count
         recipientsButton.setTitle("受信者: \(count)名", for: .normal)
+        // 永続化して他画面と共有
+        UserDefaults.standard.set(selectedRecipients, forKey: "SelectedRecipientsEmails")
         // バッジ表示も更新
         if count > 0 {
             recipientsBadge.isHidden = false
