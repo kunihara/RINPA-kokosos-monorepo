@@ -3,11 +3,13 @@ import UIKit
 final class CustomTabBar: UITabBar {
     private let barLayer = CAShapeLayer()
     private let archLayer = CAShapeLayer()
-    // アーチを少し広げる（セミサークル半径）
-    var archRadius: CGFloat = 40
+    // アーチをさらに広げる（セミサークル半径）
+    var archRadius: CGFloat = 48
     var barCorner: CGFloat = 16
-    // 全体の高さを短く
-    var barHeightExtra: CGFloat = 6
+    // 追加の高さは最小に（全体を薄く）
+    var barHeightExtra: CGFloat = 0
+    // 望ましいタブバー高さ（SafeArea下端を含めて計算）
+    var desiredBarHeight: CGFloat = 46
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -37,7 +39,8 @@ final class CustomTabBar: UITabBar {
     private func layoutLayers() {
         let w = bounds.width
         let h = bounds.height + barHeightExtra
-        let topY: CGFloat = 0
+        // アーチを少し下げて、飛び出しを抑える
+        let topY: CGFloat = 6
 
         // Bar background (rounded top corners)
         let barPath = UIBezierPath()
@@ -77,7 +80,8 @@ final class CustomTabBar: UITabBar {
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         var s = super.sizeThatFits(size)
-        s.height += barHeightExtra
+        let bottom = safeAreaInsets.bottom
+        s.height = desiredBarHeight + bottom
         return s
     }
 }

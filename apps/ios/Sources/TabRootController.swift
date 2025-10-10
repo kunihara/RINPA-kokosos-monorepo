@@ -47,10 +47,12 @@ final class TabRootController: UITabBarController {
 
         NSLayoutConstraint.activate([
             centerButton.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
-            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor),
-            centerButton.widthAnchor.constraint(equalToConstant: 56),
-            centerButton.heightAnchor.constraint(equalToConstant: 56),
+            // 少し下げて飛び出しを抑える
+            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 8),
+            centerButton.widthAnchor.constraint(equalToConstant: 52),
+            centerButton.heightAnchor.constraint(equalToConstant: 52),
         ])
+        centerButton.layer.cornerRadius = 26
     }
 
     @objc private func tapCenter() {
