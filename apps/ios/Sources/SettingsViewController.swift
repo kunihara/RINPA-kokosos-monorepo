@@ -1,135 +1,147 @@
 import UIKit
 
-final class SettingsViewController: UIViewController {
-    // 到着リマインダー
-    private let reminderSegmented = UISegmentedControl(items: ["15分", "30分", "45分", "60分"])
-    private let reminderLabel = UILabel()
-    private let reminderOptions = [15, 30, 45, 60]
-    // 帰るモードの最大共有時間
-    private let maxLabel = UILabel()
-    private let maxSegmented = UISegmentedControl(items: ["60分", "90分", "120分", "180分", "240分"])
-    private let maxOptions = [60, 90, 120, 180, 240]
-    private let recipientsButton = UIButton(type: .system)
-    private let profileButton = UIButton(type: .system)
+final class SettingsViewController: UITableViewController {
+    private enum Section: Int, CaseIterable {
+        case sharing
+        case recipients
+        case profile
+        case account
+    }
 
-    private let dangerLabel = UILabel()
-    private let deleteAccountButton = UIButton(type: .system)
-    private let signOutButton = UIButton(type: .system)
+    private enum Row {
+        case arrivalReminder
+        case maxSharing
+        case recipients
+        case profile
+        case signOut
+        case deleteAccount
+    }
+
+    private let arrivalOptions = [15, 30, 45, 60]
+    private let maxOptions = [60, 90, 120, 180, 240]
+
+    private var data: [[Row]] = []
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
         title = "設定"
-        setupUI()
-        loadValues()
+        tableView = UITableView(frame: .zero, style: .insetGrouped)
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        buildData()
     }
 
-    // 設定画面では自動で「受信者の選択」を開かない（ユーザー操作で開く）
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        tableView.reloadData()
     }
 
-    private func setupUI() {
-        reminderSegmented.translatesAutoresizingMaskIntoConstraints = false
-        reminderSegmented.addTarget(self, action: #selector(changeReminder), for: .valueChanged)
-
-        reminderLabel.text = "到着リマインダーの時間"
-        reminderLabel.textColor = .secondaryLabel
-        reminderLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        maxLabel.text = "帰るモードの最大共有時間"
-        maxLabel.textColor = .secondaryLabel
-        maxLabel.translatesAutoresizingMaskIntoConstraints = false
-        maxSegmented.translatesAutoresizingMaskIntoConstraints = false
-        maxSegmented.addTarget(self, action: #selector(changeMax), for: .valueChanged)
-
-        view.addSubview(reminderLabel)
-        view.addSubview(reminderSegmented)
-        view.addSubview(maxLabel)
-        view.addSubview(maxSegmented)
-        recipientsButton.setTitle("受信者の設定", for: .normal)
-        recipientsButton.addTarget(self, action: #selector(openRecipients), for: .touchUpInside)
-        recipientsButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(recipientsButton)
-
-        profileButton.setTitle("プロフィール設定", for: .normal)
-        profileButton.addTarget(self, action: #selector(openProfile), for: .touchUpInside)
-        profileButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(profileButton)
-
-        // APIベースURLのUIは仕様変更により削除
-        dangerLabel.text = "アカウント"
-        dangerLabel.textColor = .secondaryLabel
-        dangerLabel.translatesAutoresizingMaskIntoConstraints = false
-        deleteAccountButton.setTitle("アカウント削除", for: .normal)
-        deleteAccountButton.setTitleColor(.systemRed, for: .normal)
-        deleteAccountButton.addTarget(self, action: #selector(tapDeleteAccount), for: .touchUpInside)
-        deleteAccountButton.translatesAutoresizingMaskIntoConstraints = false
-        signOutButton.setTitle("サインアウト", for: .normal)
-        signOutButton.addTarget(self, action: #selector(tapSignOut), for: .touchUpInside)
-        signOutButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(dangerLabel)
-        view.addSubview(signOutButton)
-        view.addSubview(deleteAccountButton)
-
-        NSLayoutConstraint.activate([
-            reminderLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
-            reminderLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            reminderLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            reminderSegmented.topAnchor.constraint(equalTo: reminderLabel.bottomAnchor, constant: 12),
-            reminderSegmented.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            maxLabel.topAnchor.constraint(equalTo: reminderSegmented.bottomAnchor, constant: 28),
-            maxLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            maxLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            maxSegmented.topAnchor.constraint(equalTo: maxLabel.bottomAnchor, constant: 12),
-            maxSegmented.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            recipientsButton.topAnchor.constraint(equalTo: maxSegmented.bottomAnchor, constant: 28),
-            recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            profileButton.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 16),
-            profileButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            // 直後にアカウントセクション
-            dangerLabel.topAnchor.constraint(equalTo: profileButton.bottomAnchor, constant: 32),
-            dangerLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            dangerLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            signOutButton.topAnchor.constraint(equalTo: dangerLabel.bottomAnchor, constant: 12),
-            signOutButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            deleteAccountButton.topAnchor.constraint(equalTo: signOutButton.bottomAnchor, constant: 12),
-            deleteAccountButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-        ])
+    private func buildData() {
+        data = [
+            [.arrivalReminder, .maxSharing],
+            [.recipients],
+            [.profile],
+            [.signOut, .deleteAccount],
+        ]
     }
 
-    private func loadValues() {
-        let reminderCurrent = SettingsStore.shared.arrivalReminderMinutes
-        if let idx = reminderOptions.firstIndex(of: reminderCurrent) {
-            reminderSegmented.selectedSegmentIndex = idx
-        } else {
-            if let idx = reminderOptions.firstIndex(of: 30) { reminderSegmented.selectedSegmentIndex = idx }
+    // MARK: - UITableViewDataSource
+    override func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { data[section].count }
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        switch Section(rawValue: section)! {
+        case .sharing: return "共有"
+        case .recipients: return "受信者"
+        case .profile: return "プロフィール"
+        case .account: return "アカウント"
         }
-        let maxCurrent = SettingsStore.shared.goingHomeMaxMinutes
-        if let idx = maxOptions.firstIndex(of: maxCurrent) {
-            maxSegmented.selectedSegmentIndex = idx
-        } else if let idx = maxOptions.firstIndex(of: 120) { maxSegmented.selectedSegmentIndex = idx }
-        // APIベースURLは非表示のためロード不要
     }
 
-    @objc private func changeReminder() {
-        let idx = reminderSegmented.selectedSegmentIndex
-        guard idx >= 0 && idx < reminderOptions.count else { return }
-        SettingsStore.shared.arrivalReminderMinutes = reminderOptions[idx]
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        switch Section(rawValue: section)! {
+        case .sharing:
+            return "到着リマインダーと最大共有時間を選択できます。値はすぐに保存されます。"
+        default:
+            return nil
+        }
     }
 
-    @objc private func changeMax() {
-        let idx = maxSegmented.selectedSegmentIndex
-        guard idx >= 0 && idx < maxOptions.count else { return }
-        SettingsStore.shared.goingHomeMaxMinutes = maxOptions[idx]
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        cell.accessoryType = .disclosureIndicator
+        cell.selectionStyle = .default
+        let row = data[indexPath.section][indexPath.row]
+        switch row {
+        case .arrivalReminder:
+            cell.textLabel?.text = "到着リマインダー"
+            cell.detailTextLabel?.text = nil
+            cell.accessoryType = .none
+            cell.textLabel?.textColor = .label
+            cell.contentConfiguration = valueConfig(title: "到着リマインダー", value: "\(SettingsStore.shared.arrivalReminderMinutes)分")
+        case .maxSharing:
+            cell.contentConfiguration = valueConfig(title: "最大共有時間", value: "\(SettingsStore.shared.goingHomeMaxMinutes)分")
+        case .recipients:
+            cell.contentConfiguration = valueConfig(title: "受信者の設定", value: nil)
+        case .profile:
+            cell.contentConfiguration = valueConfig(title: "プロフィール設定", value: nil)
+        case .signOut:
+            var cfg = UIListContentConfiguration.valueCell()
+            cfg.text = "サインアウト"
+            cfg.textProperties.color = .systemRed
+            cell.contentConfiguration = cfg
+            cell.accessoryType = .none
+        case .deleteAccount:
+            var cfg = UIListContentConfiguration.valueCell()
+            cfg.text = "アカウント削除"
+            cfg.textProperties.color = .systemRed
+            cell.contentConfiguration = cfg
+            cell.accessoryType = .none
+        }
+        return cell
+    }
+
+    private func valueConfig(title: String, value: String?) -> UIListContentConfiguration {
+        var cfg = UIListContentConfiguration.valueCell()
+        cfg.text = title
+        if let v = value { cfg.secondaryText = v }
+        return cfg
+    }
+
+    // MARK: - UITableViewDelegate
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let row = data[indexPath.section][indexPath.row]
+        switch row {
+        case .arrivalReminder:
+            showMinutesSheet(title: "到着リマインダー", options: arrivalOptions, current: SettingsStore.shared.arrivalReminderMinutes) { m in
+                SettingsStore.shared.arrivalReminderMinutes = m
+                self.tableView.reloadRows(at: [indexPath], with: .automatic)
+            }
+        case .maxSharing:
+            showMinutesSheet(title: "最大共有時間", options: maxOptions, current: SettingsStore.shared.goingHomeMaxMinutes) { m in
+                SettingsStore.shared.goingHomeMaxMinutes = m
+                self.tableView.reloadRows(at: [indexPath], with: .automatic)
+            }
+        case .recipients:
+            openRecipients()
+        case .profile:
+            openProfile()
+        case .signOut:
+            tapSignOut()
+        case .deleteAccount:
+            tapDeleteAccount()
+        }
+    }
+
+    private func showMinutesSheet(title: String, options: [Int], current: Int, onSelect: @escaping (Int) -> Void) {
+        let sheet = UIAlertController(title: title, message: nil, preferredStyle: .actionSheet)
+        for m in options {
+            let title = "\(m)分" + (m == current ? " ✓" : "")
+            sheet.addAction(UIAlertAction(title: title, style: .default, handler: { _ in onSelect(m) }))
+        }
+        sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        if let pop = sheet.popoverPresentationController { pop.sourceView = self.view; pop.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY-1, width: 1, height: 1) }
+        present(sheet, animated: true)
     }
 
     // APIベースURL編集ハンドラは削除
@@ -184,8 +196,6 @@ final class SettingsViewController: UIViewController {
                 return
             }
             Task { @MainActor in
-                self.deleteAccountButton.isEnabled = false
-                defer { self.deleteAccountButton.isEnabled = true }
                 do {
                     try await APIClient().deleteAccount()
                     // Pushトークン解除→サインアウト
