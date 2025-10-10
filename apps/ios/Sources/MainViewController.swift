@@ -126,14 +126,14 @@ final class MainViewController: UIViewController {
         startEmergencyButton.translatesAutoresizingMaskIntoConstraints = false
         startEmergencyButton.titleLabel?.font = .boldSystemFont(ofSize: 40)
         startEmergencyButton.setTitleColor(.white, for: .normal)
-        startEmergencyButton.backgroundColor = UIColor.systemRed
-        startEmergencyButton.layer.shadowColor = UIColor.systemRed.cgColor
+        startEmergencyButton.backgroundColor = UIColor.kokoRed
+        startEmergencyButton.layer.shadowColor = UIColor.kokoRed.cgColor
         startEmergencyButton.layer.shadowOpacity = 0.35
         startEmergencyButton.layer.shadowRadius = 16
         startEmergencyButton.layer.shadowOffset = CGSize(width: 0, height: 8)
 
         sosBackdrop.translatesAutoresizingMaskIntoConstraints = false
-        sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
+        sosBackdrop.backgroundColor = UIColor.kokoRed.withAlphaComponent(0.15)
         sosBackdrop.alpha = 0.3
 
         // 帰るモード開始は緊急タブから削除（帰るモードは専用タブへ）
@@ -412,7 +412,7 @@ final class MainViewController: UIViewController {
         }()
 
         let overlay = UIView(frame: CGRect(x: 0, y: 0, width: sosInitialSize, height: sosInitialSize))
-        overlay.backgroundColor = UIColor.systemRed
+        overlay.backgroundColor = UIColor.kokoRed
         overlay.layer.cornerRadius = sosInitialSize / 2
         overlay.center = btnCenter
         // 拡大は不透明の赤で。フェードインは行わない
@@ -582,7 +582,8 @@ final class MainViewController: UIViewController {
         let layer = CAShapeLayer()
         layer.path = startPath.cgPath
         // パスアニメーションも不透明の赤に統一
-        layer.fillColor = UIColor.systemRed.cgColor
+        // パスアニメーションも不透明のブランド赤に統一
+        layer.fillColor = UIColor.kokoRed.cgColor
         view.layer.insertSublayer(layer, below: startEmergencyButton.layer)
         sosLayer = layer
 

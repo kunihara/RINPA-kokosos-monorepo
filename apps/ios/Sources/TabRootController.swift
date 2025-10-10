@@ -76,6 +76,10 @@ final class TabRootController: UITabBarController {
         overlay.addSubview(rightPad)
         leftPad.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
         rightPad.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
+        leftPad.isExclusiveTouch = true
+        rightPad.isExclusiveTouch = true
+        leftPad.layer.zPosition = 30 // アイコン/ラベル(80)より下、SOS(100)より下
+        rightPad.layer.zPosition = 30
         NSLayoutConstraint.activate([
             leftPad.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
             leftPad.trailingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: -64),
@@ -110,7 +114,7 @@ final class TabRootController: UITabBarController {
         // I'm Safe画面と同じベルアイコンを使用
         let bell = UIImage(systemName: "bell.and.waveform") ?? UIImage(systemName: "bell.fill")
         centerButton.setImage(bell, for: .normal)
-        centerButton.tintColor = .systemRed
+        centerButton.tintColor = .kokoRed
         centerButton.layer.cornerRadius = 28
         centerButton.layer.shadowColor = UIColor.black.cgColor
         centerButton.layer.shadowOpacity = 0.2

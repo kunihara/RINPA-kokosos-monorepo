@@ -84,7 +84,7 @@ final class CustomTabBar: UITabBar {
         archPath.addLine(to: CGPoint(x: leftX, y: h))
         archPath.close()
         archLayer.path = archPath.cgPath
-        archLayer.fillColor = UIColor.systemRed.cgColor
+        archLayer.fillColor = UIColor.kokoRed.cgColor
         archLayer.frame = bounds
     }
 
