@@ -320,9 +320,8 @@ final class MainViewController: UIViewController {
         func collapseOverlayThenRestore() {
             if let overlay = self.sosOverlay {
                 UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
-                    // 赤い画面を少し保ったまま、縮小しつつフェードアウト
+                    // 背景の赤は不透明のままサイズだけを戻す
                     overlay.transform = .identity
-                    overlay.alpha = 0.0
                 }, completion: { _ in
                     overlay.removeFromSuperview()
                     self.sosOverlay = nil
@@ -373,7 +372,8 @@ final class MainViewController: UIViewController {
         overlay.backgroundColor = UIColor.systemRed
         overlay.layer.cornerRadius = sosInitialSize / 2
         overlay.center = btnCenter
-        overlay.alpha = 0.0
+        // 拡大は不透明の赤で。フェードインは行わない
+        overlay.alpha = 1.0
 
         container.addSubview(overlay)
         container.bringSubviewToFront(overlay)
@@ -385,7 +385,6 @@ final class MainViewController: UIViewController {
         let target = sqrt(w*w + h*h) * 1.15
         let scale = max(1.0, target / sosInitialSize)
         UIView.animate(withDuration: 0.5 as TimeInterval, delay: 0, options: [.curveEaseInOut], animations: {
-            overlay.alpha = 1.0
             overlay.transform = CGAffineTransform(scaleX: scale, y: scale)
         }, completion: { _ in
             self.presentSOSFullScreen(on: container)
@@ -551,7 +550,8 @@ final class MainViewController: UIViewController {
 
         let layer = CAShapeLayer()
         layer.path = startPath.cgPath
-        layer.fillColor = UIColor.systemRed.withAlphaComponent(0.35).cgColor
+        // パスアニメーションも不透明の赤に統一
+        layer.fillColor = UIColor.systemRed.cgColor
         view.layer.insertSublayer(layer, below: startEmergencyButton.layer)
         sosLayer = layer
 
