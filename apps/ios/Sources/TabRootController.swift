@@ -17,8 +17,8 @@ final class TabRootController: UITabBarController {
         // 調整: 文字位置をわずかに下げ、アイコンが高く見えないようにする
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        // タイトルのみAppearanceで下げる（iconのオフセットはAPIに無いため個別にimageInsetsで対応）
-        let offsetY: CGFloat = 9
+        // タイトルは上方向（マイナス）に寄せてアイコンとの間隔を詰める
+        let offsetY: CGFloat = -2
         appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.inlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
