@@ -658,7 +658,11 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapStop() {
-        guard let session else { return }
+        // セッションが無い（デバッグ検証やプレビュー）の場合もUIだけは戻す
+        guard let session else {
+            self.animateSOSCollapse()
+            return
+        }
         Task { @MainActor in
             do {
                 try await self.api.stopAlert(id: session.id)
