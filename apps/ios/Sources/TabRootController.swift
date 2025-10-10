@@ -71,8 +71,8 @@ final class TabRootController: UITabBarController {
 
         NSLayoutConstraint.activate([
             centerButton.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
-            // 赤アーチを下げた分だけボタンも下げて整合
-            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 16),
+            // SOSボタンは従来位置（下げない）
+            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 10),
             centerButton.widthAnchor.constraint(equalToConstant: 56),
             centerButton.heightAnchor.constraint(equalToConstant: 56),
         ])
