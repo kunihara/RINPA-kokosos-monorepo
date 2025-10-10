@@ -402,23 +402,7 @@ final class MainViewController: UIViewController {
             full.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
 
-        // 上部：閉じる(X) と Call 112
-        let closeBtn = UIButton(type: .system)
-        closeBtn.translatesAutoresizingMaskIntoConstraints = false
-        closeBtn.setTitle("✕", for: .normal)
-        closeBtn.setTitleColor(.white, for: .normal)
-        closeBtn.titleLabel?.font = .systemFont(ofSize: 22, weight: .semibold)
-        closeBtn.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
-
-        let callTopBtn = UIButton(type: .system)
-        callTopBtn.translatesAutoresizingMaskIntoConstraints = false
-        callTopBtn.setTitle("Call 112", for: .normal)
-        callTopBtn.setTitleColor(.white, for: .normal)
-        callTopBtn.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        callTopBtn.addTarget(self, action: #selector(tapCall112), for: .touchUpInside)
-
-        full.addSubview(closeBtn)
-        full.addSubview(callTopBtn)
+        // 上部の✕とCall 112は非表示（仕様変更）
 
         // 中央：アイコン、SOSタイトル、説明
         let icon = UIImageView()
@@ -458,15 +442,15 @@ final class MainViewController: UIViewController {
         safeBtn.addTarget(self, action: #selector(tapSafeButton), for: .touchUpInside)
         full.addSubview(safeBtn)
 
-        // 下部ボタン: 停止 / 即時失効 （アウトライン）
-        let stopOutlined = UIButton(type: .system)
-        stopOutlined.translatesAutoresizingMaskIntoConstraints = false
-        stopOutlined.setTitle("  停止  ", for: .normal)
-        stopOutlined.setTitleColor(.white, for: .normal)
-        stopOutlined.layer.cornerRadius = 20
-        stopOutlined.layer.borderWidth = 1
-        stopOutlined.layer.borderColor = UIColor.white.cgColor
-        stopOutlined.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
+        // 下部ボタン: 延長 / 即時失効 （アウトライン）
+        let extendOutlined = UIButton(type: .system)
+        extendOutlined.translatesAutoresizingMaskIntoConstraints = false
+        extendOutlined.setTitle("  延長  ", for: .normal)
+        extendOutlined.setTitleColor(.white, for: .normal)
+        extendOutlined.layer.cornerRadius = 20
+        extendOutlined.layer.borderWidth = 1
+        extendOutlined.layer.borderColor = UIColor.white.cgColor
+        extendOutlined.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
 
         let revokeOutlined = UIButton(type: .system)
         revokeOutlined.translatesAutoresizingMaskIntoConstraints = false
@@ -477,7 +461,7 @@ final class MainViewController: UIViewController {
         revokeOutlined.layer.borderColor = UIColor.white.cgColor
         revokeOutlined.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
 
-        let bottomStack = UIStackView(arrangedSubviews: [stopOutlined, revokeOutlined])
+        let bottomStack = UIStackView(arrangedSubviews: [extendOutlined, revokeOutlined])
         bottomStack.translatesAutoresizingMaskIntoConstraints = false
         bottomStack.axis = .horizontal
         bottomStack.alignment = .center
@@ -488,13 +472,7 @@ final class MainViewController: UIViewController {
         // レイアウト制約
         let g = full.layoutMarginsGuide
         NSLayoutConstraint.activate([
-            closeBtn.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 8),
-            closeBtn.topAnchor.constraint(equalTo: full.safeAreaLayoutGuide.topAnchor, constant: 8),
-
-            callTopBtn.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -8),
-            callTopBtn.centerYAnchor.constraint(equalTo: closeBtn.centerYAnchor),
-
-            icon.topAnchor.constraint(equalTo: closeBtn.bottomAnchor, constant: 32),
+            icon.topAnchor.constraint(equalTo: full.safeAreaLayoutGuide.topAnchor, constant: 40),
             icon.centerXAnchor.constraint(equalTo: full.centerXAnchor),
             icon.heightAnchor.constraint(equalToConstant: 44),
             icon.widthAnchor.constraint(equalToConstant: 44),
@@ -513,7 +491,7 @@ final class MainViewController: UIViewController {
             bottomStack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
             bottomStack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
             bottomStack.bottomAnchor.constraint(equalTo: full.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            stopOutlined.heightAnchor.constraint(equalToConstant: 40),
+            extendOutlined.heightAnchor.constraint(equalToConstant: 40),
             revokeOutlined.heightAnchor.constraint(equalToConstant: 40)
         ])
 
