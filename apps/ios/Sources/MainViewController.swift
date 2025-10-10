@@ -4,7 +4,6 @@ import CoreLocation
 final class MainViewController: UIViewController {
     private let titleLabel = UILabel()
     private let startEmergencyButton = UIButton(type: .system)
-    private let startHomeButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let controlsStack = UIStackView()
     private let stopButton = UIButton(type: .system)
@@ -92,9 +91,7 @@ final class MainViewController: UIViewController {
         startEmergencyButton.addTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
         startEmergencyButton.translatesAutoresizingMaskIntoConstraints = false
 
-        startHomeButton.setTitle("帰るモード開始", for: .normal)
-        startHomeButton.addTarget(self, action: #selector(tapStartHome), for: .touchUpInside)
-        startHomeButton.translatesAutoresizingMaskIntoConstraints = false
+        // 帰るモード開始は緊急タブから削除（帰るモードは専用タブへ）
 
         statusLabel.textColor = .secondaryLabel
         statusLabel.numberOfLines = 0
@@ -132,8 +129,7 @@ final class MainViewController: UIViewController {
         controlsStack.addArrangedSubview(extendButton)
         controlsStack.addArrangedSubview(revokeButton)
         view.addSubview(controlsStack)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "設定", style: .plain, target: self, action: #selector(tapSettings))
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "サインアウト", style: .plain, target: self, action: #selector(tapSignOut))
+        // 設定はタブで提供、サインアウトは設定タブに移動（本画面のバーアイテムは設置しない）
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
@@ -142,10 +138,7 @@ final class MainViewController: UIViewController {
             startEmergencyButton.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 32),
             startEmergencyButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            startHomeButton.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 16),
-            startHomeButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-
-            recipientsButton.topAnchor.constraint(equalTo: startHomeButton.bottomAnchor, constant: 16),
+            recipientsButton.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 16),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 24),
@@ -177,9 +170,7 @@ final class MainViewController: UIViewController {
         startFlow(type: "emergency")
     }
 
-    @objc private func tapStartHome() {
-        startFlow(type: "going_home")
-    }
+    // 帰るモード開始は専用タブ（HomeModeViewController）で提供する
 
     private func startFlow(type: String) {
         presentCountdown(seconds: 3) { [weak self] in
@@ -369,10 +360,7 @@ final class MainViewController: UIViewController {
         }
     }
 
-    @objc private func tapSettings() {
-        let vc = SettingsViewController()
-        navigationController?.pushViewController(vc, animated: true)
-    }
+    // 設定はタブで提供するため本画面からの遷移は持たない
 
     @objc private func onSettingsChanged() {
         // 帰るモードで共有中なら、新しい間隔でリマインダーを再スケジュール
@@ -386,23 +374,7 @@ final class MainViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
     }
 
-    @objc private func tapSignOut() {
-        // SDKサインアウト（失敗は黙許）
-        try? awaitTask {
-            PushRegistrationService.shared.unregisterLastToken()
-            try await SupabaseAuthAdapter.shared.client.auth.signOut()
-        }
-        // 仕様: pushではなくpop系でサインインに戻す（presentedも解消）
-        if let nav = navigationController ?? (view.window?.rootViewController as? UINavigationController) {
-            if nav.presentedViewController != nil {
-                nav.dismiss(animated: true) { nav.goToSignIn(animated: true) }
-            } else {
-                nav.goToSignIn(animated: true)
-            }
-        } else {
-            dismiss(animated: true)
-        }
-    }
+    // サインアウトは設定タブに移動済み
 }
 
 // Helper to await inside @objc

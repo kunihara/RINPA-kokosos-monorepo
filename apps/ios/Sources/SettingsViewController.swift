@@ -18,6 +18,7 @@ final class SettingsViewController: UIViewController {
     private let apiHelpLabel = UILabel()
     private let dangerLabel = UILabel()
     private let deleteAccountButton = UIButton(type: .system)
+    private let signOutButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -87,7 +88,11 @@ final class SettingsViewController: UIViewController {
         deleteAccountButton.setTitleColor(.systemRed, for: .normal)
         deleteAccountButton.addTarget(self, action: #selector(tapDeleteAccount), for: .touchUpInside)
         deleteAccountButton.translatesAutoresizingMaskIntoConstraints = false
+        signOutButton.setTitle("サインアウト", for: .normal)
+        signOutButton.addTarget(self, action: #selector(tapSignOut), for: .touchUpInside)
+        signOutButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dangerLabel)
+        view.addSubview(signOutButton)
         view.addSubview(deleteAccountButton)
 
         NSLayoutConstraint.activate([
@@ -127,7 +132,10 @@ final class SettingsViewController: UIViewController {
             dangerLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             dangerLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
-            deleteAccountButton.topAnchor.constraint(equalTo: dangerLabel.bottomAnchor, constant: 12),
+            signOutButton.topAnchor.constraint(equalTo: dangerLabel.bottomAnchor, constant: 12),
+            signOutButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            deleteAccountButton.topAnchor.constraint(equalTo: signOutButton.bottomAnchor, constant: 12),
             deleteAccountButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
     }
@@ -240,5 +248,21 @@ final class SettingsViewController: UIViewController {
             }
         }))
         present(alert, animated: true)
+    }
+
+    @objc private func tapSignOut() {
+        let a = UIAlertController(title: "サインアウト", message: "サインアウトしてよろしいですか？", preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        a.addAction(UIAlertAction(title: "サインアウト", style: .destructive, handler: { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // SDKサインアウト（失敗は黙許）
+                try? await SupabaseAuthAdapter.shared.client.auth.signOut()
+                // FCMのサーバ有効フラグを下げる（最終登録トークン）
+                PushRegistrationService.shared.unregisterLastToken()
+                self.navigateToSignInRoot()
+            }
+        }))
+        present(a, animated: true)
     }
 }
