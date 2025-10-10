@@ -5,6 +5,7 @@ final class HomeModeViewController: UIViewController {
     private let titleLabel = UILabel()
     private let startButton = UIButton(type: .system)
     private let statusLabel = UILabel()
+    private let extendButton = UIButton(type: .system)
     private let countdownView = UILabel()
     private var countdownTimer: Timer?
     private var remaining = 0
@@ -38,6 +39,10 @@ final class HomeModeViewController: UIViewController {
         statusLabel.numberOfLines = 0
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        extendButton.setTitle("延長", for: .normal)
+        extendButton.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
+        extendButton.translatesAutoresizingMaskIntoConstraints = false
+
         countdownView.textAlignment = .center
         countdownView.font = .boldSystemFont(ofSize: 40)
         countdownView.isHidden = true
@@ -48,6 +53,7 @@ final class HomeModeViewController: UIViewController {
         view.addSubview(recipientsButton)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
+        view.addSubview(extendButton)
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
@@ -62,6 +68,9 @@ final class HomeModeViewController: UIViewController {
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 16),
             statusLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             statusLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            extendButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
+            extendButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             countdownView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             countdownView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -126,11 +135,39 @@ final class HomeModeViewController: UIViewController {
                                                             maxDurationSec: maxMinutes * 60,
                                                             recipients: self.selectedRecipients)
                     self.statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。\nAlertID: \(res.id)"
+                    // 延長のためにアクティブIDを保存
+                    UserDefaults.standard.set(res.id, forKey: "GoingHomeActiveAlertID")
                 } catch {
                     self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
                 }
             }
         }
     }
-}
 
+    @objc private func tapExtend() {
+        guard let id = UserDefaults.standard.string(forKey: "GoingHomeActiveAlertID"), !id.isEmpty else {
+            let a = UIAlertController(title: "延長できません", message: "延長可能な帰るモードが見つかりません。開始後に再度お試しください。", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
+            return
+        }
+        let sheet = UIAlertController(title: "共有時間を延長", message: nil, preferredStyle: .actionSheet)
+        func add(_ min: Int) {
+            sheet.addAction(UIAlertAction(title: "+\(min)分", style: .default, handler: { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    do {
+                        try await self.api.extendAlert(id: id, extendMinutes: min)
+                        self.statusLabel.text = "共有を延長しました（+\(min)分）"
+                    } catch {
+                        self.statusLabel.text = "延長に失敗: \(error.localizedDescription)"
+                    }
+                }
+            }))
+        }
+        [15,30,45,60].forEach(add)
+        sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        if let pop = sheet.popoverPresentationController { pop.sourceView = extendButton; pop.sourceRect = extendButton.bounds }
+        present(sheet, animated: true)
+    }
+}

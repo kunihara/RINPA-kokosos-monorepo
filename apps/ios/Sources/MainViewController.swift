@@ -169,10 +169,8 @@ final class MainViewController: UIViewController {
         stopButton.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
         revokeButton.setTitle("即時失効", for: .normal)
         revokeButton.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
-        extendButton.setTitle("延長", for: .normal)
-        extendButton.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
+        // 延長は帰るモードへ移動するため、この画面のコントロールからは除外
         controlsStack.addArrangedSubview(stopButton)
-        controlsStack.addArrangedSubview(extendButton)
         controlsStack.addArrangedSubview(revokeButton)
         view.addSubview(controlsStack)
         // 設定はタブで提供、サインアウトは設定タブに移動（本画面のバーアイテムは設置しない）
@@ -460,26 +458,26 @@ final class MainViewController: UIViewController {
         safeBtn.addTarget(self, action: #selector(tapSafeButton), for: .touchUpInside)
         full.addSubview(safeBtn)
 
-        // 下部の Message / Call ボタン（アウトライン）
-        let msgBtn = UIButton(type: .system)
-        msgBtn.translatesAutoresizingMaskIntoConstraints = false
-        msgBtn.setTitle("  Message  ", for: .normal)
-        msgBtn.setTitleColor(.white, for: .normal)
-        msgBtn.layer.cornerRadius = 20
-        msgBtn.layer.borderWidth = 1
-        msgBtn.layer.borderColor = UIColor.white.cgColor
-        msgBtn.addTarget(self, action: #selector(tapMessage), for: .touchUpInside)
+        // 下部ボタン: 停止 / 即時失効 （アウトライン）
+        let stopOutlined = UIButton(type: .system)
+        stopOutlined.translatesAutoresizingMaskIntoConstraints = false
+        stopOutlined.setTitle("  停止  ", for: .normal)
+        stopOutlined.setTitleColor(.white, for: .normal)
+        stopOutlined.layer.cornerRadius = 20
+        stopOutlined.layer.borderWidth = 1
+        stopOutlined.layer.borderColor = UIColor.white.cgColor
+        stopOutlined.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
 
-        let callBtn = UIButton(type: .system)
-        callBtn.translatesAutoresizingMaskIntoConstraints = false
-        callBtn.setTitle("  Call  ", for: .normal)
-        callBtn.setTitleColor(.white, for: .normal)
-        callBtn.layer.cornerRadius = 20
-        callBtn.layer.borderWidth = 1
-        callBtn.layer.borderColor = UIColor.white.cgColor
-        callBtn.addTarget(self, action: #selector(tapCall112), for: .touchUpInside)
+        let revokeOutlined = UIButton(type: .system)
+        revokeOutlined.translatesAutoresizingMaskIntoConstraints = false
+        revokeOutlined.setTitle("  即時失効  ", for: .normal)
+        revokeOutlined.setTitleColor(.white, for: .normal)
+        revokeOutlined.layer.cornerRadius = 20
+        revokeOutlined.layer.borderWidth = 1
+        revokeOutlined.layer.borderColor = UIColor.white.cgColor
+        revokeOutlined.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
 
-        let bottomStack = UIStackView(arrangedSubviews: [msgBtn, callBtn])
+        let bottomStack = UIStackView(arrangedSubviews: [stopOutlined, revokeOutlined])
         bottomStack.translatesAutoresizingMaskIntoConstraints = false
         bottomStack.axis = .horizontal
         bottomStack.alignment = .center
@@ -515,8 +513,8 @@ final class MainViewController: UIViewController {
             bottomStack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
             bottomStack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
             bottomStack.bottomAnchor.constraint(equalTo: full.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            msgBtn.heightAnchor.constraint(equalToConstant: 40),
-            callBtn.heightAnchor.constraint(equalToConstant: 40)
+            stopOutlined.heightAnchor.constraint(equalToConstant: 40),
+            revokeOutlined.heightAnchor.constraint(equalToConstant: 40)
         ])
 
         self.sosFullView = full
