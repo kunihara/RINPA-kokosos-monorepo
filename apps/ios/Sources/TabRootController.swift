@@ -112,13 +112,13 @@ final class TabRootController: UITabBarController {
             leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 12),
             leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -36),
             leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
-            // 下げすぎていたため、わずかに上げる（-8pt）
-            leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -8),
+            // さらに上げる（-18pt）
+            leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
 
             rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 36),
             rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -12),
             rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
-            rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -8),
+            rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
         ])
 
         leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
