@@ -98,16 +98,10 @@ final class CustomTabBar: UITabBar {
     }
 
     private func applyArchStyle() {
-        if isCenterActive {
-            archLayer.fillColor = UIColor.kokoRed.cgColor
-            archLayer.strokeColor = UIColor.clear.cgColor
-            archLayer.lineWidth = 0
-        } else {
-            // 以前の白ベタ（アウトラインなし）に戻す
-            archLayer.fillColor = UIColor.white.cgColor
-            archLayer.strokeColor = UIColor.clear.cgColor
-            archLayer.lineWidth = 0
-        }
+        // 要望により、アクティブ/非アクティブに関わらず常に赤ベタ
+        archLayer.fillColor = UIColor.kokoRed.cgColor
+        archLayer.strokeColor = UIColor.clear.cgColor
+        archLayer.lineWidth = 0
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
