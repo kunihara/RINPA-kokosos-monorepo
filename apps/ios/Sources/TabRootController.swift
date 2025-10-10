@@ -17,8 +17,22 @@ final class TabRootController: UITabBarController {
         // 調整: 文字位置をわずかに下げ、アイコンが高く見えないようにする
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 2)
-        appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 2)
+        // アイコン/タイトルをまとめて下方向へオフセット（白背景内に収める）
+        let offsetY: CGFloat = 5
+        // stacked（通常のタブ表示）
+        appearance.stackedLayoutAppearance.normal.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.stackedLayoutAppearance.selected.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        // inline/compactInline（iPadや横向きなど）にも適用
+        appearance.inlineLayoutAppearance.normal.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.inlineLayoutAppearance.selected.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.inlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.inlineLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.compactInlineLayoutAppearance.normal.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.compactInlineLayoutAppearance.selected.iconPositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.compactInlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
+        appearance.compactInlineLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         self.tabBar.standardAppearance = appearance
         if #available(iOS 15.0, *) {
             self.tabBar.scrollEdgeAppearance = appearance
