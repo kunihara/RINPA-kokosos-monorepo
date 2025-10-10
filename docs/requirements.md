@@ -163,6 +163,10 @@ SSEイベント（例）
 - Push 通知（Dev）
   - Dev 用 Entitlements に `aps-environment=development` を設定。XcodeGen の競合を解消し、構成ごとの `CODE_SIGN_ENTITLEMENTS` で一元管理。
 
+- コミットメッセージ規約
+  - 先頭にカテゴリ（iOS / API / Web / DB / Docs / CI）を付与してください。
+  - 詳細は `.github/COMMIT_CONVENTION.md` を参照。
+
 
 ## アカウント削除（追加）
 

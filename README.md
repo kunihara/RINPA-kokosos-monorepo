@@ -2,6 +2,7 @@ KokoSOS Monorepo (MVP skeleton)
 
 Overview
 - Requirements spec: docs/requirements.md
+- Commit convention: .github/COMMIT_CONVENTION.md（コミットメッセージはカテゴリ付与: iOS/API/Web/DB/Docs/CI）
 - iOS app triggers alerts; this repo provides the API, web receiver, and DB schema.
 - Stack: Cloudflare Workers (API), Next.js 14 (receiver web), Supabase Postgres (DB), AWS SES (email).
  - Auth (sender): Supabase Auth (Email/Password, Apple, Google, Facebook)
