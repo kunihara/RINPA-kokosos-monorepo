@@ -341,7 +341,7 @@ final class MainViewController: UIViewController {
                 self.startEmergencyButton.transform = .identity
             }
         }
-        startEmergencyButton.setTitle("停止", for: .normal)
+        // タイトルは常に「SOS」を表示する（停止の表示は行わない）
         startEmergencyButton.removeTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
         startEmergencyButton.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
     }
@@ -350,6 +350,9 @@ final class MainViewController: UIViewController {
         #if DEBUG
         print("[DEBUG] animateSOSCollapse")
         #endif
+
+        // ボタンの『停止』文字が見えないように、戻りアニメ中は一時的に非表示
+        startEmergencyButton.alpha = 0.0
 
         // 3段階: 1) フル画面UIをフェード → 2) 赤オーバーレイを縮小しながらフェード → 3) 元の背景/ボタンに戻す
 
@@ -365,6 +368,10 @@ final class MainViewController: UIViewController {
             self.startEmergencyButton.setTitle("SOS", for: .normal)
             self.startEmergencyButton.removeTarget(self, action: #selector(self.tapStop), for: .touchUpInside)
             self.startEmergencyButton.addTarget(self, action: #selector(self.tapStartEmergency), for: .touchUpInside)
+            // タイトルを『SOS』に切り替えた後で、素早くフェードイン
+            UIView.animate(withDuration: 0.10) {
+                self.startEmergencyButton.alpha = 1.0
+            }
         }
 
         func collapseOverlayThenRestore() {
