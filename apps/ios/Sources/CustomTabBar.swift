@@ -4,7 +4,6 @@ final class CustomTabBar: UITabBar {
     private let barLayer = CAShapeLayer()
     private let archLayer = CAShapeLayer()
     var archRadius: CGFloat = 34
-    var archWidth: CGFloat = 86
     var barCorner: CGFloat = 16
     var barHeightExtra: CGFloat = 14
 
@@ -56,15 +55,18 @@ final class CustomTabBar: UITabBar {
         barLayer.frame = bounds
 
         // Red arch behind the center button
+        // Ensure symmetry: the rectangular sides align exactly under the semicircle endpoints.
         let cx = w / 2
-        let half = archWidth / 2
-        let archHeight: CGFloat = archRadius + 12
+        let leftX = cx - archRadius
+        let rightX = cx + archRadius
         let archPath = UIBezierPath()
-        archPath.move(to: CGPoint(x: cx - half, y: topY))
-        // upper semicircle
+        // Start at left arc endpoint
+        archPath.move(to: CGPoint(x: leftX, y: topY))
+        // Draw upper semicircle
         archPath.addArc(withCenter: CGPoint(x: cx, y: topY), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
-        archPath.addLine(to: CGPoint(x: cx + half, y: archHeight))
-        archPath.addLine(to: CGPoint(x: cx - half, y: archHeight))
+        // Extend straight down to the bottom of the bar, then across, then back up
+        archPath.addLine(to: CGPoint(x: rightX, y: h))
+        archPath.addLine(to: CGPoint(x: leftX, y: h))
         archPath.close()
         archLayer.path = archPath.cgPath
         archLayer.fillColor = UIColor.systemRed.cgColor
@@ -77,4 +79,3 @@ final class CustomTabBar: UITabBar {
         return s
     }
 }
-
