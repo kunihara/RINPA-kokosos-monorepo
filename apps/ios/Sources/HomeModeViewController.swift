@@ -61,7 +61,15 @@ final class HomeModeViewController: UIViewController {
         titleLabel.font = .boldSystemFont(ofSize: 24)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        startButton.setTitle("帰るモード開始", for: .normal)
+        // SOSボタンと同じ形状・配置（円形の大ボタン）をB案のモノトーンで
+        startButton.setTitle("開始", for: .normal)
+        startButton.setTitleColor(.label, for: .normal)
+        startButton.titleLabel?.font = .boldSystemFont(ofSize: 32)
+        startButton.backgroundColor = .secondarySystemBackground
+        startButton.layer.shadowColor = UIColor.label.withAlphaComponent(0.15).cgColor
+        startButton.layer.shadowOpacity = 1
+        startButton.layer.shadowRadius = 12
+        startButton.layer.shadowOffset = CGSize(width: 0, height: 6)
         startButton.addTarget(self, action: #selector(tapStart), for: .touchUpInside)
         startButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -116,6 +124,8 @@ final class HomeModeViewController: UIViewController {
 
             startButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             startButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            startButton.widthAnchor.constraint(equalToConstant: 220),
+            startButton.heightAnchor.constraint(equalToConstant: 220),
 
             recipientsButton.topAnchor.constraint(equalTo: startButton.bottomAnchor, constant: 16),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -143,6 +153,12 @@ final class HomeModeViewController: UIViewController {
             recipientsBadgeLabel.topAnchor.constraint(equalTo: recipientsBadge.topAnchor, constant: 8),
             recipientsBadgeLabel.bottomAnchor.constraint(equalTo: recipientsBadge.bottomAnchor, constant: -8)
         ])
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        startButton.layer.cornerRadius = startButton.bounds.height / 2
+        if #available(iOS 13.0, *) { startButton.layer.cornerCurve = .continuous }
     }
 
     private func updateRecipientsChip() {
@@ -416,7 +432,23 @@ extension HomeModeViewController {
     }
 
     @objc private func tapRevokeFromFull() {
-        // 既存の revoke と同等の動作（UI上は閉じずに維持）
-        self.tapRevoke()
+        revokeCurrentAlert()
+    }
+
+    private func revokeCurrentAlert() {
+        guard let id = UserDefaults.standard.string(forKey: "GoingHomeActiveAlertID"), !id.isEmpty else {
+            let a = UIAlertController(title: "失効できません", message: "失効可能な共有が見つかりません。開始後に再度お試しください。", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default))
+            present(a, animated: true)
+            return
+        }
+        Task { @MainActor in
+            do {
+                try await self.api.revokeAlert(id: id)
+                self.statusLabel.text = "リンクを即時失効しました"
+            } catch {
+                self.statusLabel.text = "失効に失敗: \(error.localizedDescription)"
+            }
+        }
     }
 }
