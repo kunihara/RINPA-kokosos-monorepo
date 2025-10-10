@@ -107,12 +107,14 @@ final class TabRootController: UITabBarController {
         tabBar.bringSubviewToFront(rightItem)
 
         NSLayoutConstraint.activate([
-            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 22),
-            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -60),
+            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 16),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -40),
+            leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 4),
             leftItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: 0),
 
-            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 60),
-            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -22),
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 40),
+            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -16),
+            rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 4),
             rightItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: 0),
         ])
 

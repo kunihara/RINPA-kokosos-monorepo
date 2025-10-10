@@ -7,6 +7,8 @@ final class CustomTabItemView: UIControl {
 
     var selectedTintColor: UIColor = .label { didSet { applyStyle() } }
     var normalTintColor: UIColor = .secondaryLabel { didSet { applyStyle() } }
+    // タップしやすさ向上のためのヒット拡張
+    var extraHitOutset: CGFloat = 10
 
     override var isSelected: Bool { didSet { applyStyle() } }
 
@@ -52,5 +54,15 @@ final class CustomTabItemView: UIControl {
         let tint = isSelected ? selectedTintColor : normalTintColor
         imageView.tintColor = tint
         titleLabel.textColor = tint
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // コントロールの周囲にヒット領域を拡張（最小44pt四方を目標）
+        let minSide: CGFloat = 44
+        var bounds = self.bounds.insetBy(dx: -extraHitOutset, dy: -extraHitOutset)
+        let addW = max(0, (minSide - bounds.width) / 2)
+        let addH = max(0, (minSide - bounds.height) / 2)
+        bounds = bounds.insetBy(dx: -addW, dy: -addH)
+        return bounds.contains(point)
     }
 }
