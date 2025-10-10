@@ -17,8 +17,8 @@ final class TabRootController: UITabBarController {
         // 調整: 文字位置をわずかに下げ、アイコンが高く見えないようにする
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        // タイトルは上方向（マイナス）に寄せてアイコンとの間隔を詰める
-        let offsetY: CGFloat = -2
+        // アイコンとタイトルを同時にさらに下へ移動（相対距離は維持）
+        let offsetY: CGFloat = 2
         appearance.stackedLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.stackedLayoutAppearance.selected.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
         appearance.inlineLayoutAppearance.normal.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: offsetY)
@@ -33,15 +33,15 @@ final class TabRootController: UITabBarController {
         let home = UINavigationController(rootViewController: HomeModeViewController())
         home.tabBarItem = UITabBarItem(title: "帰るモード", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
         // アイコンを文字に近づける（上下の間隔を詰める）
-        home.tabBarItem.imageInsets = UIEdgeInsets(top: 16, left: 0, bottom: -16, right: 0)
+        home.tabBarItem.imageInsets = UIEdgeInsets(top: 20, left: 0, bottom: -20, right: 0)
 
         let emergency = UINavigationController(rootViewController: MainViewController())
         emergency.tabBarItem = UITabBarItem(title: "緊急モード", image: UIImage(systemName: "phone.down.circle"), selectedImage: UIImage(systemName: "phone.down.circle.fill"))
-        emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 16, left: 0, bottom: -16, right: 0)
+        emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 20, left: 0, bottom: -20, right: 0)
 
         let settings = UINavigationController(rootViewController: SettingsViewController())
         settings.tabBarItem = UITabBarItem(title: "設定", image: UIImage(systemName: "bell.badge"), selectedImage: UIImage(systemName: "bell.badge.fill"))
-        settings.tabBarItem.imageInsets = UIEdgeInsets(top: 16, left: 0, bottom: -16, right: 0)
+        settings.tabBarItem.imageInsets = UIEdgeInsets(top: 20, left: 0, bottom: -20, right: 0)
 
         viewControllers = [home, emergency, settings]
 
