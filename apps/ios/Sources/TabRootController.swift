@@ -111,8 +111,11 @@ final class TabRootController: UITabBarController {
         rightItem.selectedTintColor = .label
         rightItem.normalTintColor = .secondaryLabel
         // ヒット領域は中央側を小さく、外側を大きく（中央ボタンとの競合回避）
-        leftItem.hitOutsets = UIEdgeInsets(top: 16, left: 20, bottom: 16, right: 6)
-        rightItem.hitOutsets = UIEdgeInsets(top: 16, left: 6, bottom: 16, right: 20)
+        leftItem.hitOutsets = UIEdgeInsets(top: 18, left: 26, bottom: 18, right: 6)
+        rightItem.hitOutsets = UIEdgeInsets(top: 18, left: 6, bottom: 18, right: 26)
+        // z順で左右は中央の下、ただしタップは有効
+        leftItem.layer.zPosition = 80
+        rightItem.layer.zPosition = 80
 
         leftItem.translatesAutoresizingMaskIntoConstraints = false
         rightItem.translatesAutoresizingMaskIntoConstraints = false
@@ -124,12 +127,12 @@ final class TabRootController: UITabBarController {
         // 中央SOSボタンのヒット領域を確保するため、左右は中心から十分離す
         NSLayoutConstraint.activate([
             leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
-            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -48),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -56),
             leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             // さらに上げる（-18pt）
             leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
 
-            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 48),
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 56),
             rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
             rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),

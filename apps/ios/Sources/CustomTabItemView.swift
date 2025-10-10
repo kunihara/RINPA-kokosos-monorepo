@@ -47,8 +47,8 @@ final class CustomTabItemView: UIControl {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            imageView.heightAnchor.constraint(equalToConstant: 24),
-            imageView.widthAnchor.constraint(equalToConstant: 24)
+            imageView.heightAnchor.constraint(equalToConstant: 28),
+            imageView.widthAnchor.constraint(equalToConstant: 28)
         ])
 
         applyStyle()
