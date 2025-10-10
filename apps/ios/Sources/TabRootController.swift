@@ -2,6 +2,8 @@ import UIKit
 
 final class TabRootController: UITabBarController {
     private let centerButton = UIButton(type: .system)
+    private let leftItem = CustomTabItemView(title: "帰るモード", image: UIImage(systemName: "location.circle"))
+    private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "bell.badge"))
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -31,21 +33,21 @@ final class TabRootController: UITabBarController {
         }
 
         let home = UINavigationController(rootViewController: HomeModeViewController())
-        home.tabBarItem = UITabBarItem(title: "帰るモード", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
-        // アイコンを文字に近づける（上下の間隔を詰める）
-        home.tabBarItem.imageInsets = UIEdgeInsets(top: 30, left: 0, bottom: -30, right: 0)
+        // 標準のタイトルは空にして、見た目はカスタム項目で表示
+        home.tabBarItem = UITabBarItem(title: "", image: UIImage(systemName: "location.circle"), selectedImage: UIImage(systemName: "location.circle.fill"))
 
         let emergency = UINavigationController(rootViewController: MainViewController())
         emergency.tabBarItem = UITabBarItem(title: "緊急モード", image: UIImage(systemName: "phone.down.circle"), selectedImage: UIImage(systemName: "phone.down.circle.fill"))
         emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 30, left: 0, bottom: -30, right: 0)
 
         let settings = UINavigationController(rootViewController: SettingsViewController())
-        settings.tabBarItem = UITabBarItem(title: "設定", image: UIImage(systemName: "bell.badge"), selectedImage: UIImage(systemName: "bell.badge.fill"))
-        settings.tabBarItem.imageInsets = UIEdgeInsets(top: 30, left: 0, bottom: -30, right: 0)
+        settings.tabBarItem = UITabBarItem(title: "", image: UIImage(systemName: "bell.badge"), selectedImage: UIImage(systemName: "bell.badge.fill"))
 
         viewControllers = [home, emergency, settings]
 
         setupCenterButton()
+        setupCustomItems()
+        updateCustomSelection()
     }
 
     private func setupCenterButton() {
@@ -88,5 +90,48 @@ final class TabRootController: UITabBarController {
                 self.centerButton.transform = .identity
             }
         }
+        updateCustomSelection()
+    }
+
+    private func setupCustomItems() {
+        leftItem.selectedTintColor = .label
+        leftItem.normalTintColor = .secondaryLabel
+        rightItem.selectedTintColor = .label
+        rightItem.normalTintColor = .secondaryLabel
+
+        leftItem.translatesAutoresizingMaskIntoConstraints = false
+        rightItem.translatesAutoresizingMaskIntoConstraints = false
+        tabBar.addSubview(leftItem)
+        tabBar.addSubview(rightItem)
+        tabBar.bringSubviewToFront(leftItem)
+        tabBar.bringSubviewToFront(rightItem)
+
+        NSLayoutConstraint.activate([
+            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 22),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -60),
+            leftItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 60),
+            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -22),
+            rightItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+        ])
+
+        leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
+        rightItem.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
+    }
+
+    @objc private func tapLeft() {
+        selectedIndex = 0
+        updateCustomSelection()
+    }
+
+    @objc private func tapRight() {
+        selectedIndex = 2
+        updateCustomSelection()
+    }
+
+    private func updateCustomSelection() {
+        leftItem.isSelected = (selectedIndex == 0)
+        rightItem.isSelected = (selectedIndex == 2)
     }
 }
