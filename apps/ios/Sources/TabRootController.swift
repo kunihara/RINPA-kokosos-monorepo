@@ -115,7 +115,7 @@ final class TabRootController: UITabBarController {
         let bell = UIImage(systemName: "bell.and.waveform") ?? UIImage(systemName: "bell.fill")
         centerButton.setImage(bell, for: .normal)
         centerButton.tintColor = .kokoRed
-        centerButton.layer.cornerRadius = 28
+        centerButton.layer.cornerRadius = 32
         centerButton.layer.shadowColor = UIColor.black.cgColor
         centerButton.layer.shadowOpacity = 0.2
         centerButton.layer.shadowRadius = 8
@@ -131,10 +131,10 @@ final class TabRootController: UITabBarController {
             centerButton.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
             // SOSボタンもさらに下げてアーチと整合
             centerButton.centerYAnchor.constraint(equalTo: overlay.topAnchor, constant: 20),
-            centerButton.widthAnchor.constraint(equalToConstant: 56),
-            centerButton.heightAnchor.constraint(equalToConstant: 56),
+            centerButton.widthAnchor.constraint(equalToConstant: 64),
+            centerButton.heightAnchor.constraint(equalToConstant: 64),
         ])
-        centerButton.layer.cornerRadius = 28
+        centerButton.layer.cornerRadius = 32
     }
 
     @objc private func tapCenter() {
