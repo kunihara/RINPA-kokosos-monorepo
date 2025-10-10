@@ -7,7 +7,7 @@ final class SettingsStore {
 
     private let keyArrivalReminder = "arrivalReminderMinutes"
     private let keyGoingHomeMax = "goingHomeMaxMinutes"
-    private let keyAPIBaseURLOverride = "APIBaseURLOverride"
+    // APIベースURLの上書きは廃止
 
     var arrivalReminderMinutes: Int {
         get {
@@ -34,20 +34,5 @@ final class SettingsStore {
         }
     }
 
-    // APIベースURLの手動上書き（デバイス実機からの接続やステージング確認用）
-    var apiBaseURLOverride: String? {
-        get {
-            let s = UserDefaults.standard.string(forKey: keyAPIBaseURLOverride)
-            return (s?.isEmpty == false) ? s : nil
-        }
-        set {
-            let trimmed = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let t = trimmed, !t.isEmpty {
-                UserDefaults.standard.set(t, forKey: keyAPIBaseURLOverride)
-            } else {
-                UserDefaults.standard.removeObject(forKey: keyAPIBaseURLOverride)
-            }
-            NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
-        }
-    }
+    // apiBaseURLOverride は削除済み
 }

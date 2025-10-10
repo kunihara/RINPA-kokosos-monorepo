@@ -656,11 +656,7 @@ final class MainViewController: UIViewController {
                     }
                     self.startPeriodicUpdates()
                 } catch {
-                    if let urlErr = error as? URLError, urlErr.code == .cannotFindHost {
-                        self.statusLabel.text = "開始に失敗しました: ホストが見つかりません。設定>APIベースURLで到達可能なURLを指定してください。\n現在: \(self.api.baseURL.absoluteString)"
-                    } else {
-                        self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
-                    }
+                    self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)\n接続先の設定とネットワーク状況をご確認ください。"
                 }
             }
         }

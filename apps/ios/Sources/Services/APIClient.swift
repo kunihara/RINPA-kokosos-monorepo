@@ -8,17 +8,7 @@ struct APIClient {
 
     init() {
         let dict = Bundle.main.infoDictionary
-        // 1) User override from Settings (for device testing or custom endpoints)
-        if let override = UserDefaults.standard.string(forKey: APIClient.baseURLOverrideKey) {
-            let trimmed = override.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty, let url = URL(string: trimmed), let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-                let schemeOK = (comps.scheme == "http" || comps.scheme == "https")
-                if schemeOK, let host = comps.host, !host.isEmpty {
-                    self.baseURL = url
-                    return
-                }
-            }
-        }
+        // 1) 設定からの上書きは廃止（常にビルド設定/Info.plistを参照）
 
         // Helper: treat unresolved $(VAR) as invalid
         func isUnresolvedVariable(_ s: String) -> Bool { s.contains("$(") }

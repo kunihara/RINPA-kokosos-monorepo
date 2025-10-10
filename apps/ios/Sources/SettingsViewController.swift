@@ -12,10 +12,6 @@ final class SettingsViewController: UIViewController {
     private let recipientsButton = UIButton(type: .system)
     private let profileButton = UIButton(type: .system)
 
-    // API Base URL override
-    private let apiGroupLabel = UILabel()
-    private let apiTextField = UITextField()
-    private let apiHelpLabel = UILabel()
     private let dangerLabel = UILabel()
     private let deleteAccountButton = UIButton(type: .system)
     private let signOutButton = UIButton(type: .system)
@@ -61,26 +57,7 @@ final class SettingsViewController: UIViewController {
         profileButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(profileButton)
 
-        // API override UI
-        apiGroupLabel.text = "APIベースURL(上級者向け)"
-        apiGroupLabel.textColor = .secondaryLabel
-        apiGroupLabel.translatesAutoresizingMaskIntoConstraints = false
-        apiTextField.borderStyle = .roundedRect
-        apiTextField.placeholder = "例: http://<MacのIP>:8787 または https://<公開API>"
-        apiTextField.keyboardType = .URL
-        apiTextField.autocapitalizationType = .none
-        apiTextField.autocorrectionType = .no
-        apiTextField.clearButtonMode = .whileEditing
-        apiTextField.translatesAutoresizingMaskIntoConstraints = false
-        apiTextField.addTarget(self, action: #selector(apiEditingDidEnd), for: .editingDidEnd)
-        apiHelpLabel.text = "未設定時はInfo.plistのAPIBaseURLを使用。実機はlocalhost不可のためLAN IPや公開ドメインを指定してください。"
-        apiHelpLabel.textColor = .tertiaryLabel
-        apiHelpLabel.numberOfLines = 0
-        apiHelpLabel.font = .systemFont(ofSize: 12)
-        apiHelpLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(apiGroupLabel)
-        view.addSubview(apiTextField)
-        view.addSubview(apiHelpLabel)
+        // APIベースURLのUIは仕様変更により削除
         dangerLabel.text = "アカウント"
         dangerLabel.textColor = .secondaryLabel
         dangerLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -116,19 +93,8 @@ final class SettingsViewController: UIViewController {
             profileButton.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 16),
             profileButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            apiGroupLabel.topAnchor.constraint(equalTo: profileButton.bottomAnchor, constant: 32),
-            apiGroupLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            apiGroupLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            apiTextField.topAnchor.constraint(equalTo: apiGroupLabel.bottomAnchor, constant: 8),
-            apiTextField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            apiTextField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            apiHelpLabel.topAnchor.constraint(equalTo: apiTextField.bottomAnchor, constant: 6),
-            apiHelpLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            apiHelpLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            dangerLabel.topAnchor.constraint(equalTo: apiHelpLabel.bottomAnchor, constant: 32),
+            // 直後にアカウントセクション
+            dangerLabel.topAnchor.constraint(equalTo: profileButton.bottomAnchor, constant: 32),
             dangerLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             dangerLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
@@ -151,8 +117,7 @@ final class SettingsViewController: UIViewController {
         if let idx = maxOptions.firstIndex(of: maxCurrent) {
             maxSegmented.selectedSegmentIndex = idx
         } else if let idx = maxOptions.firstIndex(of: 120) { maxSegmented.selectedSegmentIndex = idx }
-        // API override
-        apiTextField.text = SettingsStore.shared.apiBaseURLOverride
+        // APIベースURLは非表示のためロード不要
     }
 
     @objc private func changeReminder() {
@@ -167,10 +132,7 @@ final class SettingsViewController: UIViewController {
         SettingsStore.shared.goingHomeMaxMinutes = maxOptions[idx]
     }
 
-    @objc private func apiEditingDidEnd() {
-        let text = apiTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-        SettingsStore.shared.apiBaseURLOverride = text
-    }
+    // APIベースURL編集ハンドラは削除
 
     @objc private func openRecipients() {
         // サインイン必須（トークン無し時は先にサインイン）
