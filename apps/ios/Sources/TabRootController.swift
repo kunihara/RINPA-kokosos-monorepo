@@ -3,7 +3,7 @@ import UIKit
 final class TabRootController: UITabBarController {
     private let centerButton = UIButton(type: .system)
     private let leftItem = CustomTabItemView(title: "帰るモード", image: UIImage(systemName: "location.circle"))
-    private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "bell.badge"))
+    private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "gearshape"))
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -109,14 +109,14 @@ final class TabRootController: UITabBarController {
         tabBar.bringSubviewToFront(rightItem)
 
         NSLayoutConstraint.activate([
-            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 12),
-            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -36),
+            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -28),
             leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             // さらに上げる（-18pt）
             leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
 
-            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 36),
-            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -12),
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 28),
+            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
             rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
             rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -18),
         ])
