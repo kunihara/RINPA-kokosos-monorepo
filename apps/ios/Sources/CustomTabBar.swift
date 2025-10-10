@@ -3,9 +3,11 @@ import UIKit
 final class CustomTabBar: UITabBar {
     private let barLayer = CAShapeLayer()
     private let archLayer = CAShapeLayer()
-    var archRadius: CGFloat = 34
+    // アーチを少し広げる（セミサークル半径）
+    var archRadius: CGFloat = 40
     var barCorner: CGFloat = 16
-    var barHeightExtra: CGFloat = 14
+    // 全体の高さを短く
+    var barHeightExtra: CGFloat = 6
 
     override init(frame: CGRect) {
         super.init(frame: frame)

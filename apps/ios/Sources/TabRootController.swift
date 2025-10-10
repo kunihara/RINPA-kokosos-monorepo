@@ -31,7 +31,9 @@ final class TabRootController: UITabBarController {
     private func setupCenterButton() {
         centerButton.translatesAutoresizingMaskIntoConstraints = false
         centerButton.backgroundColor = .white
-        centerButton.setImage(UIImage(systemName: "phone.down.fill"), for: .normal)
+        // I'm Safe画面と同じベルアイコンを使用
+        let bell = UIImage(systemName: "bell.and.waveform") ?? UIImage(systemName: "bell.fill")
+        centerButton.setImage(bell, for: .normal)
         centerButton.tintColor = .systemRed
         centerButton.layer.cornerRadius = 28
         centerButton.layer.shadowColor = UIColor.black.cgColor
@@ -66,4 +68,3 @@ final class TabRootController: UITabBarController {
         }
     }
 }
-
