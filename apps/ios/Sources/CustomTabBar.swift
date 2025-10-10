@@ -103,9 +103,10 @@ final class CustomTabBar: UITabBar {
             archLayer.strokeColor = UIColor.clear.cgColor
             archLayer.lineWidth = 0
         } else {
+            // 以前の白ベタ（アウトラインなし）に戻す
             archLayer.fillColor = UIColor.white.cgColor
-            archLayer.strokeColor = UIColor.kokoRed.cgColor
-            archLayer.lineWidth = 2
+            archLayer.strokeColor = UIColor.clear.cgColor
+            archLayer.lineWidth = 0
         }
     }
 
