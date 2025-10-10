@@ -135,6 +135,9 @@ final class MainViewController: UIViewController {
         sosBackdrop.translatesAutoresizingMaskIntoConstraints = false
         sosBackdrop.backgroundColor = UIColor.kokoRed.withAlphaComponent(0.15)
         sosBackdrop.alpha = 0.3
+        if #available(iOS 13.0, *) {
+            sosBackdrop.layer.cornerCurve = .continuous
+        }
 
         // 帰るモード開始は緊急タブから削除（帰るモードは専用タブへ）
 
@@ -315,6 +318,10 @@ final class MainViewController: UIViewController {
         // 丸ボタンの角丸をレイアウト後に適用
         startEmergencyButton.layer.cornerRadius = startEmergencyButton.bounds.height / 2
         sosBackdrop.layer.cornerRadius = sosBackdrop.bounds.height / 2
+        if #available(iOS 13.0, *) {
+            startEmergencyButton.layer.cornerCurve = .continuous
+            sosBackdrop.layer.cornerCurve = .continuous
+        }
     }
 
     // MARK: - SOS Animation
@@ -362,12 +369,14 @@ final class MainViewController: UIViewController {
 
         func collapseOverlayThenRestore() {
             if let overlay = self.sosOverlay {
-                UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
-                    // 背景の赤は不透明のままサイズだけを戻す
+                // 拡大の完全な逆アニメーション（同じduration/curve、アルファ変更なし）
+                self.sosBackdrop.isHidden = true
+                UIView.animate(withDuration: 0.5, delay: 0, options: [.curveEaseInOut], animations: {
                     overlay.transform = .identity
                 }, completion: { _ in
                     overlay.removeFromSuperview()
                     self.sosOverlay = nil
+                    self.sosBackdrop.isHidden = false
                     restoreBackgroundAndButton()
                 })
             } else {
@@ -411,9 +420,14 @@ final class MainViewController: UIViewController {
             }
         }()
 
-        let overlay = UIView(frame: CGRect(x: 0, y: 0, width: sosInitialSize, height: sosInitialSize))
+        // オーバーレイの初期サイズを『SOSボタンの直径』に合わせる
+        let buttonDiameter = max(startEmergencyButton.bounds.width, startEmergencyButton.bounds.height)
+        let overlay = UIView(frame: CGRect(x: 0, y: 0, width: buttonDiameter, height: buttonDiameter))
         overlay.backgroundColor = UIColor.kokoRed
-        overlay.layer.cornerRadius = sosInitialSize / 2
+        overlay.layer.cornerRadius = buttonDiameter / 2
+        if #available(iOS 13.0, *) {
+            overlay.layer.cornerCurve = .continuous
+        }
         overlay.center = btnCenter
         // 拡大は不透明の赤で。フェードインは行わない
         overlay.alpha = 1.0
@@ -421,12 +435,14 @@ final class MainViewController: UIViewController {
         container.addSubview(overlay)
         container.bringSubviewToFront(overlay)
         sosOverlay = overlay
+        // 背景の丸はオーバーレイ拡大中は隠す（戻すときにフェード）
+        sosBackdrop.isHidden = true
 
-        // 画面対角に十分広がるスケールを計算
+        // 画面対角に十分広がるスケールを計算（基準はボタン直径）
         let w = container.bounds.width
         let h = container.bounds.height
         let target = sqrt(w*w + h*h) * 1.15
-        let scale = max(1.0, target / sosInitialSize)
+        let scale = max(1.0, target / max(buttonDiameter, 1))
         UIView.animate(withDuration: 0.5 as TimeInterval, delay: 0, options: [.curveEaseInOut], animations: {
             overlay.transform = CGAffineTransform(scaleX: scale, y: scale)
         }, completion: { _ in
