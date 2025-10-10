@@ -1,0 +1,11 @@
+<Category>: <subject>
+
+<body>
+
+Refs: <issue/PR>
+
+# Categories: iOS | API | Web | DB | Docs | CI
+# Example:
+# iOS: SOSアニメーションを追加（緊急モード）
+# API: 受信者検証完了でPush通知を送信
+# Web: /auth/confirm でフラグメントを next に連結
