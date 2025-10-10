@@ -39,8 +39,8 @@ final class CustomTabItemView: UIControl {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            imageView.heightAnchor.constraint(equalToConstant: 20),
-            imageView.widthAnchor.constraint(equalToConstant: 20)
+            imageView.heightAnchor.constraint(equalToConstant: 24),
+            imageView.widthAnchor.constraint(equalToConstant: 24)
         ])
 
         applyStyle()
@@ -54,4 +54,3 @@ final class CustomTabItemView: UIControl {
         titleLabel.textColor = tint
     }
 }
-

@@ -109,11 +109,11 @@ final class TabRootController: UITabBarController {
         NSLayoutConstraint.activate([
             leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 22),
             leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -60),
-            leftItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+            leftItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
 
             rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 60),
             rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -22),
-            rightItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+            rightItem.bottomAnchor.constraint(equalTo: tabBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
         ])
 
         leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
