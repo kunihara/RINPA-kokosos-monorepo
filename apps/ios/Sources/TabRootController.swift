@@ -62,6 +62,12 @@ final class TabRootController: UITabBarController {
         tabBar.bringSubviewToFront(leftItem)
         tabBar.bringSubviewToFront(rightItem)
         tabBar.bringSubviewToFront(centerButton) // 最前面にSOSボタン
+        // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
+        for v in tabBar.subviews {
+            if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
+                v.isUserInteractionEnabled = false
+            }
+        }
     }
 
     private func setupCenterButton() {
