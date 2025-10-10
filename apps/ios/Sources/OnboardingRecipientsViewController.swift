@@ -52,7 +52,7 @@ final class OnboardingRecipientsViewController: UIViewController, UITableViewDat
             table.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        NotificationCenter.default.addObserver(self, selector: #selector(onContactsRefresh), name: .ContactsShouldRefresh, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onContactsRefresh), name: Notification.Name("ContactsShouldRefresh"), object: nil)
         Task { await refreshList() }
     }
 
