@@ -10,6 +10,14 @@ final class MainViewController: UIViewController {
     private var sosBackdropW: NSLayoutConstraint!
     private var sosBackdropH: NSLayoutConstraint!
     private let sosInitialSize: CGFloat = 280
+    #if DEBUG
+    private let debugAnimateOnlySOS = true
+    #else
+    private let debugAnimateOnlySOS = false
+    #endif
+    // Fallback overlay for robust animation (frame-based)
+    private var sosOverlay: UIView?
+    private var sosLayer: CAShapeLayer?
     private let statusLabel = UILabel()
     private let controlsStack = UIStackView()
     private let stopButton = UIButton(type: .system)
@@ -121,6 +129,7 @@ final class MainViewController: UIViewController {
 
         sosBackdrop.translatesAutoresizingMaskIntoConstraints = false
         sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
+        sosBackdrop.alpha = 0.3
 
         // 帰るモード開始は緊急タブから削除（帰るモードは専用タブへ）
 
@@ -142,6 +151,9 @@ final class MainViewController: UIViewController {
         view.addSubview(subLabel)
         view.addSubview(sosBackdrop)
         view.addSubview(startEmergencyButton)
+        // 確実にボタンが前面、バックドロップが背面になるように調整
+        sosBackdrop.layer.zPosition = -1
+        view.bringSubviewToFront(startEmergencyButton)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
         recipientsButton.setTitle("受信者: 0名", for: .normal)
@@ -217,6 +229,10 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapStartEmergency() {
+        // 先にアニメーションを開始
+        animateSOSExpand()
+        // デバッグ中はアニメーションのみ確認
+        if debugAnimateOnlySOS { return }
         startFlow(type: "emergency")
     }
 
@@ -255,15 +271,24 @@ final class MainViewController: UIViewController {
 
     // MARK: - SOS Animation
     private func animateSOSExpand() {
-        view.layoutIfNeeded()
-        let w = view.bounds.width
-        let h = view.bounds.height
-        let target = sqrt(w*w + h*h) * 1.1 // cover diagonal
-        sosBackdropW.constant = target
-        sosBackdropH.constant = target
-        UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0.3, options: [.curveEaseInOut]) {
-            self.view.layoutIfNeeded()
-            self.sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.25)
+        #if DEBUG
+        print("[DEBUG] animateSOSExpand")
+        #endif
+        // Haptic feedback for emphasis
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        // 1) Path-based layer or overlay（より確実に視覚変化させる）
+        animateSOSExpandLayer()
+        // デバッグ中はオーバーレイでも強制表示
+        #if DEBUG
+        animateSOSExpandOverlay()
+        #endif
+        // ボタン自体の軽いスケールで押下感を出す
+        UIView.animate(withDuration: 0.12, animations: {
+            self.startEmergencyButton.transform = CGAffineTransform(scaleX: 0.94, y: 0.94)
+        }) { _ in
+            UIView.animate(withDuration: 0.18) {
+                self.startEmergencyButton.transform = .identity
+            }
         }
         startEmergencyButton.setTitle("停止", for: .normal)
         startEmergencyButton.removeTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
@@ -271,18 +296,119 @@ final class MainViewController: UIViewController {
     }
 
     private func animateSOSCollapse() {
+        #if DEBUG
+        print("[DEBUG] animateSOSCollapse")
+        #endif
+        if let overlay = sosOverlay, let win = view.window ?? UIApplication.shared.windows.first {
+            UIView.animate(withDuration: 0.3, animations: {
+                overlay.alpha = 0.0
+                overlay.transform = .identity
+            }, completion: { _ in
+                overlay.removeFromSuperview()
+                self.sosOverlay = nil
+            })
+        }
         sosBackdropW.constant = sosInitialSize
         sosBackdropH.constant = sosInitialSize
-        UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut]) {
+        UIView.animate(withDuration: 0.35, delay: 0, options: [.curveEaseInOut], animations: {
             self.view.layoutIfNeeded()
-            self.sosBackdrop.backgroundColor = UIColor.systemRed.withAlphaComponent(0.15)
-        }
+            self.sosBackdrop.alpha = 0.3
+            self.sosBackdrop.layer.cornerRadius = self.sosInitialSize / 2
+        })
+        animateSOSCollapseLayer()
         startEmergencyButton.setTitle("SOS", for: .normal)
         startEmergencyButton.removeTarget(self, action: #selector(tapStop), for: .touchUpInside)
         startEmergencyButton.addTarget(self, action: #selector(tapStartEmergency), for: .touchUpInside)
     }
 
+    private func animateSOSExpandOverlay() {
+        // 決してオプショナルにしないように明示的にコンテナを決定
+        let container: UIView
+        if let win = self.view.window {
+            container = win
+        } else if let superview = self.view.superview {
+            container = superview
+        } else {
+            container = self.view
+        }
+
+        // ボタン中心をコンテナ座標に変換（安全にフォールバック）
+        let btnCenter: CGPoint = {
+            if let sp = startEmergencyButton.superview {
+                return sp.convert(startEmergencyButton.center, to: container)
+            } else {
+                return container.center
+            }
+        }()
+
+        let overlay = UIView(frame: CGRect(x: 0, y: 0, width: sosInitialSize, height: sosInitialSize))
+        overlay.backgroundColor = UIColor.systemRed.withAlphaComponent(0.35)
+        overlay.layer.cornerRadius = sosInitialSize / 2
+        overlay.center = btnCenter
+        overlay.alpha = 0.0
+
+        container.addSubview(overlay)
+        container.bringSubviewToFront(overlay)
+        sosOverlay = overlay
+
+        // 画面対角に十分広がるスケールを計算
+        let w = container.bounds.width
+        let h = container.bounds.height
+        let target = sqrt(w*w + h*h) * 1.15
+        let scale = max(1.0, target / sosInitialSize)
+        UIView.animate(withDuration: 0.5 as TimeInterval, delay: 0, options: [.curveEaseInOut], animations: {
+            overlay.alpha = 1.0
+            overlay.transform = CGAffineTransform(scaleX: scale, y: scale)
+        })
+    }
+
+    private func animateSOSExpandLayer() {
+        let center = startEmergencyButton.superview?.convert(startEmergencyButton.center, to: view) ?? view.center
+        let startRect = CGRect(x: center.x - sosInitialSize/2, y: center.y - sosInitialSize/2, width: sosInitialSize, height: sosInitialSize)
+        let startPath = UIBezierPath(ovalIn: startRect)
+        let w = view.bounds.width, h = view.bounds.height
+        let target = sqrt(w*w + h*h) * 1.15
+        let endRect = CGRect(x: center.x - target/2, y: center.y - target/2, width: target, height: target)
+        let endPath = UIBezierPath(ovalIn: endRect)
+
+        let layer = CAShapeLayer()
+        layer.path = startPath.cgPath
+        layer.fillColor = UIColor.systemRed.withAlphaComponent(0.35).cgColor
+        view.layer.insertSublayer(layer, below: startEmergencyButton.layer)
+        sosLayer = layer
+
+        let anim = CABasicAnimation(keyPath: "path")
+        anim.fromValue = startPath.cgPath
+        anim.toValue = endPath.cgPath
+        anim.duration = 0.5
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        anim.fillMode = .forwards
+        anim.isRemovedOnCompletion = false
+        layer.add(anim, forKey: "expandPath")
+    }
+
+    private func animateSOSCollapseLayer() {
+        guard let layer = sosLayer else { return }
+        let center = startEmergencyButton.superview?.convert(startEmergencyButton.center, to: view) ?? view.center
+        let endRect = CGRect(x: center.x - sosInitialSize/2, y: center.y - sosInitialSize/2, width: sosInitialSize, height: sosInitialSize)
+        let endPath = UIBezierPath(ovalIn: endRect)
+        let anim = CABasicAnimation(keyPath: "path")
+        anim.toValue = endPath.cgPath
+        anim.duration = 0.35
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        anim.fillMode = .forwards
+        anim.isRemovedOnCompletion = false
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            self?.sosLayer?.removeFromSuperlayer()
+            self?.sosLayer = nil
+        }
+        layer.add(anim, forKey: "collapsePath")
+        CATransaction.commit()
+    }
+
     private func kickoff(type: String) {
+        if debugAnimateOnlySOS { return }
         // Require at least one recipient
         guard !selectedRecipients.isEmpty else {
             showAlert("受信者未選択", "まず『受信者』をタップして、送信先を選択してください。")
