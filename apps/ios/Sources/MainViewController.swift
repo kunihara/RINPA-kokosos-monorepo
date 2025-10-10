@@ -35,6 +35,10 @@ final class MainViewController: UIViewController {
     private let contactsClient = ContactsClient()
     private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
     private let recipientsButton = UIButton(type: .system)
+    // 画面下部に表示する受信者バッジ
+    private let recipientsBadge = UIView()
+    private let recipientsBadgeIcon = UIImageView()
+    private let recipientsBadgeLabel = UILabel()
     private var session: AlertSession? { didSet { updateControls() } }
     private var didAutoShowOnboarding = false
     private let updateIntervalSec: TimeInterval = 60 // 1〜5分の範囲で調整可（ここは1分）
@@ -165,15 +169,33 @@ final class MainViewController: UIViewController {
         controlsStack.spacing = 12
         controlsStack.alignment = .center
         controlsStack.translatesAutoresizingMaskIntoConstraints = false
-        stopButton.setTitle("停止", for: .normal)
-        stopButton.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
         revokeButton.setTitle("即時失効", for: .normal)
         revokeButton.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
-        // 延長は帰るモードへ移動するため、この画面のコントロールからは除外
-        controlsStack.addArrangedSubview(stopButton)
+        // SOS画面から「停止」ボタンは削除。必要なら即時失効のみ残す。
         controlsStack.addArrangedSubview(revokeButton)
         view.addSubview(controlsStack)
         // 設定はタブで提供、サインアウトは設定タブに移動（本画面のバーアイテムは設置しない）
+
+        // 受信者バッジ（画面左下）
+        recipientsBadge.translatesAutoresizingMaskIntoConstraints = false
+        recipientsBadge.backgroundColor = .systemBackground
+        recipientsBadge.layer.cornerRadius = 14
+        recipientsBadge.layer.shadowColor = UIColor.black.cgColor
+        recipientsBadge.layer.shadowOpacity = 0.12
+        recipientsBadge.layer.shadowRadius = 8
+        recipientsBadge.layer.shadowOffset = CGSize(width: 0, height: 4)
+        recipientsBadge.isHidden = true
+        recipientsBadgeIcon.translatesAutoresizingMaskIntoConstraints = false
+        recipientsBadgeIcon.image = UIImage(systemName: "person.crop.circle")
+        recipientsBadgeIcon.tintColor = .systemGray
+        recipientsBadgeIcon.contentMode = .scaleAspectFit
+        recipientsBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        recipientsBadgeLabel.text = "受信者: 0名"
+        recipientsBadgeLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        recipientsBadgeLabel.textColor = .label
+        recipientsBadge.addSubview(recipientsBadgeIcon)
+        recipientsBadge.addSubview(recipientsBadgeLabel)
+        view.addSubview(recipientsBadge)
 
         // Prepare constraints for animated sizing of SOS backdrop
         sosBackdropW = sosBackdrop.widthAnchor.constraint(equalToConstant: sosInitialSize)
@@ -212,7 +234,18 @@ final class MainViewController: UIViewController {
             countdownView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             countdownView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             countdownView.widthAnchor.constraint(equalToConstant: 160),
-            countdownView.heightAnchor.constraint(equalToConstant: 100)
+            countdownView.heightAnchor.constraint(equalToConstant: 100),
+
+            recipientsBadge.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
+            recipientsBadge.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            recipientsBadgeIcon.leadingAnchor.constraint(equalTo: recipientsBadge.leadingAnchor, constant: 10),
+            recipientsBadgeIcon.centerYAnchor.constraint(equalTo: recipientsBadge.centerYAnchor),
+            recipientsBadgeIcon.widthAnchor.constraint(equalToConstant: 24),
+            recipientsBadgeIcon.heightAnchor.constraint(equalToConstant: 24),
+            recipientsBadgeLabel.leadingAnchor.constraint(equalTo: recipientsBadgeIcon.trailingAnchor, constant: 8),
+            recipientsBadgeLabel.trailingAnchor.constraint(equalTo: recipientsBadge.trailingAnchor, constant: -12),
+            recipientsBadgeLabel.topAnchor.constraint(equalTo: recipientsBadge.topAnchor, constant: 8),
+            recipientsBadgeLabel.bottomAnchor.constraint(equalTo: recipientsBadge.bottomAnchor, constant: -8)
         ])
     }
 
@@ -225,6 +258,20 @@ final class MainViewController: UIViewController {
     private func updateRecipientsChip() {
         let count = selectedRecipients.count
         recipientsButton.setTitle("受信者: \(count)名", for: .normal)
+        // バッジ表示も更新
+        if count > 0 {
+            recipientsBadge.isHidden = false
+            let first = selectedRecipients.first ?? ""
+            let text: String
+            if count == 1 {
+                text = first
+            } else {
+                text = "\(first) ほか\(count-1)人"
+            }
+            recipientsBadgeLabel.text = text
+        } else {
+            recipientsBadge.isHidden = true
+        }
     }
 
     @objc private func tapStartEmergency() {
