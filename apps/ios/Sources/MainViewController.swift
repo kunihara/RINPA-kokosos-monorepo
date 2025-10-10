@@ -456,7 +456,8 @@ final class MainViewController: UIViewController {
         safeBtn.setTitleColor(.systemRed, for: .normal)
         safeBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         safeBtn.layer.cornerRadius = 44
-        safeBtn.addTarget(self, action: #selector(tapStop), for: .touchUpInside)
+        // 『I'm Safe』はハプティクスを出した上で停止処理へ
+        safeBtn.addTarget(self, action: #selector(tapSafeButton), for: .touchUpInside)
         full.addSubview(safeBtn)
 
         // 下部の Message / Call ボタン（アウトライン）
@@ -522,6 +523,15 @@ final class MainViewController: UIViewController {
         UIView.animate(withDuration: 0.22, animations: {
             full.alpha = 1.0
         })
+    }
+
+    @objc private func tapSafeButton() {
+        // 成功系のフィードバック
+        let h = UINotificationFeedbackGenerator()
+        h.prepare()
+        h.notificationOccurred(.success)
+        // 既存の停止処理へ
+        tapStop()
     }
 
     @objc private func tapMessage() {
