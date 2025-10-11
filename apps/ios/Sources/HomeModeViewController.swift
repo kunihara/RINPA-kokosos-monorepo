@@ -305,6 +305,12 @@ final class HomeModeViewController: UIViewController {
         }
     }
 
+    private func showAlert(_ title: String, _ msg: String) {
+        let a = UIAlertController(title: title, message: msg, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
+    }
+
     private func kickoff() {
         if debugAnimateOnlyHome { return }
         guard !selectedRecipients.isEmpty else {
@@ -557,12 +563,17 @@ extension HomeModeViewController {
                 // 1) 停止
                 try await self.api.stopAlert(id: id)
                 // 2) 即時失効（信頼性向上版：指数バックオフ＋冪等考慮）
-                await self.api.revokeAlertReliably(id: id)
-                self.statusLabel.text = "帰るモードを停止しました（リンクは即時失効）"
+                let revokedOK = await self.api.revokeAlertReliably(id: id)
+                self.statusLabel.text = revokedOK ? "帰るモードを停止しました（リンクは即時失効）" : "帰るモードを停止しました（リンク失効は未確定）"
                 // アクティブIDは不要になるためクリア
                 UserDefaults.standard.removeObject(forKey: "GoingHomeActiveAlertID")
+                // サーバ結果を明示
+                let title = "停止処理"
+                let msg = revokedOK ? "共有を停止し、リンクを即時失効しました。" : "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。"
+                self.showAlert(title, msg)
             } catch {
                 self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
+                self.showAlert("停止処理", "停止に失敗しました: \(error.localizedDescription)")
             }
         }
     }

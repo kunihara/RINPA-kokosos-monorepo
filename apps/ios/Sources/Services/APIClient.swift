@@ -232,16 +232,16 @@ struct APIClient {
     }
 
     // 信頼性向上: 404/410/409 は「既に無効」と見なして成功と扱い、その他は指数バックオフで再試行
-    func revokeAlertReliably(id: String, maxAttempts: Int = 3, initialDelay: TimeInterval = 0.3) async {
+    func revokeAlertReliably(id: String, maxAttempts: Int = 3, initialDelay: TimeInterval = 0.3) async -> Bool {
         for attempt in 1...maxAttempts {
             do {
                 try await revokeAlert(id: id)
-                return
+                return true
             } catch let err as APIError {
                 switch err {
                 case let .http(status, _):
                     // 404/410: 既に存在しない/消失、409: 競合（既に失効済み等）→ 成功扱い
-                    if status == 404 || status == 410 || status == 409 { return }
+                    if status == 404 || status == 410 || status == 409 { return true }
                 }
             } catch {
                 // ネットワーク等の一時的失敗→リトライ
@@ -250,6 +250,7 @@ struct APIClient {
             let delay = initialDelay * pow(2.0, Double(attempt - 1))
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
         }
+        return false
     }
 
     func extendAlert(id: String, extendMinutes: Int) async throws {

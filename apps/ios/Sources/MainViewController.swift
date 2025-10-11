@@ -772,12 +772,17 @@ final class MainViewController: UIViewController {
                 // 1) 通常の停止
                 try await self.api.stopAlert(id: alertId)
                 // 2) 停止直後に即時失効（信頼性向上版：指数バックオフ＋冪等考慮）
-                await self.api.revokeAlertReliably(id: alertId)
+                let revokedOK = await self.api.revokeAlertReliably(id: alertId)
                 self.session?.status = .ended
-                self.teardownActiveSession(with: "共有を停止しました（リンクは即時失効）")
+                self.teardownActiveSession(with: revokedOK ? "共有を停止しました（リンクは即時失効）" : "共有を停止しました（リンク失効は未確定）")
                 self.animateSOSCollapse()
+                // ユーザーにサーバ結果を明示
+                let title = "停止処理"
+                let msg = revokedOK ? "共有を停止し、リンクを即時失効しました。" : "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。"
+                self.showAlert(title, msg)
             } catch {
                 self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
+                self.showAlert("停止処理", "停止に失敗しました: \(error.localizedDescription)")
             }
         }
     }
