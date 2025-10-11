@@ -60,14 +60,15 @@ final class TabRootController: UITabBarController {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         overlay.backgroundColor = .clear
         overlay.isUserInteractionEnabled = true
-        view.addSubview(overlay)
+        // tabBar直下に配置して同一座標系で追従させる
+        tabBar.addSubview(overlay)
         NSLayoutConstraint.activate([
             overlay.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor),
             overlay.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor),
             overlay.topAnchor.constraint(equalTo: tabBar.topAnchor),
             overlay.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor)
         ])
-        view.bringSubviewToFront(overlay)
+        tabBar.bringSubviewToFront(overlay)
 
         // 広いヒットエリアの透明パッドを左右に配置（中央SOSとのギャップを確保）
         leftPad.translatesAutoresizingMaskIntoConstraints = false
@@ -99,7 +100,7 @@ final class TabRootController: UITabBarController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
-        view.bringSubviewToFront(overlay)
+        tabBar.bringSubviewToFront(overlay)
         // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
         for v in tabBar.subviews {
             if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
