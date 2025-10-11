@@ -586,9 +586,8 @@ extension HomeModeViewController {
         let gen = UINotificationFeedbackGenerator()
         gen.prepare()
         gen.notificationOccurred(.success)
-        // 帰るモードでも停止+即時失効を実行
+        // 停止+即時失効を実行（結果に応じてフルスクリーンを閉じるのは後段で判定）
         stopAndRevokeCurrentAlert()
-        closeFullScreen()
     }
 
     @objc private func closeFullScreen() {
@@ -633,6 +632,7 @@ extension HomeModeViewController {
                 // 成功はスナックバー、未確定/失敗のみアラート
                 if revokedOK {
                     self.showSnack("共有を停止しました")
+                    self.closeFullScreen()
                 } else {
                     self.showAlert("停止処理", "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。")
                 }
@@ -652,6 +652,7 @@ extension HomeModeViewController {
                 self.statusLabel.text = "帰るモードを停止しました（リンクは即時失効・デバッグ）"
                 UserDefaults.standard.removeObject(forKey: "GoingHomeActiveAlertID")
                 self.showSnack("共有を停止しました")
+                self.closeFullScreen()
             } else {
                 self.statusLabel.text = "停止に失敗しました: デバッグ失敗"
                 self.showAlert("停止処理", "停止に失敗しました（デバッグ）")
