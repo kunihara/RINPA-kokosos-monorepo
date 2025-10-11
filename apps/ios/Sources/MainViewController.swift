@@ -768,9 +768,13 @@ final class MainViewController: UIViewController {
         }
         Task { @MainActor in
             do {
-                try await self.api.stopAlert(id: session.id)
+                let alertId = session.id
+                // 1) 通常の停止
+                try await self.api.stopAlert(id: alertId)
+                // 2) 停止直後に即時失効も実行（エラーは握りつぶして続行）
+                do { try await self.api.revokeAlert(id: alertId) } catch { /* ignore revoke error */ }
                 self.session?.status = .ended
-                self.teardownActiveSession(with: "共有を停止しました")
+                self.teardownActiveSession(with: "共有を停止しました（リンクは即時失効）")
                 self.animateSOSCollapse()
             } catch {
                 self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
