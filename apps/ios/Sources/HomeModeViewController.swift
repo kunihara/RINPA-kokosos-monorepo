@@ -413,19 +413,19 @@ extension HomeModeViewController {
         let extendBtn = UIButton(type: .system)
         extendBtn.translatesAutoresizingMaskIntoConstraints = false
         extendBtn.setTitle("  延長  ", for: .normal)
-        extendBtn.setTitleColor(.label, for: .normal)
+        extendBtn.setTitleColor(.white, for: .normal)
         extendBtn.layer.cornerRadius = 20
         extendBtn.layer.borderWidth = 1
-        extendBtn.layer.borderColor = UIColor.separator.cgColor
+        extendBtn.layer.borderColor = UIColor.white.cgColor
         extendBtn.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
 
         let revokeBtn = UIButton(type: .system)
         revokeBtn.translatesAutoresizingMaskIntoConstraints = false
         revokeBtn.setTitle("  即時失効  ", for: .normal)
-        revokeBtn.setTitleColor(.label, for: .normal)
+        revokeBtn.setTitleColor(.white, for: .normal)
         revokeBtn.layer.cornerRadius = 20
         revokeBtn.layer.borderWidth = 1
-        revokeBtn.layer.borderColor = UIColor.separator.cgColor
+        revokeBtn.layer.borderColor = UIColor.white.cgColor
         revokeBtn.addTarget(self, action: #selector(tapRevokeFromFull), for: .touchUpInside)
 
         let bottom = UIStackView(arrangedSubviews: [extendBtn, revokeBtn])
