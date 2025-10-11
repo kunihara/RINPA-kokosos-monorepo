@@ -277,6 +277,8 @@ final class MainViewController: UIViewController {
     }
 
     private func showSnack(_ message: String) {
+        // 可能ならウィンドウ直下に出してオーバーレイより前面に
+        let container: UIView = self.view.window ?? self.view
         let bar = UILabel()
         bar.text = "  " + message + "  "
         bar.textColor = .white
@@ -287,8 +289,8 @@ final class MainViewController: UIViewController {
         bar.layer.masksToBounds = true
         bar.alpha = 0
         bar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(bar)
-        let g = view.safeAreaLayoutGuide
+        container.addSubview(bar)
+        let g = container.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             bar.centerXAnchor.constraint(equalTo: g.centerXAnchor),
             bar.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -24)
@@ -296,6 +298,23 @@ final class MainViewController: UIViewController {
         UIView.animate(withDuration: 0.2, animations: { bar.alpha = 1 }) { _ in
             UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { bar.alpha = 0 }) { _ in
                 bar.removeFromSuperview()
+            }
+        }
+    }
+
+    // DEBUG: 停止処理をランダムで成功/失敗にするシミュレーション
+    private func simulateStopDebug() {
+        let delay: TimeInterval = 0.6
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let ok = Bool.random()
+            if ok {
+                self.session?.status = .ended
+                self.teardownActiveSession(with: "共有を停止しました（リンクは即時失効・デバッグ）")
+                self.animateSOSCollapse()
+                self.showAlert("停止処理", "共有を停止し、リンクを即時失効しました（デバッグ）")
+            } else {
+                self.statusLabel.text = "停止に失敗しました: デバッグ失敗"
+                self.showAlert("停止処理", "停止に失敗しました（デバッグ）")
             }
         }
     }
@@ -810,6 +829,8 @@ final class MainViewController: UIViewController {
             self.animateSOSCollapse()
             return
         }
+        // デバッグ: 通信せず擬似応答
+        if debugAnimateOnlySOS { simulateStopDebug(); return }
         Task { @MainActor in
             do {
                 let alertId = session.id
