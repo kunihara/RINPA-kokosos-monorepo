@@ -276,6 +276,30 @@ final class MainViewController: UIViewController {
         present(a, animated: true)
     }
 
+    private func showSnack(_ message: String) {
+        let bar = UILabel()
+        bar.text = "  " + message + "  "
+        bar.textColor = .white
+        bar.font = .systemFont(ofSize: 14, weight: .semibold)
+        bar.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        bar.numberOfLines = 1
+        bar.layer.cornerRadius = 16
+        bar.layer.masksToBounds = true
+        bar.alpha = 0
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
+        let g = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            bar.centerXAnchor.constraint(equalTo: g.centerXAnchor),
+            bar.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -24)
+        ])
+        UIView.animate(withDuration: 0.2, animations: { bar.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { bar.alpha = 0 }) { _ in
+                bar.removeFromSuperview()
+            }
+        }
+    }
+
     private func updateRecipientsChip() {
         let count = selectedRecipients.count
         recipientsButton.setTitle("受信者: \(count)名", for: .normal)
@@ -712,11 +736,13 @@ final class MainViewController: UIViewController {
                         self.bgTracker.start(alertId: res.id)
                     }
                     self.startPeriodicUpdates()
-                    // サーバ応答をユーザーに明示
-                    self.showAlert("開始処理", "共有を開始しました（ID: \(res.id)）")
+                    // 成功はスナックバーのみで通知し、そのまま移行
+                    self.showSnack("共有を開始しました")
                 } catch {
                     self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)\n接続先の設定とネットワーク状況をご確認ください。"
+                    // 失敗はアラートを表示し、自動遷移しないようUIを元に戻す
                     self.showAlert("開始処理", "開始に失敗しました: \(error.localizedDescription)")
+                    self.animateSOSCollapse()
                 }
             }
         }
