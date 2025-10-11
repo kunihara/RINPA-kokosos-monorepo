@@ -520,6 +520,8 @@ extension HomeModeViewController {
         let gen = UINotificationFeedbackGenerator()
         gen.prepare()
         gen.notificationOccurred(.success)
+        // 帰るモードでも停止+即時失効を実行
+        stopAndRevokeCurrentAlert()
         closeFullScreen()
     }
 
@@ -542,6 +544,27 @@ extension HomeModeViewController {
 
     @objc private func tapRevokeFromFull() {
         revokeCurrentAlert()
+    }
+
+    private func stopAndRevokeCurrentAlert() {
+        guard let id = UserDefaults.standard.string(forKey: "GoingHomeActiveAlertID"), !id.isEmpty else {
+            // 起動中の共有が見つからない場合は案内のみ
+            statusLabel.text = "停止できません（開始中の共有が見つかりません）"
+            return
+        }
+        Task { @MainActor in
+            do {
+                // 1) 停止
+                try await self.api.stopAlert(id: id)
+                // 2) 即時失効（停止優先。失敗は握りつぶし）
+                do { try await self.api.revokeAlert(id: id) } catch { /* ignore */ }
+                self.statusLabel.text = "帰るモードを停止しました（リンクは即時失効）"
+                // アクティブIDは不要になるためクリア
+                UserDefaults.standard.removeObject(forKey: "GoingHomeActiveAlertID")
+            } catch {
+                self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
+            }
+        }
     }
 
     private func revokeCurrentAlert() {
