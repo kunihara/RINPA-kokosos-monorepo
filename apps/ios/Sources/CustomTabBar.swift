@@ -94,8 +94,8 @@ final class CustomTabBar: UITabBar {
         archPath.close()
         archLayer.path = archPath.cgPath
         archLayer.frame = bounds
-        archLayer.fillColor = UIColor.kokoRed.cgColor
-        archLayer.strokeColor = UIColor.clear.cgColor
+        // 塗り/線は状態に応じて適用
+        applyArchStyle()
 
         CATransaction.commit()
     }
@@ -105,10 +105,17 @@ final class CustomTabBar: UITabBar {
     }
 
     private func applyArchStyle() {
-        // 常に赤ベタ
-        archLayer.fillColor = UIColor.kokoRed.cgColor
-        archLayer.strokeColor = UIColor.clear.cgColor
-        archLayer.lineWidth = 0
+        if isCenterActive {
+            // アクティブ: 赤ベタ
+            archLayer.fillColor = UIColor.kokoRed.cgColor
+            archLayer.strokeColor = UIColor.clear.cgColor
+            archLayer.lineWidth = 0
+        } else {
+            // 非アクティブ: 白ベタ（タブの背景色と同じ）
+            archLayer.fillColor = UIColor.systemBackground.cgColor
+            archLayer.strokeColor = UIColor.clear.cgColor
+            archLayer.lineWidth = 0
+        }
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
