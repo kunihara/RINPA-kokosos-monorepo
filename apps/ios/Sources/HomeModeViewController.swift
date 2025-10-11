@@ -327,27 +327,41 @@ final class HomeModeViewController: UIViewController {
     }
 
     private func showSnack(_ message: String) {
+        // SOSと同じ上部スナックバー（十分な内側余白付き）
         let container: UIView = self.view.window ?? self.view
-        let bar = UILabel()
-        bar.text = "  " + message + "  "
-        bar.textColor = .white
-        bar.font = .systemFont(ofSize: 14, weight: .semibold)
-        bar.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-        bar.numberOfLines = 1
-        bar.layer.cornerRadius = 16
-        bar.layer.masksToBounds = true
-        bar.alpha = 0
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(bar)
-        container.bringSubviewToFront(bar)
+        let wrap = UIView()
+        wrap.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        wrap.layer.cornerRadius = 16
+        wrap.layer.masksToBounds = true
+        wrap.alpha = 0
+        wrap.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = message
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(wrap)
+        wrap.addSubview(label)
+        container.bringSubviewToFront(wrap)
+
         let g = container.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            bar.centerXAnchor.constraint(equalTo: g.centerXAnchor),
-            bar.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -24)
+            // 上部表示（16ptの余白）
+            wrap.topAnchor.constraint(equalTo: g.topAnchor, constant: 16),
+            wrap.centerXAnchor.constraint(equalTo: g.centerXAnchor),
+
+            // 内側余白（左右16 / 上下10）
+            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 10),
+            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -10),
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -16)
         ])
-        UIView.animate(withDuration: 0.2, animations: { bar.alpha = 1 }) { _ in
-            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { bar.alpha = 0 }) { _ in
-                bar.removeFromSuperview()
+
+        UIView.animate(withDuration: 0.2, animations: { wrap.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { wrap.alpha = 0 }) { _ in
+                wrap.removeFromSuperview()
             }
         }
     }
