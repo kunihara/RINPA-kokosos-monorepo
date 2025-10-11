@@ -57,6 +57,7 @@ final class TabRootController: UITabBarController {
         // 中央はカスタムViewで処理
         setupCenterSOS()
         setupCustomItems()
+        setupTapPads()
         // Forward hit-testing to our custom views
         if let bar = self.tabBar as? CustomTabBar {
             bar.centerHitView = centerSOS
@@ -209,6 +210,45 @@ final class TabRootController: UITabBarController {
         rightItem.isUserInteractionEnabled = true
         leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
         rightItem.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
+    }
+
+    // 見た目に依存せず大きなタップ領域で左右タブを確実に反応させる透明パッド
+    private func setupTapPads() {
+        leftPad.translatesAutoresizingMaskIntoConstraints = false
+        rightPad.translatesAutoresizingMaskIntoConstraints = false
+        leftPad.backgroundColor = .clear
+        rightPad.backgroundColor = .clear
+        leftPad.isAccessibilityElement = true
+        rightPad.isAccessibilityElement = true
+        leftPad.accessibilityLabel = "帰るモード"
+        rightPad.accessibilityLabel = "設定"
+        tabBar.addSubview(leftPad)
+        tabBar.addSubview(rightPad)
+
+        // 中央SOSの左右に十分なギャップを空ける（SOSヒットと衝突しないように）
+        let gap: CGFloat = 48
+        NSLayoutConstraint.activate([
+            leftPad.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor),
+            leftPad.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -gap),
+            leftPad.topAnchor.constraint(equalTo: tabBar.topAnchor),
+            leftPad.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor),
+
+            rightPad.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: gap),
+            rightPad.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor),
+            rightPad.topAnchor.constraint(equalTo: tabBar.topAnchor),
+            rightPad.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor),
+        ])
+
+        leftPad.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
+        rightPad.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
+
+        // 左右パッドは左右項目の下にあっても良いが、タップ確実性のため一段上に
+        tabBar.bringSubviewToFront(leftPad)
+        tabBar.bringSubviewToFront(rightPad)
+        // さらにカスタム項目とSOSを最前面へ
+        tabBar.bringSubviewToFront(leftItem)
+        tabBar.bringSubviewToFront(rightItem)
+        tabBar.bringSubviewToFront(centerSOS)
     }
 
     @objc private func tapLeft() {
