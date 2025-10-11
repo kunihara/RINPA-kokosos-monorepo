@@ -150,6 +150,8 @@ final class MainViewController: UIViewController {
         statusLabel.textColor = .secondaryLabel
         statusLabel.numberOfLines = 0
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        // 画面上にステータス文言を出さない（スナック/アラートに集約）
+        statusLabel.isHidden = true
 
         countdownView.textAlignment = .center
         countdownView.font = .boldSystemFont(ofSize: 40)

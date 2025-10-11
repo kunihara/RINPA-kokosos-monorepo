@@ -113,6 +113,8 @@ final class HomeModeViewController: UIViewController {
         statusLabel.textColor = .secondaryLabel
         statusLabel.numberOfLines = 0
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        // 画面上にステータス文言を出さない（スナック/アラートに集約）
+        statusLabel.isHidden = true
 
         // 画面上の単独ボタンは「即時失効」に変更
         // 即時失効ボタンは要望により非表示
