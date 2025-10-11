@@ -337,8 +337,11 @@ final class HomeModeViewController: UIViewController {
                     self.statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。\nAlertID: \(res.id)"
                     // 延長のためにアクティブIDを保存
                     UserDefaults.standard.set(res.id, forKey: "GoingHomeActiveAlertID")
+                    // サーバ応答をユーザーに明示
+                    self.showAlert("開始処理", "共有を開始しました（ID: \(res.id)）")
                 } catch {
                     self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)"
+                    self.showAlert("開始処理", "開始に失敗しました: \(error.localizedDescription)")
                 }
             }
         }

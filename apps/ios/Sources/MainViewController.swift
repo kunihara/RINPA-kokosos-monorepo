@@ -712,8 +712,11 @@ final class MainViewController: UIViewController {
                         self.bgTracker.start(alertId: res.id)
                     }
                     self.startPeriodicUpdates()
+                    // サーバ応答をユーザーに明示
+                    self.showAlert("開始処理", "共有を開始しました（ID: \(res.id)）")
                 } catch {
                     self.statusLabel.text = "開始に失敗しました: \(error.localizedDescription)\n接続先の設定とネットワーク状況をご確認ください。"
+                    self.showAlert("開始処理", "開始に失敗しました: \(error.localizedDescription)")
                 }
             }
         }
