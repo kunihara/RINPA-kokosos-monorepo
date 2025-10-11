@@ -309,8 +309,11 @@ final class MainViewController: UIViewController {
             label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -16)
         ])
 
+        // フルスクリーン追加後に隠れないよう、少し遅らせて再度前面に出す
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { container.bringSubviewToFront(wrap) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { container.bringSubviewToFront(wrap) }
         UIView.animate(withDuration: 0.2, animations: { wrap.alpha = 1 }) { _ in
-            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { wrap.alpha = 0 }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 2.6, options: [], animations: { wrap.alpha = 0 }) { _ in
                 wrap.removeFromSuperview()
             }
         }

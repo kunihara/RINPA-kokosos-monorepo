@@ -356,8 +356,11 @@ final class HomeModeViewController: UIViewController {
             label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -16)
         ])
 
+        // フルスクリーン表示後に隠れないよう、少し遅らせて前面に
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { container.bringSubviewToFront(wrap) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { container.bringSubviewToFront(wrap) }
         UIView.animate(withDuration: 0.2, animations: { wrap.alpha = 1 }) { _ in
-            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { wrap.alpha = 0 }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 2.6, options: [], animations: { wrap.alpha = 0 }) { _ in
                 wrap.removeFromSuperview()
             }
         }
