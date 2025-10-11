@@ -2,6 +2,7 @@ import UIKit
 
 final class TabRootController: UITabBarController {
     private let centerButton = UIButton(type: .system)
+    private let centerSOS = CenterSOSItemView()
     private let leftItem = CustomTabItemView(title: "帰るモード", image: UIImage(systemName: "location.circle"))
     private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "gearshape"))
     private let overlay = UIView()
@@ -53,6 +54,7 @@ final class TabRootController: UITabBarController {
 
         setupOverlay()
         setupCenterButton()
+        setupCenterSOS()
         setupCustomItems()
         // 初期選択状態の反映
         updateCustomSelection()
@@ -61,7 +63,8 @@ final class TabRootController: UITabBarController {
     private func setupOverlay() {
         overlay.translatesAutoresizingMaskIntoConstraints = false
         overlay.backgroundColor = .clear
-        overlay.isUserInteractionEnabled = true
+        // overlayは左右の位置決めのためだけに保持し、タッチは通す
+        overlay.isUserInteractionEnabled = false
         // tabBar直下に配置して同一座標系で追従させる
         tabBar.addSubview(overlay)
         NSLayoutConstraint.activate([
@@ -74,31 +77,7 @@ final class TabRootController: UITabBarController {
 
         // 背景はCustomTabBarが描画するためoverlayでは描画しない
 
-        // 広いヒットエリアの透明パッドを左右に配置（中央SOSとのギャップを確保）
-        leftPad.translatesAutoresizingMaskIntoConstraints = false
-        rightPad.translatesAutoresizingMaskIntoConstraints = false
-        overlay.addSubview(leftPad)
-        overlay.addSubview(rightPad)
-        leftPad.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
-        rightPad.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
-        leftPad.isExclusiveTouch = true
-        rightPad.isExclusiveTouch = true
-        leftPad.layer.zPosition = 30 // アイコン/ラベル(80)より下、SOS(100)より下
-        rightPad.layer.zPosition = 30
-        NSLayoutConstraint.activate([
-            leftPad.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
-            leftPad.trailingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: -64),
-            leftPad.topAnchor.constraint(equalTo: overlay.topAnchor),
-            leftPad.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
-
-            rightPad.leadingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: 64),
-            rightPad.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
-            rightPad.topAnchor.constraint(equalTo: overlay.topAnchor),
-            rightPad.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
-        ])
-        tabBar.bringSubviewToFront(centerButton)
-        overlay.bringSubviewToFront(leftItem)
-        overlay.bringSubviewToFront(rightItem)
+        // 左右はtabBar直下に配置するためoverlayでは操作しない
     }
 
     override func viewDidLayoutSubviews() {
@@ -106,7 +85,7 @@ final class TabRootController: UITabBarController {
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
         // overlay（左右）と中央ボタンの順序を明示（中央ボタンを最前面へ）
         tabBar.bringSubviewToFront(overlay)
-        tabBar.bringSubviewToFront(centerButton)
+        tabBar.bringSubviewToFront(centerSOS)
         if let bar = self.tabBar as? CustomTabBar { bar.setNeedsLayout(); bar.layoutIfNeeded() }
         // 背景同期は不要
         // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
@@ -146,6 +125,23 @@ final class TabRootController: UITabBarController {
         centerButton.layer.cornerRadius = 32
     }
 
+    private func setupCenterSOS() {
+        centerSOS.translatesAutoresizingMaskIntoConstraints = false
+        centerSOS.archRadius = 48
+        centerSOS.archCenterOffset = 24
+        centerSOS.circleSize = 64
+        centerSOS.addTarget(self, action: #selector(tapCenter), for: .touchUpInside)
+        tabBar.addSubview(centerSOS)
+        NSLayoutConstraint.activate([
+            centerSOS.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor),
+            centerSOS.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor),
+            centerSOS.topAnchor.constraint(equalTo: tabBar.topAnchor),
+            centerSOS.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor)
+        ])
+        // 旧ボタンは視覚上は隠す（段階移行のため残す）
+        centerButton.isHidden = true
+    }
+
     @objc private func tapCenter() {
         // Haptics and select middle tab (emergency)
         let gen = UIImpactFeedbackGenerator(style: .heavy)
@@ -153,10 +149,10 @@ final class TabRootController: UITabBarController {
         selectedIndex = 1
         // Small tap animation
         UIView.animate(withDuration: 0.08, animations: {
-            self.centerButton.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
+            self.centerSOS.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
         }) { _ in
             UIView.animate(withDuration: 0.12) {
-                self.centerButton.transform = .identity
+                self.centerSOS.transform = .identity
             }
         }
         updateCustomSelection()
@@ -176,22 +172,22 @@ final class TabRootController: UITabBarController {
 
         leftItem.translatesAutoresizingMaskIntoConstraints = false
         rightItem.translatesAutoresizingMaskIntoConstraints = false
-        overlay.addSubview(leftItem)
-        overlay.addSubview(rightItem)
-        overlay.bringSubviewToFront(leftItem)
-        overlay.bringSubviewToFront(rightItem)
+        tabBar.addSubview(leftItem)
+        tabBar.addSubview(rightItem)
+        tabBar.bringSubviewToFront(leftItem)
+        tabBar.bringSubviewToFront(rightItem)
 
         // 中央SOSボタンのヒット領域を確保するため、左右は中心から十分離す
         NSLayoutConstraint.activate([
             leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
             leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -64),
-            leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
-            leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
+            leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor),
+            leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor),
 
             rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 64),
             rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
-            rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
-            rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
+            rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor),
+            rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor),
         ])
 
         // 直接タップで切替（overlayパッド非依存）
@@ -216,22 +212,8 @@ final class TabRootController: UITabBarController {
         rightItem.isSelected = (selectedIndex == 2)
         // SOS(中央)の見た目: アクティブ時=赤ベタ+白アイコン / 非アクティブ時=白ベタ+赤アウトライン
         let isActive = (selectedIndex == 1)
-        styleCenterButton(isActive: isActive)
+        centerSOS.applyActiveStyle(isActive)
         if let bar = self.tabBar as? CustomTabBar { bar.isCenterActive = isActive }
-    }
-
-    private func styleCenterButton(isActive: Bool) {
-        if isActive {
-            centerButton.backgroundColor = .kokoRed
-            centerButton.tintColor = .white
-            centerButton.layer.borderWidth = 0
-            centerButton.layer.borderColor = UIColor.clear.cgColor
-        } else {
-            centerButton.backgroundColor = .white
-            centerButton.tintColor = .kokoRed
-            centerButton.layer.borderWidth = 2
-            centerButton.layer.borderColor = UIColor.kokoRed.cgColor
-        }
     }
 
     // 1x1の透明画像（標準アイコンを不可視化するために使用）

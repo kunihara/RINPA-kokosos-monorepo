@@ -39,6 +39,12 @@ final class CustomTabBar: UITabBar {
         layer.insertSublayer(archLayer, above: barLayer)
         clipsToBounds = false
         layer.masksToBounds = false
+        // CoreAnimationの暗黙アニメを無効化（復帰直後のチラつき/ズレを防ぐ）
+        let null = NSNull()
+        barLayer.actions = ["position": null, "bounds": null, "path": null, "contents": null]
+        archLayer.actions = ["position": null, "bounds": null, "path": null, "contents": null]
+        barLayer.needsDisplayOnBoundsChange = true
+        archLayer.needsDisplayOnBoundsChange = true
     }
 
     override func layoutSubviews() {
@@ -47,6 +53,10 @@ final class CustomTabBar: UITabBar {
     }
 
     private func layoutLayers() {
+        // レイアウト更新時の暗黙アニメを無効化
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+
         let w = bounds.width
         let h = bounds.height + barHeightExtra
         // 白背景を最大化（最上部から描画）
@@ -71,25 +81,13 @@ final class CustomTabBar: UITabBar {
         barLayer.shadowOffset = CGSize(width: 0, height: -2)
         barLayer.frame = bounds
 
-        // Red arch behind the center button（下方向へオフセット可能）
-        // Ensure symmetry: the rectangular sides align exactly under the semicircle endpoints.
-        let cx = w / 2
-        let archTop = topY + archYOffset
-        let leftX = cx - archRadius
-        let rightX = cx + archRadius
-        let archPath = UIBezierPath()
-        // Start at left arc endpoint
-        archPath.move(to: CGPoint(x: leftX, y: archTop))
-        // Draw upper semicircle
-        archPath.addArc(withCenter: CGPoint(x: cx, y: archTop), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
-        // Extend straight down to the bottom of the bar, then across, then back up
-        archPath.addLine(to: CGPoint(x: rightX, y: h))
-        archPath.addLine(to: CGPoint(x: leftX, y: h))
-        archPath.close()
-        archLayer.path = archPath.cgPath
+        // Red arch drawing is delegated to CenterSOSItemView to share the same layout timing.
+        archLayer.path = nil
         archLayer.frame = bounds
-        archLayer.fillColor = UIColor.kokoRed.cgColor
+        archLayer.fillColor = UIColor.clear.cgColor
         archLayer.strokeColor = UIColor.clear.cgColor
+
+        CATransaction.commit()
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -100,8 +98,8 @@ final class CustomTabBar: UITabBar {
     }
 
     private func applyArchStyle() {
-        // 要望により、アクティブ/非アクティブに関わらず常に赤ベタ
-        archLayer.fillColor = UIColor.kokoRed.cgColor
+        // Arch is drawn elsewhere; keep layer transparent.
+        archLayer.fillColor = UIColor.clear.cgColor
         archLayer.strokeColor = UIColor.clear.cgColor
         archLayer.lineWidth = 0
     }
