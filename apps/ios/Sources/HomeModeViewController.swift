@@ -263,7 +263,7 @@ final class HomeModeViewController: UIViewController {
             // 単発開始時もハプティクスで確定フィードバック
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             animateExpand()
-            if debugAnimateOnlyHome { return }
+            if debugAnimateOnlyHome { simulateStartDebug(); return }
             presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
             return
         }
@@ -282,9 +282,24 @@ final class HomeModeViewController: UIViewController {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         // B案のフルスクリーン拡大演出を開始
         animateExpand()
-        // アニメーション確認モードでは機能をオフ（ネットワーク/ロジックを呼ばない）
-        if debugAnimateOnlyHome { return }
+        // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
+        if debugAnimateOnlyHome { simulateStartDebug(); return }
         presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
+    }
+
+    // DEBUG: 通信を行わず、ランダムで開始の成功/失敗をシミュレーション
+    private func simulateStartDebug() {
+        let delay: TimeInterval = 0.8
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let ok = Bool.random()
+            if ok {
+                self.showSnack("共有を開始しました")
+            } else {
+                self.statusLabel.text = "開始に失敗しました: デバッグ失敗"
+                self.showAlert("開始処理", "開始に失敗しました（デバッグ）")
+                self.closeFullScreen()
+            }
+        }
     }
 
     private func presentCountdown(seconds: Int, completion: @escaping () -> Void) {

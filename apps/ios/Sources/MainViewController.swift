@@ -325,7 +325,7 @@ final class MainViewController: UIViewController {
         // 設定で1回タップが許可されている場合は即時開始
         if SettingsStore.shared.requireTripleTap == false {
             animateSOSExpand()
-            if debugAnimateOnlySOS { return }
+            if debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
             startFlow(type: "emergency")
             return
         }
@@ -344,9 +344,24 @@ final class MainViewController: UIViewController {
         sosTripleTapCount = 0
         // 先にアニメーションを開始
         animateSOSExpand()
-        // デバッグ中はアニメーションのみ確認
-        if debugAnimateOnlySOS { return }
+        // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
+        if debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
         startFlow(type: "emergency")
+    }
+
+    // DEBUG: 通信を行わず、ランダムで開始の成功/失敗をシミュレーション
+    private func simulateStartDebug(type: String) {
+        let delay: TimeInterval = 0.8
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let ok = Bool.random()
+            if ok {
+                self.showSnack("共有を開始しました")
+            } else {
+                self.statusLabel.text = "開始に失敗しました: デバッグ失敗"
+                self.showAlert("開始処理", "開始に失敗しました（デバッグ）")
+                self.animateSOSCollapse()
+            }
+        }
     }
 
     // 帰るモード開始は専用タブ（HomeModeViewController）で提供する
