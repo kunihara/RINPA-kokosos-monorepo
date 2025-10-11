@@ -7,6 +7,7 @@ final class TabRootController: UITabBarController {
     private let overlay = UIView()
     private let leftPad = UIControl()
     private let rightPad = UIControl()
+    private let tabBgView = TabBackgroundView()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -53,8 +54,7 @@ final class TabRootController: UITabBarController {
         setupOverlay()
         setupCenterButton()
         setupCustomItems()
-        // アーチを中央ボタンに同期
-        if let bar = self.tabBar as? CustomTabBar { bar.centerRef = centerButton }
+        // 初期選択状態の反映
         updateCustomSelection()
     }
 
@@ -71,6 +71,8 @@ final class TabRootController: UITabBarController {
             overlay.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor)
         ])
         tabBar.bringSubviewToFront(overlay)
+
+        // 背景はCustomTabBarが描画するためoverlayでは描画しない
 
         // 広いヒットエリアの透明パッドを左右に配置（中央SOSとのギャップを確保）
         leftPad.translatesAutoresizingMaskIntoConstraints = false
@@ -94,8 +96,7 @@ final class TabRootController: UITabBarController {
             rightPad.topAnchor.constraint(equalTo: overlay.topAnchor),
             rightPad.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
         ])
-        overlay.bringSubviewToFront(centerArch)
-        overlay.bringSubviewToFront(centerButton)
+        tabBar.bringSubviewToFront(centerButton)
         overlay.bringSubviewToFront(leftItem)
         overlay.bringSubviewToFront(rightItem)
     }
@@ -103,10 +104,11 @@ final class TabRootController: UITabBarController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
+        // overlay（左右）と中央ボタンの順序を明示（中央ボタンを最前面へ）
         tabBar.bringSubviewToFront(overlay)
-        if let bar = self.tabBar as? CustomTabBar { bar.centerRef = centerButton; bar.setNeedsLayout(); bar.layoutIfNeeded() }
-        centerArch.centerRef = centerButton
-        centerArch.setNeedsLayout(); centerArch.layoutIfNeeded()
+        tabBar.bringSubviewToFront(centerButton)
+        if let bar = self.tabBar as? CustomTabBar { bar.setNeedsLayout(); bar.layoutIfNeeded() }
+        // 背景同期は不要
         // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
         for v in tabBar.subviews {
             if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
@@ -128,16 +130,16 @@ final class TabRootController: UITabBarController {
         centerButton.layer.shadowRadius = 8
         centerButton.layer.shadowOffset = CGSize(width: 0, height: 4)
         centerButton.addTarget(self, action: #selector(tapCenter), for: .touchUpInside)
-        overlay.addSubview(centerButton)
-        overlay.bringSubviewToFront(centerButton)
-        overlay.clipsToBounds = false
+        tabBar.addSubview(centerButton)
+        tabBar.bringSubviewToFront(centerButton)
+        tabBar.clipsToBounds = false
         centerButton.isUserInteractionEnabled = true
         centerButton.layer.zPosition = 100
 
         NSLayoutConstraint.activate([
-            centerButton.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
-            // SOSボタンをわずかに下げる
-            centerButton.centerYAnchor.constraint(equalTo: overlay.topAnchor, constant: 24),
+            centerButton.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
+            // アーチ中心に合わせる（CustomTabBar.archYOffset=24）
+            centerButton.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 24),
             centerButton.widthAnchor.constraint(equalToConstant: 64),
             centerButton.heightAnchor.constraint(equalToConstant: 64),
         ])

@@ -63,6 +63,7 @@ final class CustomTabBar: UITabBar {
         barPath.addLine(to: CGPoint(x: barCorner, y: topY))
         barPath.addQuadCurve(to: CGPoint(x: 0, y: topY + barCorner), controlPoint: CGPoint(x: 0, y: topY))
         barLayer.path = barPath.cgPath
+        // 以前の安定挙動に復帰（白背景はここで描画）
         barLayer.fillColor = UIColor.systemBackground.cgColor
         barLayer.shadowColor = UIColor.black.cgColor
         barLayer.shadowOpacity = 0.08
