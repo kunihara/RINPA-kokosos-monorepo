@@ -239,6 +239,8 @@ final class HomeModeViewController: UIViewController {
     @objc private func tapStart() {
         // 設定が1回タップなら即時
         if SettingsStore.shared.requireTripleTap == false {
+            // 単発開始時もハプティクスで確定フィードバック
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             animateExpand()
             if debugAnimateOnlyHome { return }
             presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
