@@ -556,8 +556,8 @@ extension HomeModeViewController {
             do {
                 // 1) 停止
                 try await self.api.stopAlert(id: id)
-                // 2) 即時失効（停止優先。失敗は握りつぶし）
-                do { try await self.api.revokeAlert(id: id) } catch { /* ignore */ }
+                // 2) 即時失効（信頼性向上版：指数バックオフ＋冪等考慮）
+                await self.api.revokeAlertReliably(id: id)
                 self.statusLabel.text = "帰るモードを停止しました（リンクは即時失効）"
                 // アクティブIDは不要になるためクリア
                 UserDefaults.standard.removeObject(forKey: "GoingHomeActiveAlertID")

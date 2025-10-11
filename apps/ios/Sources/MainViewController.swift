@@ -771,8 +771,8 @@ final class MainViewController: UIViewController {
                 let alertId = session.id
                 // 1) 通常の停止
                 try await self.api.stopAlert(id: alertId)
-                // 2) 停止直後に即時失効も実行（エラーは握りつぶして続行）
-                do { try await self.api.revokeAlert(id: alertId) } catch { /* ignore revoke error */ }
+                // 2) 停止直後に即時失効（信頼性向上版：指数バックオフ＋冪等考慮）
+                await self.api.revokeAlertReliably(id: alertId)
                 self.session?.status = .ended
                 self.teardownActiveSession(with: "共有を停止しました（リンクは即時失効）")
                 self.animateSOSCollapse()
