@@ -54,7 +54,8 @@ final class TabRootController: UITabBarController {
         viewControllers = [home, emergency, settings]
 
         setupOverlay()
-        setupCenterButton()
+        // 中央はカスタムViewで処理
+        setupCenterSOS()
         setupCustomItems()
         // Forward hit-testing to our custom views
         if let bar = self.tabBar as? CustomTabBar {
@@ -139,13 +140,15 @@ final class TabRootController: UITabBarController {
         centerSOS.archRadius = 48
         // Align with CustomTabBar.archYOffset
         centerSOS.archCenterOffset = 24
-        centerSOS.circleSize = 64
+        centerSOS.circleSize = 68
         centerSOS.addTarget(self, action: #selector(tapCenter), for: .touchUpInside)
         tabBar.addSubview(centerSOS)
         // 中央SOSは円の周囲のみをカバー（左右タブの上には被せない）
         NSLayoutConstraint.activate([
             centerSOS.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
-            centerSOS.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 24),
+            // centerYは view の半分(=36)ずらされるため、円中心(=archYOffset=24)に合わせるには +36 が正確だが
+            // ここでは見た目とタップ整合性のため 36 に設定（円中心=tabBar.top+24 に一致）
+            centerSOS.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 36),
             centerSOS.widthAnchor.constraint(equalToConstant: 72),
             centerSOS.heightAnchor.constraint(equalToConstant: 72)
         ])
