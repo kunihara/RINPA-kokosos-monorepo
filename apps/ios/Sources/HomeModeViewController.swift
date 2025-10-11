@@ -102,11 +102,12 @@ final class HomeModeViewController: UIViewController {
         recipientsButton.addTarget(self, action: #selector(tapRecipients), for: .touchUpInside)
         recipientsButton.translatesAutoresizingMaskIntoConstraints = false
 
-        // 3回タップヒント
+        // 3回タップヒント（ボタン周辺グラフィックに被らないよう十分な余白）
         tripleTapHintLabel.text = "3回タップで開始"
         tripleTapHintLabel.textAlignment = .center
-        tripleTapHintLabel.textColor = .secondaryLabel
-        tripleTapHintLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        // 見た目は "Are you in an emergency?" と同じスタイル
+        tripleTapHintLabel.textColor = .label
+        tripleTapHintLabel.font = .systemFont(ofSize: 24, weight: .heavy)
         tripleTapHintLabel.translatesAutoresizingMaskIntoConstraints = false
 
         statusLabel.textColor = .secondaryLabel
@@ -186,10 +187,11 @@ final class HomeModeViewController: UIViewController {
             startButton.widthAnchor.constraint(equalToConstant: 220),
             startButton.heightAnchor.constraint(equalToConstant: 220),
 
-            tripleTapHintLabel.topAnchor.constraint(equalTo: startButton.bottomAnchor, constant: 8),
+            // ボタンの外周から十分下げる
+            tripleTapHintLabel.topAnchor.constraint(equalTo: startButton.bottomAnchor, constant: 28),
             tripleTapHintLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            recipientsButton.topAnchor.constraint(equalTo: tripleTapHintLabel.bottomAnchor, constant: 12),
+            recipientsButton.topAnchor.constraint(equalTo: tripleTapHintLabel.bottomAnchor, constant: 16),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 16),

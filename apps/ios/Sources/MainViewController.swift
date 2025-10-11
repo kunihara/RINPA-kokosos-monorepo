@@ -174,11 +174,12 @@ final class MainViewController: UIViewController {
         recipientsButton.addTarget(self, action: #selector(tapRecipients), for: .touchUpInside)
         recipientsButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(recipientsButton)
-        // 3回タップヒント
+        // 3回タップヒント（ボタン周辺グラフィックに被らないよう十分な余白）
         tripleTapHintLabel.text = "3回タップで開始"
         tripleTapHintLabel.textAlignment = .center
-        tripleTapHintLabel.textColor = .secondaryLabel
-        tripleTapHintLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        // 見た目は "Are you in an emergency?" と同じスタイル
+        tripleTapHintLabel.textColor = .label
+        tripleTapHintLabel.font = .systemFont(ofSize: 24, weight: .heavy)
         tripleTapHintLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tripleTapHintLabel)
         controlsStack.axis = .horizontal
@@ -237,10 +238,11 @@ final class MainViewController: UIViewController {
             startEmergencyButton.centerXAnchor.constraint(equalTo: sosBackdrop.centerXAnchor),
             startEmergencyButton.centerYAnchor.constraint(equalTo: sosBackdrop.centerYAnchor),
 
-            tripleTapHintLabel.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 8),
+            // ボタンの外周から十分下げる
+            tripleTapHintLabel.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 28),
             tripleTapHintLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            recipientsButton.topAnchor.constraint(equalTo: tripleTapHintLabel.bottomAnchor, constant: 12),
+            recipientsButton.topAnchor.constraint(equalTo: tripleTapHintLabel.bottomAnchor, constant: 16),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 24),
