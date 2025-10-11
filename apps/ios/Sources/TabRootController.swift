@@ -58,11 +58,11 @@ final class TabRootController: UITabBarController {
         setupCenterSOS()
         setupCustomItems()
         setupTapPads()
-        // Forward hit-testing to our custom views
+        // Forward hit-testing to our custom views（左右はパッド優先）
         if let bar = self.tabBar as? CustomTabBar {
             bar.centerHitView = centerSOS
-            bar.leftHitView = leftItem
-            bar.rightHitView = rightItem
+            bar.leftHitView = leftPad
+            bar.rightHitView = rightPad
         }
         // 初期選択状態の反映
         updateCustomSelection()
@@ -94,6 +94,8 @@ final class TabRootController: UITabBarController {
         // overlay（左右）と中央ボタンの順序を明示（中央ボタンを最前面へ）
         // Keep custom controls above any internal tab bar subviews
         tabBar.bringSubviewToFront(overlay)
+        tabBar.bringSubviewToFront(leftPad)
+        tabBar.bringSubviewToFront(rightPad)
         tabBar.bringSubviewToFront(leftItem)
         tabBar.bringSubviewToFront(rightItem)
         tabBar.bringSubviewToFront(centerSOS)
@@ -103,6 +105,8 @@ final class TabRootController: UITabBarController {
         for v in tabBar.subviews {
             if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
                 v.isUserInteractionEnabled = false
+                v.isHidden = true
+                v.alpha = 0.001
             }
         }
     }
