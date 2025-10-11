@@ -277,27 +277,40 @@ final class MainViewController: UIViewController {
     }
 
     private func showSnack(_ message: String) {
-        // 可能ならウィンドウ直下に出してオーバーレイより前面に
+        // 可能ならウィンドウ直下に出して前面に。画面上部に表示し、十分な内側余白を確保。
         let container: UIView = self.view.window ?? self.view
-        let bar = UILabel()
-        bar.text = "  " + message + "  "
-        bar.textColor = .white
-        bar.font = .systemFont(ofSize: 14, weight: .semibold)
-        bar.backgroundColor = UIColor.black.withAlphaComponent(0.8)
-        bar.numberOfLines = 1
-        bar.layer.cornerRadius = 16
-        bar.layer.masksToBounds = true
-        bar.alpha = 0
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(bar)
+        let wrap = UIView()
+        wrap.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        wrap.layer.cornerRadius = 16
+        wrap.layer.masksToBounds = true
+        wrap.alpha = 0
+        wrap.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = message
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(wrap)
+        wrap.addSubview(label)
+
         let g = container.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            bar.centerXAnchor.constraint(equalTo: g.centerXAnchor),
-            bar.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -24)
+            // 上部に表示（16pt余白）
+            wrap.topAnchor.constraint(equalTo: g.topAnchor, constant: 16),
+            wrap.centerXAnchor.constraint(equalTo: g.centerXAnchor),
+
+            // ラベルの内側余白（左右16 / 上下10）
+            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 10),
+            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -10),
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -16)
         ])
-        UIView.animate(withDuration: 0.2, animations: { bar.alpha = 1 }) { _ in
-            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { bar.alpha = 0 }) { _ in
-                bar.removeFromSuperview()
+
+        UIView.animate(withDuration: 0.2, animations: { wrap.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 1.6, options: [], animations: { wrap.alpha = 0 }) { _ in
+                wrap.removeFromSuperview()
             }
         }
     }
@@ -311,7 +324,7 @@ final class MainViewController: UIViewController {
                 self.session?.status = .ended
                 self.teardownActiveSession(with: "共有を停止しました（リンクは即時失効・デバッグ）")
                 self.animateSOSCollapse()
-                self.showAlert("停止処理", "共有を停止し、リンクを即時失効しました（デバッグ）")
+                self.showSnack("共有を停止しました")
             } else {
                 self.statusLabel.text = "停止に失敗しました: デバッグ失敗"
                 self.showAlert("停止処理", "停止に失敗しました（デバッグ）")
@@ -841,10 +854,12 @@ final class MainViewController: UIViewController {
                 self.session?.status = .ended
                 self.teardownActiveSession(with: revokedOK ? "共有を停止しました（リンクは即時失効）" : "共有を停止しました（リンク失効は未確定）")
                 self.animateSOSCollapse()
-                // ユーザーにサーバ結果を明示
-                let title = "停止処理"
-                let msg = revokedOK ? "共有を停止し、リンクを即時失効しました。" : "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。"
-                self.showAlert(title, msg)
+                // 成功はスナックバー、未確定/失敗のみアラート
+                if revokedOK {
+                    self.showSnack("共有を停止しました")
+                } else {
+                    self.showAlert("停止処理", "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。")
+                }
             } catch {
                 self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
                 self.showAlert("停止処理", "停止に失敗しました: \(error.localizedDescription)")

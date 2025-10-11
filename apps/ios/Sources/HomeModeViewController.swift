@@ -617,10 +617,12 @@ extension HomeModeViewController {
                 self.statusLabel.text = revokedOK ? "帰るモードを停止しました（リンクは即時失効）" : "帰るモードを停止しました（リンク失効は未確定）"
                 // アクティブIDは不要になるためクリア
                 UserDefaults.standard.removeObject(forKey: "GoingHomeActiveAlertID")
-                // サーバ結果を明示
-                let title = "停止処理"
-                let msg = revokedOK ? "共有を停止し、リンクを即時失効しました。" : "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。"
-                self.showAlert(title, msg)
+                // 成功はスナックバー、未確定/失敗のみアラート
+                if revokedOK {
+                    self.showSnack("共有を停止しました")
+                } else {
+                    self.showAlert("停止処理", "共有は停止しましたが、リンクの失効に失敗しました。通信状況をご確認の上、再度お試しください。")
+                }
             } catch {
                 self.statusLabel.text = "停止に失敗: \(error.localizedDescription)"
                 self.showAlert("停止処理", "停止に失敗しました: \(error.localizedDescription)")
@@ -636,7 +638,7 @@ extension HomeModeViewController {
             if ok {
                 self.statusLabel.text = "帰るモードを停止しました（リンクは即時失効・デバッグ）"
                 UserDefaults.standard.removeObject(forKey: "GoingHomeActiveAlertID")
-                self.showAlert("停止処理", "共有を停止し、リンクを即時失効しました（デバッグ）")
+                self.showSnack("共有を停止しました")
             } else {
                 self.statusLabel.text = "停止に失敗しました: デバッグ失敗"
                 self.showAlert("停止処理", "停止に失敗しました（デバッグ）")
