@@ -86,7 +86,9 @@ final class CenterSOSItemView: UIControl {
         if active {
             circleButton.backgroundColor = .kokoRed
             circleButton.tintColor = .white
-            circleButton.layer.borderWidth = 0
+            // アクティブ時は白い枠を付与
+            circleButton.layer.borderWidth = 2
+            circleButton.layer.borderColor = UIColor.white.cgColor
         } else {
             circleButton.backgroundColor = .white
             circleButton.tintColor = .kokoRed
