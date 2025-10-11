@@ -7,10 +7,8 @@ final class CustomTabBar: UITabBar {
     var archRadius: CGFloat = 48
     // SOSの赤アーチのみを下方向にオフセット
     var archYOffset: CGFloat = 12
-    // 緊急タブがアクティブかどうか（見た目切替に使用）
+    // 緊急タブがアクティブかどうか（見た目切替）
     var isCenterActive: Bool = false { didSet { applyArchStyle() } }
-    // 中央SOSボタン（タブ内の参照）: アーチ位置をボタン中心に同期させる
-    weak var centerRef: UIView?
 
     // カスタムヒット優先（中央SOS/左右項目へタッチを振り分ける）
     weak var centerHitView: UIView?
@@ -75,11 +73,7 @@ final class CustomTabBar: UITabBar {
         // Red arch behind the center button（下方向へオフセット可能）
         // Ensure symmetry: the rectangular sides align exactly under the semicircle endpoints.
         let cx = w / 2
-        // 中央ボタンがある場合は、そのcenter.yにアーチ中心を合わせる
-        var archTop = topY + archYOffset
-        if let ref = centerRef, ref.superview === self {
-            archTop = max(0, min(h, ref.center.y))
-        }
+        let archTop = topY + archYOffset
         let leftX = cx - archRadius
         let rightX = cx + archRadius
         let archPath = UIBezierPath()
@@ -93,7 +87,8 @@ final class CustomTabBar: UITabBar {
         archPath.close()
         archLayer.path = archPath.cgPath
         archLayer.frame = bounds
-        applyArchStyle()
+        archLayer.fillColor = UIColor.kokoRed.cgColor
+        archLayer.strokeColor = UIColor.clear.cgColor
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {

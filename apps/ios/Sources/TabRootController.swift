@@ -94,6 +94,7 @@ final class TabRootController: UITabBarController {
             rightPad.topAnchor.constraint(equalTo: overlay.topAnchor),
             rightPad.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
         ])
+        overlay.bringSubviewToFront(centerArch)
         overlay.bringSubviewToFront(centerButton)
         overlay.bringSubviewToFront(leftItem)
         overlay.bringSubviewToFront(rightItem)
@@ -104,6 +105,8 @@ final class TabRootController: UITabBarController {
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
         tabBar.bringSubviewToFront(overlay)
         if let bar = self.tabBar as? CustomTabBar { bar.centerRef = centerButton; bar.setNeedsLayout(); bar.layoutIfNeeded() }
+        centerArch.centerRef = centerButton
+        centerArch.setNeedsLayout(); centerArch.layoutIfNeeded()
         // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
         for v in tabBar.subviews {
             if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
