@@ -21,6 +21,9 @@ final class HomeModeViewController: UIViewController {
     private let recipientsBadgeLabel = UILabel()
     private var countdownTimer: Timer?
     private var remaining = 0
+    // 3回連続タップ用のガード
+    private var homeTripleTapCount = 0
+    private var homeTripleTapTimer: Timer?
     private let locationService = LocationService()
     private let api = APIClient()
     private let contactsClient = ContactsClient()
@@ -234,6 +237,17 @@ final class HomeModeViewController: UIViewController {
     }
 
     @objc private func tapStart() {
+        // 3回連続タップで有効化
+        homeTripleTapCount += 1
+        homeTripleTapTimer?.invalidate()
+        if homeTripleTapCount < 3 {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            homeTripleTapTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+                self?.homeTripleTapCount = 0
+            }
+            return
+        }
+        homeTripleTapCount = 0
         // B案のフルスクリーン拡大演出を開始
         animateExpand()
         // アニメーション確認モードでは機能をオフ（ネットワーク/ロジックを呼ばない）

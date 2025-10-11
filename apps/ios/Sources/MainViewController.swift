@@ -26,6 +26,9 @@ final class MainViewController: UIViewController {
     private let extendButton = UIButton(type: .system)
     private let countdownView = UILabel()
     private var countdownTimer: Timer?
+    // 3回連続タップ用のガード
+    private var sosTripleTapCount = 0
+    private var sosTripleTapTimer: Timer?
     private var updateTimer: Timer?
     private var reminderTimer: Timer?
     private var remaining = 0
@@ -280,6 +283,19 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapStartEmergency() {
+        // 3回連続タップで有効化
+        sosTripleTapCount += 1
+        sosTripleTapTimer?.invalidate()
+        if sosTripleTapCount < 3 {
+            // 軽いハプティクスで段階フィードバック
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            // 1.2秒以内に連続で3回
+            sosTripleTapTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+                self?.sosTripleTapCount = 0
+            }
+            return
+        }
+        sosTripleTapCount = 0
         // 先にアニメーションを開始
         animateSOSExpand()
         // デバッグ中はアニメーションのみ確認
