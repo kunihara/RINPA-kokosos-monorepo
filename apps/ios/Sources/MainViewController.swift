@@ -38,6 +38,7 @@ final class MainViewController: UIViewController {
     private let contactsClient = ContactsClient()
     private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
     private let recipientsButton = UIButton(type: .system)
+    private let tripleTapHintLabel = UILabel()
     // 画面下部に表示する受信者バッジ
     private let recipientsBadge = UIView()
     private let recipientsBadgeIcon = UIImageView()
@@ -102,6 +103,8 @@ final class MainViewController: UIViewController {
                 }
             }
         }
+        // 設定変更に応じてヒント表示を更新
+        tripleTapHintLabel.isHidden = !SettingsStore.shared.requireTripleTap
     }
 
     private func setupUI() {
@@ -171,6 +174,13 @@ final class MainViewController: UIViewController {
         recipientsButton.addTarget(self, action: #selector(tapRecipients), for: .touchUpInside)
         recipientsButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(recipientsButton)
+        // 3回タップヒント
+        tripleTapHintLabel.text = "3回タップで開始"
+        tripleTapHintLabel.textAlignment = .center
+        tripleTapHintLabel.textColor = .secondaryLabel
+        tripleTapHintLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        tripleTapHintLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(tripleTapHintLabel)
         controlsStack.axis = .horizontal
         controlsStack.spacing = 12
         controlsStack.alignment = .center
@@ -227,7 +237,10 @@ final class MainViewController: UIViewController {
             startEmergencyButton.centerXAnchor.constraint(equalTo: sosBackdrop.centerXAnchor),
             startEmergencyButton.centerYAnchor.constraint(equalTo: sosBackdrop.centerYAnchor),
 
-            recipientsButton.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 20),
+            tripleTapHintLabel.topAnchor.constraint(equalTo: startEmergencyButton.bottomAnchor, constant: 8),
+            tripleTapHintLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            recipientsButton.topAnchor.constraint(equalTo: tripleTapHintLabel.bottomAnchor, constant: 12),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 24),
@@ -832,6 +845,8 @@ final class MainViewController: UIViewController {
     // 設定はタブで提供するため本画面からの遷移は持たない
 
     @objc private func onSettingsChanged() {
+        // 設定変更に伴うUI更新
+        tripleTapHintLabel.isHidden = !SettingsStore.shared.requireTripleTap
         // 帰るモードで共有中なら、新しい間隔でリマインダーを再スケジュール
         guard session?.status == .active, session?.mode == .going_home else { return }
         reminderTimer?.invalidate(); reminderTimer = nil

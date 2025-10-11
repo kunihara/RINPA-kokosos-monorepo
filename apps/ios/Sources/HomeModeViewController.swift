@@ -29,6 +29,7 @@ final class HomeModeViewController: UIViewController {
     private let contactsClient = ContactsClient()
     private var selectedRecipients: [String] = [] { didSet { updateRecipientsChip() } }
     private let recipientsButton = UIButton(type: .system)
+    private let tripleTapHintLabel = UILabel()
     // Animation (B案: ソリッド・ニュートラル)
     private var overlayView: UIView?
     private var fullView: UIView?
@@ -101,6 +102,13 @@ final class HomeModeViewController: UIViewController {
         recipientsButton.addTarget(self, action: #selector(tapRecipients), for: .touchUpInside)
         recipientsButton.translatesAutoresizingMaskIntoConstraints = false
 
+        // 3回タップヒント
+        tripleTapHintLabel.text = "3回タップで開始"
+        tripleTapHintLabel.textAlignment = .center
+        tripleTapHintLabel.textColor = .secondaryLabel
+        tripleTapHintLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        tripleTapHintLabel.translatesAutoresizingMaskIntoConstraints = false
+
         statusLabel.textColor = .secondaryLabel
         statusLabel.numberOfLines = 0
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -146,6 +154,7 @@ final class HomeModeViewController: UIViewController {
         view.addSubview(headlineLabel)
         view.addSubview(subLabel)
         view.addSubview(recipientsButton)
+        view.addSubview(tripleTapHintLabel)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
         view.addSubview(extendButton)
@@ -177,7 +186,10 @@ final class HomeModeViewController: UIViewController {
             startButton.widthAnchor.constraint(equalToConstant: 220),
             startButton.heightAnchor.constraint(equalToConstant: 220),
 
-            recipientsButton.topAnchor.constraint(equalTo: startButton.bottomAnchor, constant: 16),
+            tripleTapHintLabel.topAnchor.constraint(equalTo: startButton.bottomAnchor, constant: 8),
+            tripleTapHintLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            recipientsButton.topAnchor.constraint(equalTo: tripleTapHintLabel.bottomAnchor, constant: 12),
             recipientsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             statusLabel.topAnchor.constraint(equalTo: recipientsButton.bottomAnchor, constant: 16),
@@ -203,6 +215,12 @@ final class HomeModeViewController: UIViewController {
             recipientsBadgeLabel.topAnchor.constraint(equalTo: recipientsBadge.topAnchor, constant: 8),
             recipientsBadgeLabel.bottomAnchor.constraint(equalTo: recipientsBadge.bottomAnchor, constant: -8)
         ])
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 設定に応じてヒント表示/非表示
+        tripleTapHintLabel.isHidden = !SettingsStore.shared.requireTripleTap
     }
 
     override func viewDidLayoutSubviews() {
