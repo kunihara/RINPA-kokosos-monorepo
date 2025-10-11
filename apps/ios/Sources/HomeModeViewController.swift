@@ -87,10 +87,10 @@ final class HomeModeViewController: UIViewController {
 
         // SOSボタンと同じ形状・配置（円形の大ボタン）をB案のモノトーンで
         startButton.setTitle("開始", for: .normal)
-        startButton.setTitleColor(.label, for: .normal)
+        startButton.setTitleColor(.white, for: .normal)
         startButton.titleLabel?.font = .boldSystemFont(ofSize: 32)
-        // グレーをさらに濃く（dynamic）
-        startButton.backgroundColor = .systemGray2
+        // Light/Dark最適化した濃いグレー
+        startButton.backgroundColor = .homeButtonFill
         startButton.addTarget(self, action: #selector(tapStart), for: .touchUpInside)
         startButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -335,7 +335,7 @@ extension HomeModeViewController {
         // 初期サイズはボタン直径
         let d = max(startButton.bounds.width, startButton.bounds.height)
         let ov = UIView(frame: CGRect(x: 0, y: 0, width: d, height: d))
-        ov.backgroundColor = UIColor.systemGray2
+        ov.backgroundColor = UIColor.homeButtonFill
         ov.layer.cornerRadius = d/2
         if #available(iOS 13.0, *) { ov.layer.cornerCurve = .continuous }
         ov.center = btnCenter
@@ -360,7 +360,7 @@ extension HomeModeViewController {
         if fullView != nil { return }
         let full = UIView()
         full.translatesAutoresizingMaskIntoConstraints = false
-        full.backgroundColor = UIColor.systemGray2
+        full.backgroundColor = UIColor.homeButtonFill
         full.alpha = 0.0
         container.addSubview(full)
         NSLayoutConstraint.activate([
