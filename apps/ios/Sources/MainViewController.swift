@@ -186,10 +186,8 @@ final class MainViewController: UIViewController {
         controlsStack.spacing = 12
         controlsStack.alignment = .center
         controlsStack.translatesAutoresizingMaskIntoConstraints = false
-        revokeButton.setTitle("即時失効", for: .normal)
-        revokeButton.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
-        // SOS画面から「停止」ボタンは削除。必要なら即時失効のみ残す。
-        controlsStack.addArrangedSubview(revokeButton)
+        // 即時失効ボタンは非表示（要望により削除）
+        controlsStack.isHidden = true
         view.addSubview(controlsStack)
         // 設定はタブで提供、サインアウトは設定タブに移動（本画面のバーアイテムは設置しない）
 
@@ -629,16 +627,8 @@ final class MainViewController: UIViewController {
         extendOutlined.layer.borderColor = UIColor.white.cgColor
         extendOutlined.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
 
-        let revokeOutlined = UIButton(type: .system)
-        revokeOutlined.translatesAutoresizingMaskIntoConstraints = false
-        revokeOutlined.setTitle("  即時失効  ", for: .normal)
-        revokeOutlined.setTitleColor(.white, for: .normal)
-        revokeOutlined.layer.cornerRadius = 20
-        revokeOutlined.layer.borderWidth = 1
-        revokeOutlined.layer.borderColor = UIColor.white.cgColor
-        revokeOutlined.addTarget(self, action: #selector(tapRevoke), for: .touchUpInside)
-
-        let bottomStack = UIStackView(arrangedSubviews: [extendOutlined, revokeOutlined])
+        // 即時失効ボタンは非表示（要望により削除）
+        let bottomStack = UIStackView(arrangedSubviews: [extendOutlined])
         bottomStack.translatesAutoresizingMaskIntoConstraints = false
         bottomStack.axis = .horizontal
         bottomStack.alignment = .center
@@ -668,8 +658,7 @@ final class MainViewController: UIViewController {
             bottomStack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
             bottomStack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
             bottomStack.bottomAnchor.constraint(equalTo: full.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            extendOutlined.heightAnchor.constraint(equalToConstant: 40),
-            revokeOutlined.heightAnchor.constraint(equalToConstant: 40)
+            extendOutlined.heightAnchor.constraint(equalToConstant: 40)
         ])
 
         self.sosFullView = full

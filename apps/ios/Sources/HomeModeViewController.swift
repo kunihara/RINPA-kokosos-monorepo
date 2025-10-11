@@ -115,8 +115,10 @@ final class HomeModeViewController: UIViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // 画面上の単独ボタンは「即時失効」に変更
-        extendButton.setTitle("即時失効", for: .normal)
-        extendButton.addTarget(self, action: #selector(tapRevokeFromButton), for: .touchUpInside)
+        // 即時失効ボタンは要望により非表示
+        extendButton.setTitle("", for: .normal)
+        extendButton.isHidden = true
+        extendButton.isEnabled = false
         extendButton.translatesAutoresizingMaskIntoConstraints = false
 
         countdownView.textAlignment = .center
@@ -539,16 +541,8 @@ extension HomeModeViewController {
         extendBtn.layer.borderColor = UIColor.white.cgColor
         extendBtn.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
 
-        let revokeBtn = UIButton(type: .system)
-        revokeBtn.translatesAutoresizingMaskIntoConstraints = false
-        revokeBtn.setTitle("  即時失効  ", for: .normal)
-        revokeBtn.setTitleColor(.white, for: .normal)
-        revokeBtn.layer.cornerRadius = 20
-        revokeBtn.layer.borderWidth = 1
-        revokeBtn.layer.borderColor = UIColor.white.cgColor
-        revokeBtn.addTarget(self, action: #selector(tapRevokeFromFull), for: .touchUpInside)
-
-        let bottom = UIStackView(arrangedSubviews: [extendBtn, revokeBtn])
+        // 即時失効ボタンは非表示（要望により削除）
+        let bottom = UIStackView(arrangedSubviews: [extendBtn])
         bottom.translatesAutoresizingMaskIntoConstraints = false
         bottom.axis = .horizontal
         bottom.alignment = .center
@@ -577,8 +571,7 @@ extension HomeModeViewController {
             bottom.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
             bottom.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
             bottom.bottomAnchor.constraint(equalTo: full.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            extendBtn.heightAnchor.constraint(equalToConstant: 40),
-            revokeBtn.heightAnchor.constraint(equalToConstant: 40)
+            extendBtn.heightAnchor.constraint(equalToConstant: 40)
         ])
 
         UIView.animate(withDuration: 0.22) { full.alpha = 1.0 }
