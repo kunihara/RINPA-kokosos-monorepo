@@ -53,6 +53,8 @@ final class TabRootController: UITabBarController {
         setupOverlay()
         setupCenterButton()
         setupCustomItems()
+        // アーチを中央ボタンに同期
+        if let bar = self.tabBar as? CustomTabBar { bar.centerRef = centerButton }
         updateCustomSelection()
     }
 
@@ -101,6 +103,7 @@ final class TabRootController: UITabBarController {
         super.viewDidLayoutSubviews()
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
         tabBar.bringSubviewToFront(overlay)
+        if let bar = self.tabBar as? CustomTabBar { bar.centerRef = centerButton; bar.setNeedsLayout(); bar.layoutIfNeeded() }
         // 既存の標準タブボタンはタップを無効化（カスタムで扱う）
         for v in tabBar.subviews {
             if NSStringFromClass(type(of: v)).contains("UITabBarButton") {
