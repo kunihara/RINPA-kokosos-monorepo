@@ -6,6 +6,14 @@ final class HomeModeViewController: UIViewController {
     private let startButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let extendButton = UIButton(type: .system)
+    // SOSと同じ見出し/説明
+    private let headlineLabel = UILabel()
+    private let subLabel = UILabel()
+    // SOSと同様のバックドロップ（薄い円）
+    private let homeBackdrop = UIView()
+    private var homeBackdropW: NSLayoutConstraint!
+    private var homeBackdropH: NSLayoutConstraint!
+    private let homeInitialSize: CGFloat = 280
     private let countdownView = UILabel()
     // 受信者表示バッジ
     private let recipientsBadge = UIView()
@@ -30,7 +38,8 @@ final class HomeModeViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
-        title = "帰るモード"
+        // 画面上のナビタイトルは表示しない（SOSと同様の上部ラベルに統一）
+        self.title = nil
         setupUI()
         // 保存された受信者を反映
         if let saved = UserDefaults.standard.stringArray(forKey: "SelectedRecipientsEmails"), !saved.isEmpty {
@@ -57,19 +66,31 @@ final class HomeModeViewController: UIViewController {
     }
 
     private func setupUI() {
-        titleLabel.text = "帰るモード"
-        titleLabel.font = .boldSystemFont(ofSize: 24)
+        // SOSと同じ『Home』表記（小さめラベル）
+        titleLabel.text = "Home"
+        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // SOSと同じ上部テキストを同じ位置/スタイルで表示
+        headlineLabel.text = "Are you in an\nemergency?"
+        headlineLabel.numberOfLines = 0
+        headlineLabel.textAlignment = .center
+        headlineLabel.font = .systemFont(ofSize: 24, weight: .heavy)
+        headlineLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        subLabel.text = "Press the button below and help will\nreach you shortly."
+        subLabel.numberOfLines = 0
+        subLabel.textAlignment = .center
+        subLabel.textColor = .secondaryLabel
+        subLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        subLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // SOSボタンと同じ形状・配置（円形の大ボタン）をB案のモノトーンで
         startButton.setTitle("開始", for: .normal)
         startButton.setTitleColor(.label, for: .normal)
         startButton.titleLabel?.font = .boldSystemFont(ofSize: 32)
-        startButton.backgroundColor = .secondarySystemBackground
-        startButton.layer.shadowColor = UIColor.label.withAlphaComponent(0.15).cgColor
-        startButton.layer.shadowOpacity = 1
-        startButton.layer.shadowRadius = 12
-        startButton.layer.shadowOffset = CGSize(width: 0, height: 6)
+        // グレーを濃く（dynamic）：secondarySystemBackground よりコントラストを出す
+        startButton.backgroundColor = .systemGray3
         startButton.addTarget(self, action: #selector(tapStart), for: .touchUpInside)
         startButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -111,19 +132,45 @@ final class HomeModeViewController: UIViewController {
         recipientsBadge.addSubview(recipientsBadgeLabel)
 
         view.addSubview(titleLabel)
+        // バックドロップ（薄い円）を追加して、影ではなくSOSと同じ周辺表現に
+        homeBackdrop.translatesAutoresizingMaskIntoConstraints = false
+        homeBackdrop.backgroundColor = UIColor.label.withAlphaComponent(0.12)
+        homeBackdrop.alpha = 0.3
+        if #available(iOS 13.0, *) { homeBackdrop.layer.cornerCurve = .continuous }
+
+        view.addSubview(homeBackdrop)
         view.addSubview(startButton)
+        view.addSubview(headlineLabel)
+        view.addSubview(subLabel)
         view.addSubview(recipientsButton)
         view.addSubview(statusLabel)
         view.addSubview(countdownView)
         view.addSubview(extendButton)
         view.addSubview(recipientsBadge)
 
+        // 事前にバックドロップのサイズ制約を作成
+        homeBackdropW = homeBackdrop.widthAnchor.constraint(equalToConstant: homeInitialSize)
+        homeBackdropH = homeBackdrop.heightAnchor.constraint(equalToConstant: homeInitialSize)
+
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            startButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            startButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            // SOSと同じ位置関係で上部テキストを配置
+            headlineLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 18),
+            headlineLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            subLabel.topAnchor.constraint(equalTo: headlineLabel.bottomAnchor, constant: 8),
+            subLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            // バックドロップのサイズ（SOSと同じ280）
+            homeBackdropW,
+            homeBackdropH,
+            homeBackdrop.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            homeBackdrop.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -20),
+
+            // 開始ボタンはバックドロップ中央に配置（SOSと同じ）
+            startButton.centerXAnchor.constraint(equalTo: homeBackdrop.centerXAnchor),
+            startButton.centerYAnchor.constraint(equalTo: homeBackdrop.centerYAnchor),
             startButton.widthAnchor.constraint(equalToConstant: 220),
             startButton.heightAnchor.constraint(equalToConstant: 220),
 
@@ -159,6 +206,8 @@ final class HomeModeViewController: UIViewController {
         super.viewDidLayoutSubviews()
         startButton.layer.cornerRadius = startButton.bounds.height / 2
         if #available(iOS 13.0, *) { startButton.layer.cornerCurve = .continuous }
+        homeBackdrop.layer.cornerRadius = homeBackdrop.bounds.height / 2
+        if #available(iOS 13.0, *) { homeBackdrop.layer.cornerCurve = .continuous }
     }
 
     private func updateRecipientsChip() {
