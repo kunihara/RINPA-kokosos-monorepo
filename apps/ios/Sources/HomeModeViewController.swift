@@ -262,7 +262,6 @@ final class HomeModeViewController: UIViewController {
         if SettingsStore.shared.requireTripleTap == false {
             // 単発開始時もハプティクスで確定フィードバック
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-            animateExpand()
             if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlyHome { simulateStartDebug(); return }
             presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
             return
@@ -280,8 +279,6 @@ final class HomeModeViewController: UIViewController {
         homeTripleTapCount = 0
         // 3回目は確定フィードバックとして強めのハプティクス
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        // B案のフルスクリーン拡大演出を開始
-        animateExpand()
         // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
         if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlyHome { simulateStartDebug(); return }
         presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
@@ -293,11 +290,11 @@ final class HomeModeViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let ok = Bool.random()
             if ok {
+                self.animateExpand()
                 self.showSnack("共有を開始しました")
             } else {
                 self.statusLabel.text = "開始に失敗しました: デバッグ失敗"
                 self.showAlert("開始処理", "開始に失敗しました（デバッグ）")
-                self.closeFullScreen()
             }
         }
     }
@@ -389,6 +386,8 @@ final class HomeModeViewController: UIViewController {
                                                             type: "going_home",
                                                             maxDurationSec: maxMinutes * 60,
                                                             recipients: self.selectedRecipients)
+                    // 成功したのでここで初めてアニメーションを開始
+                    self.animateExpand()
                     self.statusLabel.text = "帰るモードを開始しました。到着したら『停止』をタップしてください。\nAlertID: \(res.id)"
                     // 延長のためにアクティブIDを保存
                     UserDefaults.standard.set(res.id, forKey: "GoingHomeActiveAlertID")

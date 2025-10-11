@@ -357,7 +357,6 @@ final class MainViewController: UIViewController {
     @objc private func tapStartEmergency() {
         // 設定で1回タップが許可されている場合は即時開始
         if SettingsStore.shared.requireTripleTap == false {
-            animateSOSExpand()
             if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
             startFlow(type: "emergency")
             return
@@ -375,8 +374,6 @@ final class MainViewController: UIViewController {
             return
         }
         sosTripleTapCount = 0
-        // 先にアニメーションを開始
-        animateSOSExpand()
         // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
         if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
         startFlow(type: "emergency")
@@ -388,11 +385,11 @@ final class MainViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let ok = Bool.random()
             if ok {
+                self.animateSOSExpand()
                 self.showSnack("共有を開始しました")
             } else {
                 self.statusLabel.text = "開始に失敗しました: デバッグ失敗"
                 self.showAlert("開始処理", "開始に失敗しました（デバッグ）")
-                self.animateSOSCollapse()
             }
         }
     }
@@ -762,12 +759,14 @@ final class MainViewController: UIViewController {
                     // 共有時間: 緊急は既定60分、帰るモードは設定値から
                     let maxMinutes = (type == "going_home") ? SettingsStore.shared.goingHomeMaxMinutes : 60
                     let res = try await self.api.startAlert(lat: loc.coordinate.latitude,
-                                                        lng: loc.coordinate.longitude,
-                                                        accuracy: loc.horizontalAccuracy,
-                                                        battery: battery,
-                                                        type: type,
-                                                        maxDurationSec: maxMinutes * 60,
-                                                        recipients: self.selectedRecipients)
+                                                         lng: loc.coordinate.longitude,
+                                                         accuracy: loc.horizontalAccuracy,
+                                                         battery: battery,
+                                                         type: type,
+                                                         maxDurationSec: maxMinutes * 60,
+                                                         recipients: self.selectedRecipients)
+                    // 成功したのでここで初めてアニメーションを開始
+                    self.animateSOSExpand()
                     self.statusLabel.text = "共有を開始しました\nAlertID: \(res.id)\nToken: \(res.shareToken.prefix(16))…"
                     let mode: AlertSession.Mode = {
                         if let m = AlertSession.Mode(rawValue: res.type.rawValue) { return m }
