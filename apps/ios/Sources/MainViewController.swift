@@ -376,7 +376,9 @@ final class MainViewController: UIViewController {
             }
             return
         }
+        // 3回目の確定フィードバック（強め）
         sosTripleTapCount = 0
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
         if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
         startFlow(type: "emergency")
