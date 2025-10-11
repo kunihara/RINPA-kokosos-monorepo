@@ -8,6 +8,7 @@ final class SettingsStore {
     private let keyArrivalReminder = "arrivalReminderMinutes"
     private let keyGoingHomeMax = "goingHomeMaxMinutes"
     private let keyRequireTripleTap = "requireTripleTapForStart"
+    private let keyEnableDebugSimulation = "enableDebugSimulation"
     // APIベースURLの上書きは廃止
 
     var arrivalReminderMinutes: Int {
@@ -48,6 +49,19 @@ final class SettingsStore {
             NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
         }
     }
+
+    #if DEBUG
+    // デバッグ用: 開始/停止を通信せず擬似成功/失敗で検証
+    var enableDebugSimulation: Bool {
+        get { UserDefaults.standard.bool(forKey: keyEnableDebugSimulation) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: keyEnableDebugSimulation)
+            NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
+        }
+    }
+    #else
+    var enableDebugSimulation: Bool { get { return false } set { /* no-op */ } }
+    #endif
 
     // apiBaseURLOverride は削除済み
 }

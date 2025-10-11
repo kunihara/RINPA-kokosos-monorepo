@@ -6,6 +6,9 @@ final class SettingsViewController: UITableViewController {
         case recipients
         case profile
         case account
+        #if DEBUG
+        case debug
+        #endif
     }
 
     private enum Row {
@@ -16,6 +19,9 @@ final class SettingsViewController: UITableViewController {
         case profile
         case signOut
         case deleteAccount
+        #if DEBUG
+        case debugSimulation
+        #endif
     }
 
     private let arrivalOptions = [15, 30, 45, 60]
@@ -43,6 +49,9 @@ final class SettingsViewController: UITableViewController {
             [.profile],
             [.signOut, .deleteAccount],
         ]
+        #if DEBUG
+        data.append([.debugSimulation])
+        #endif
     }
 
     // MARK: - UITableViewDataSource
@@ -55,6 +64,9 @@ final class SettingsViewController: UITableViewController {
         case .recipients: return "受信者"
         case .profile: return "プロフィール"
         case .account: return "アカウント"
+        #if DEBUG
+        case .debug: return "デバッグ"
+        #endif
         }
     }
 
@@ -100,6 +112,19 @@ final class SettingsViewController: UITableViewController {
             cfg.textProperties.color = .systemRed
             cell.contentConfiguration = cfg
             cell.accessoryType = .none
+        #if DEBUG
+        case .debugSimulation:
+            var cfg2 = UIListContentConfiguration.valueCell()
+            cfg2.text = "デバッグ: 擬似開始/停止"
+            cell.contentConfiguration = cfg2
+            let sw = UISwitch()
+            sw.isOn = SettingsStore.shared.enableDebugSimulation
+            sw.addAction(UIAction(handler: { _ in
+                SettingsStore.shared.enableDebugSimulation = sw.isOn
+            }), for: .valueChanged)
+            cell.accessoryView = sw
+            cell.selectionStyle = .none
+        #endif
         }
         return cell
     }
@@ -139,6 +164,10 @@ final class SettingsViewController: UITableViewController {
             tapSignOut()
         case .deleteAccount:
             tapDeleteAccount()
+        #if DEBUG
+        case .debugSimulation:
+            break
+        #endif
         }
     }
 

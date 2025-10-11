@@ -358,7 +358,7 @@ final class MainViewController: UIViewController {
         // 設定で1回タップが許可されている場合は即時開始
         if SettingsStore.shared.requireTripleTap == false {
             animateSOSExpand()
-            if debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
+            if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
             startFlow(type: "emergency")
             return
         }
@@ -378,7 +378,7 @@ final class MainViewController: UIViewController {
         // 先にアニメーションを開始
         animateSOSExpand()
         // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
-        if debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
+        if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlySOS { simulateStartDebug(type: "emergency"); return }
         startFlow(type: "emergency")
     }
 
@@ -838,13 +838,12 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapStop() {
-        // セッションが無い（デバッグ検証やプレビュー）の場合もUIだけは戻す
-        guard let session else {
-            self.animateSOSCollapse()
-            return
+        // デバッグ: 通信せず擬似応答（開始していなくても検証できるように先に判定）
+        if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlySOS {
+            simulateStopDebug(); return
         }
-        // デバッグ: 通信せず擬似応答
-        if debugAnimateOnlySOS { simulateStopDebug(); return }
+        // セッションが無い場合は通常動作としてUIだけ戻す
+        guard let session else { self.animateSOSCollapse(); return }
         Task { @MainActor in
             do {
                 let alertId = session.id

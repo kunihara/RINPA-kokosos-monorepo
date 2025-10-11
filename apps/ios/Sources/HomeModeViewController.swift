@@ -263,7 +263,7 @@ final class HomeModeViewController: UIViewController {
             // 単発開始時もハプティクスで確定フィードバック
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             animateExpand()
-            if debugAnimateOnlyHome { simulateStartDebug(); return }
+            if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlyHome { simulateStartDebug(); return }
             presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
             return
         }
@@ -283,7 +283,7 @@ final class HomeModeViewController: UIViewController {
         // B案のフルスクリーン拡大演出を開始
         animateExpand()
         // デバッグ中はランダムで成功/失敗を返す（通信を行わない）
-        if debugAnimateOnlyHome { simulateStartDebug(); return }
+        if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlyHome { simulateStartDebug(); return }
         presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
     }
 
@@ -613,14 +613,12 @@ extension HomeModeViewController {
     }
 
     private func stopAndRevokeCurrentAlert() {
-        guard let id = UserDefaults.standard.string(forKey: "GoingHomeActiveAlertID"), !id.isEmpty else {
-            // 起動中の共有が見つからない場合は案内のみ
-            statusLabel.text = "停止できません（開始中の共有が見つかりません）"
-            return
+        // デバッグ: 通信せず擬似応答（開始していなくても検証できるように先に判定）
+        if SettingsStore.shared.enableDebugSimulation || debugAnimateOnlyHome {
+            simulateStopDebug(); return
         }
-        // デバッグ: 通信せず擬似応答
-        if debugAnimateOnlyHome {
-            simulateStopDebug()
+        guard let id = UserDefaults.standard.string(forKey: "GoingHomeActiveAlertID"), !id.isEmpty else {
+            statusLabel.text = "停止できません（開始中の共有が見つかりません）"
             return
         }
         Task { @MainActor in
