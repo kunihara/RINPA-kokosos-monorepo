@@ -1,6 +1,7 @@
 import UIKit
 
 final class TabRootController: UITabBarController {
+    private let lastSelectedKey = "LastSelectedTabIndex"
     private let centerButton = UIButton(type: .system)
     private let centerSOS = CenterSOSItemView()
     // 中央SOSはcenterSOS(CustomTabItemView)で表示・タップを処理します
@@ -58,6 +59,10 @@ final class TabRootController: UITabBarController {
         setupCenterSOS()
         setupCustomItems()
         setupTapPads()
+        // 前回の選択タブを復元（0:帰る/1:SOS/2:設定）
+        let saved = UserDefaults.standard.integer(forKey: lastSelectedKey)
+        let idx = (0...2).contains(saved) ? saved : 1
+        selectedIndex = idx
         // Forward hit-testing to our custom views（左右はパッド優先）
         if let bar = self.tabBar as? CustomTabBar {
             bar.centerHitView = centerSOS
@@ -166,6 +171,7 @@ final class TabRootController: UITabBarController {
         let gen = UIImpactFeedbackGenerator(style: .heavy)
         gen.impactOccurred()
         selectedIndex = 1
+        UserDefaults.standard.set(1, forKey: lastSelectedKey)
         // Small tap animation
         UIView.animate(withDuration: 0.08, animations: {
             self.centerSOS.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
@@ -257,11 +263,13 @@ final class TabRootController: UITabBarController {
 
     @objc private func tapLeft() {
         selectedIndex = 0
+        UserDefaults.standard.set(0, forKey: lastSelectedKey)
         updateCustomSelection()
     }
 
     @objc private func tapRight() {
         selectedIndex = 2
+        UserDefaults.standard.set(2, forKey: lastSelectedKey)
         updateCustomSelection()
     }
 
