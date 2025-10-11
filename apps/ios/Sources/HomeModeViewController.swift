@@ -248,6 +248,8 @@ final class HomeModeViewController: UIViewController {
             return
         }
         homeTripleTapCount = 0
+        // 3回目は確定フィードバックとして強めのハプティクス
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         // B案のフルスクリーン拡大演出を開始
         animateExpand()
         // アニメーション確認モードでは機能をオフ（ネットワーク/ロジックを呼ばない）
