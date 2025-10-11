@@ -114,8 +114,9 @@ final class HomeModeViewController: UIViewController {
         statusLabel.numberOfLines = 0
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        extendButton.setTitle("延長", for: .normal)
-        extendButton.addTarget(self, action: #selector(tapExtend), for: .touchUpInside)
+        // 画面上の単独ボタンは「即時失効」に変更
+        extendButton.setTitle("即時失効", for: .normal)
+        extendButton.addTarget(self, action: #selector(tapRevokeFromButton), for: .touchUpInside)
         extendButton.translatesAutoresizingMaskIntoConstraints = false
 
         countdownView.textAlignment = .center
@@ -362,6 +363,11 @@ final class HomeModeViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         if let pop = sheet.popoverPresentationController { pop.sourceView = extendButton; pop.sourceRect = extendButton.bounds }
         present(sheet, animated: true)
+    }
+
+    // 画面上の即時失効ボタン（旧: 延長）
+    @objc private func tapRevokeFromButton() {
+        revokeCurrentAlert()
     }
 }
 
