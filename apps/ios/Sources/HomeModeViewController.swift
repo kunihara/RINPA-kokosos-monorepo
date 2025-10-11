@@ -339,6 +339,7 @@ final class HomeModeViewController: UIViewController {
         bar.alpha = 0
         bar.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(bar)
+        container.bringSubviewToFront(bar)
         let g = container.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             bar.centerXAnchor.constraint(equalTo: g.centerXAnchor),

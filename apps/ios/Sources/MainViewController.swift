@@ -293,6 +293,7 @@ final class MainViewController: UIViewController {
         label.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(wrap)
+        container.bringSubviewToFront(wrap)
         wrap.addSubview(label)
 
         let g = container.safeAreaLayoutGuide
