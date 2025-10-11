@@ -431,7 +431,8 @@ extension HomeModeViewController {
         safeBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         safeBtn.layer.cornerRadius = 44
         if #available(iOS 13.0, *) { safeBtn.layer.cornerCurve = .continuous }
-        safeBtn.addTarget(self, action: #selector(closeFullScreen), for: .touchUpInside)
+        // SOSフルスクリーンと同じく成功ハプティクスを鳴らしてから閉じる
+        safeBtn.addTarget(self, action: #selector(tapHomeSafe), for: .touchUpInside)
         full.addSubview(safeBtn)
 
         // 下部: 延長/即時失効（モノトーン）
@@ -487,6 +488,13 @@ extension HomeModeViewController {
         ])
 
         UIView.animate(withDuration: 0.22) { full.alpha = 1.0 }
+    }
+
+    @objc private func tapHomeSafe() {
+        let gen = UINotificationFeedbackGenerator()
+        gen.prepare()
+        gen.notificationOccurred(.success)
+        closeFullScreen()
     }
 
     @objc private func closeFullScreen() {
