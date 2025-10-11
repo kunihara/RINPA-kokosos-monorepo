@@ -7,6 +7,7 @@ final class SettingsStore {
 
     private let keyArrivalReminder = "arrivalReminderMinutes"
     private let keyGoingHomeMax = "goingHomeMaxMinutes"
+    private let keyRequireTripleTap = "requireTripleTapForStart"
     // APIベースURLの上書きは廃止
 
     var arrivalReminderMinutes: Int {
@@ -30,6 +31,20 @@ final class SettingsStore {
             // 30〜240分の範囲に制限
             let clamped = max(30, min(newValue, 240))
             UserDefaults.standard.set(clamped, forKey: keyGoingHomeMax)
+            NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
+        }
+    }
+
+    // 開始操作の安全性: 3回タップ(既定) or 1回タップ
+    var requireTripleTap: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: keyRequireTripleTap) == nil {
+                return true // 既定: 3回タップを要求
+            }
+            return UserDefaults.standard.bool(forKey: keyRequireTripleTap)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: keyRequireTripleTap)
             NotificationCenter.default.post(name: SettingsStore.changedNotification, object: nil)
         }
     }

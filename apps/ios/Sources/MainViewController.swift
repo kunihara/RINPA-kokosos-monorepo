@@ -283,6 +283,13 @@ final class MainViewController: UIViewController {
     }
 
     @objc private func tapStartEmergency() {
+        // 設定で1回タップが許可されている場合は即時開始
+        if SettingsStore.shared.requireTripleTap == false {
+            animateSOSExpand()
+            if debugAnimateOnlySOS { return }
+            startFlow(type: "emergency")
+            return
+        }
         // 3回連続タップで有効化
         sosTripleTapCount += 1
         sosTripleTapTimer?.invalidate()

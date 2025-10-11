@@ -11,6 +11,7 @@ final class SettingsViewController: UITableViewController {
     private enum Row {
         case arrivalReminder
         case maxSharing
+        case startTapMode
         case recipients
         case profile
         case signOut
@@ -37,7 +38,7 @@ final class SettingsViewController: UITableViewController {
 
     private func buildData() {
         data = [
-            [.arrivalReminder, .maxSharing],
+            [.arrivalReminder, .maxSharing, .startTapMode],
             [.recipients],
             [.profile],
             [.signOut, .deleteAccount],
@@ -80,6 +81,9 @@ final class SettingsViewController: UITableViewController {
             cell.contentConfiguration = valueConfig(title: "到着リマインダー", value: "\(SettingsStore.shared.arrivalReminderMinutes)分")
         case .maxSharing:
             cell.contentConfiguration = valueConfig(title: "最大共有時間", value: "\(SettingsStore.shared.goingHomeMaxMinutes)分")
+        case .startTapMode:
+            let mode = SettingsStore.shared.requireTripleTap ? "3回タップ" : "1回タップ"
+            cell.contentConfiguration = valueConfig(title: "開始操作", value: mode)
         case .recipients:
             cell.contentConfiguration = valueConfig(title: "受信者の設定", value: nil)
         case .profile:
@@ -122,6 +126,11 @@ final class SettingsViewController: UITableViewController {
                 SettingsStore.shared.goingHomeMaxMinutes = m
                 self.tableView.reloadRows(at: [indexPath], with: .automatic)
             }
+        case .startTapMode:
+            showTapModeSheet(currentTriple: SettingsStore.shared.requireTripleTap) { triple in
+                SettingsStore.shared.requireTripleTap = triple
+                self.tableView.reloadRows(at: [indexPath], with: .automatic)
+            }
         case .recipients:
             openRecipients()
         case .profile:
@@ -131,6 +140,17 @@ final class SettingsViewController: UITableViewController {
         case .deleteAccount:
             tapDeleteAccount()
         }
+    }
+
+    private func showTapModeSheet(currentTriple: Bool, onSelect: @escaping (Bool) -> Void) {
+        let sheet = UIAlertController(title: "開始操作", message: nil, preferredStyle: .actionSheet)
+        let one = UIAlertAction(title: (currentTriple ? "1回タップ" : "1回タップ ✓"), style: .default) { _ in onSelect(false) }
+        let three = UIAlertAction(title: (currentTriple ? "3回タップ ✓" : "3回タップ"), style: .default) { _ in onSelect(true) }
+        sheet.addAction(one)
+        sheet.addAction(three)
+        sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        if let pop = sheet.popoverPresentationController { pop.sourceView = self.view; pop.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.maxY-1, width: 1, height: 1) }
+        present(sheet, animated: true)
     }
 
     private func showMinutesSheet(title: String, options: [Int], current: Int, onSelect: @escaping (Int) -> Void) {

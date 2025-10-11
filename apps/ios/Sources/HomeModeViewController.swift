@@ -237,6 +237,13 @@ final class HomeModeViewController: UIViewController {
     }
 
     @objc private func tapStart() {
+        // 設定が1回タップなら即時
+        if SettingsStore.shared.requireTripleTap == false {
+            animateExpand()
+            if debugAnimateOnlyHome { return }
+            presentCountdown(seconds: 3) { [weak self] in self?.kickoff() }
+            return
+        }
         // 3回連続タップで有効化
         homeTripleTapCount += 1
         homeTripleTapTimer?.invalidate()
