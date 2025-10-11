@@ -81,25 +81,32 @@ final class CustomTabBar: UITabBar {
         barLayer.shadowOffset = CGSize(width: 0, height: -2)
         barLayer.frame = bounds
 
-        // Red arch drawing is delegated to CenterSOSItemView to share the same layout timing.
-        archLayer.path = nil
+        // Red arch (restore drawing here)
+        let cx = w / 2
+        let archTop = topY + archYOffset
+        let leftX = cx - archRadius
+        let rightX = cx + archRadius
+        let archPath = UIBezierPath()
+        archPath.move(to: CGPoint(x: leftX, y: archTop))
+        archPath.addArc(withCenter: CGPoint(x: cx, y: archTop), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
+        archPath.addLine(to: CGPoint(x: rightX, y: h))
+        archPath.addLine(to: CGPoint(x: leftX, y: h))
+        archPath.close()
+        archLayer.path = archPath.cgPath
         archLayer.frame = bounds
-        archLayer.fillColor = UIColor.clear.cgColor
+        archLayer.fillColor = UIColor.kokoRed.cgColor
         archLayer.strokeColor = UIColor.clear.cgColor
 
         CATransaction.commit()
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        var s = super.sizeThatFits(size)
-        let bottom = safeAreaInsets.bottom
-        s.height = desiredBarHeight + bottom
-        return s
+        return super.sizeThatFits(size)
     }
 
     private func applyArchStyle() {
-        // Arch is drawn elsewhere; keep layer transparent.
-        archLayer.fillColor = UIColor.clear.cgColor
+        // 常に赤ベタ
+        archLayer.fillColor = UIColor.kokoRed.cgColor
         archLayer.strokeColor = UIColor.clear.cgColor
         archLayer.lineWidth = 0
     }

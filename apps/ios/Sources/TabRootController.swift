@@ -3,6 +3,7 @@ import UIKit
 final class TabRootController: UITabBarController {
     private let centerButton = UIButton(type: .system)
     private let centerSOS = CenterSOSItemView()
+    // 中央SOSはcenterSOS(CustomTabItemView)で表示・タップを処理します
     private let leftItem = CustomTabItemView(title: "帰るモード", image: UIImage(systemName: "location.circle"))
     private let rightItem = CustomTabItemView(title: "設定", image: UIImage(systemName: "gearshape"))
     private let overlay = UIView()
@@ -54,8 +55,13 @@ final class TabRootController: UITabBarController {
 
         setupOverlay()
         setupCenterButton()
-        setupCenterSOS()
         setupCustomItems()
+        // Forward hit-testing to our custom views
+        if let bar = self.tabBar as? CustomTabBar {
+            bar.centerHitView = centerSOS
+            bar.leftHitView = leftItem
+            bar.rightHitView = rightItem
+        }
         // 初期選択状態の反映
         updateCustomSelection()
     }
@@ -84,7 +90,10 @@ final class TabRootController: UITabBarController {
         super.viewDidLayoutSubviews()
         // 内部のTabBarButtonが前面に来ることがあるため、カスタム項目と中央ボタンを常に最前面へ
         // overlay（左右）と中央ボタンの順序を明示（中央ボタンを最前面へ）
+        // Keep custom controls above any internal tab bar subviews
         tabBar.bringSubviewToFront(overlay)
+        tabBar.bringSubviewToFront(leftItem)
+        tabBar.bringSubviewToFront(rightItem)
         tabBar.bringSubviewToFront(centerSOS)
         if let bar = self.tabBar as? CustomTabBar { bar.setNeedsLayout(); bar.layoutIfNeeded() }
         // 背景同期は不要
@@ -112,7 +121,7 @@ final class TabRootController: UITabBarController {
         tabBar.addSubview(centerButton)
         tabBar.bringSubviewToFront(centerButton)
         tabBar.clipsToBounds = false
-        centerButton.isUserInteractionEnabled = true
+        centerButton.isUserInteractionEnabled = false
         centerButton.layer.zPosition = 100
 
         NSLayoutConstraint.activate([
@@ -128,17 +137,19 @@ final class TabRootController: UITabBarController {
     private func setupCenterSOS() {
         centerSOS.translatesAutoresizingMaskIntoConstraints = false
         centerSOS.archRadius = 48
+        // Align with CustomTabBar.archYOffset
         centerSOS.archCenterOffset = 24
         centerSOS.circleSize = 64
         centerSOS.addTarget(self, action: #selector(tapCenter), for: .touchUpInside)
         tabBar.addSubview(centerSOS)
+        // 中央SOSは円の周囲のみをカバー（左右タブの上には被せない）
         NSLayoutConstraint.activate([
-            centerSOS.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor),
-            centerSOS.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor),
-            centerSOS.topAnchor.constraint(equalTo: tabBar.topAnchor),
-            centerSOS.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor)
+            centerSOS.centerXAnchor.constraint(equalTo: tabBar.centerXAnchor),
+            centerSOS.centerYAnchor.constraint(equalTo: tabBar.topAnchor, constant: 24),
+            centerSOS.widthAnchor.constraint(equalToConstant: 72),
+            centerSOS.heightAnchor.constraint(equalToConstant: 72)
         ])
-        // 旧ボタンは視覚上は隠す（段階移行のため残す）
+        centerSOS.drawArch = false // アーチはCustomTabBar側で描画
         centerButton.isHidden = true
     }
 
@@ -164,8 +175,8 @@ final class TabRootController: UITabBarController {
         rightItem.selectedTintColor = .label
         rightItem.normalTintColor = .secondaryLabel
         // ヒット領域は中央側を小さく、外側を大きく（中央ボタンとの競合回避）
-        leftItem.hitOutsets = UIEdgeInsets(top: 18, left: 26, bottom: 18, right: 6)
-        rightItem.hitOutsets = UIEdgeInsets(top: 18, left: 6, bottom: 18, right: 26)
+        leftItem.hitOutsets = UIEdgeInsets(top: 32, left: 28, bottom: 24, right: 12)
+        rightItem.hitOutsets = UIEdgeInsets(top: 32, left: 12, bottom: 24, right: 28)
         // z順で左右は中央の下、ただしタップは有効
         leftItem.layer.zPosition = 80
         rightItem.layer.zPosition = 80
@@ -190,7 +201,7 @@ final class TabRootController: UITabBarController {
             rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor),
         ])
 
-        // 直接タップで切替（overlayパッド非依存）
+        // 直接タップで切替（overlay非依存）
         leftItem.isUserInteractionEnabled = true
         rightItem.isUserInteractionEnabled = true
         leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)

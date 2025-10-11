@@ -4,6 +4,7 @@ final class CenterSOSItemView: UIControl {
     var archRadius: CGFloat = 48 { didSet { setNeedsLayout() } }
     var archCenterOffset: CGFloat = 24 { didSet { setNeedsLayout() } }
     var circleSize: CGFloat = 64 { didSet { setNeedsLayout() } }
+    var drawArch: Bool = true { didSet { setNeedsLayout() } }
 
     private let archLayer = CAShapeLayer()
     private let circleButton = UIButton(type: .system)
@@ -65,16 +66,19 @@ final class CenterSOSItemView: UIControl {
         let topY = archCenterOffset
         let leftX = cx - archRadius
         let rightX = cx + archRadius
-
-        let p = UIBezierPath()
-        p.move(to: CGPoint(x: leftX, y: topY))
-        p.addArc(withCenter: CGPoint(x: cx, y: topY), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
-        p.addLine(to: CGPoint(x: rightX, y: h))
-        p.addLine(to: CGPoint(x: leftX, y: h))
-        p.close()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        archLayer.path = p.cgPath
+        if drawArch && archRadius > 0 {
+            let p = UIBezierPath()
+            p.move(to: CGPoint(x: leftX, y: topY))
+            p.addArc(withCenter: CGPoint(x: cx, y: topY), radius: archRadius, startAngle: .pi, endAngle: 0, clockwise: true)
+            p.addLine(to: CGPoint(x: rightX, y: h))
+            p.addLine(to: CGPoint(x: leftX, y: h))
+            p.close()
+            archLayer.path = p.cgPath
+        } else {
+            archLayer.path = nil
+        }
         CATransaction.commit()
     }
 
@@ -91,13 +95,13 @@ final class CenterSOSItemView: UIControl {
         }
     }
 
-    // タップ可能領域は円の内側のみに限定
+    // タップ可能領域は円の少し外側まで許容（タップしやすさ向上）
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         let cx = bounds.width/2
         let cy = archCenterOffset
         let dx = point.x - cx
         let dy = point.y - cy
-        let r = max(circleSize/2, 1)
+        let r = max(circleSize/2 + 10, 1) // +10ptの余白を許容
         return (dx*dx + dy*dy) <= (r*r)
     }
 

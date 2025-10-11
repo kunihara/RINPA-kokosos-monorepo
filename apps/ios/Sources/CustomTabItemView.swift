@@ -2,7 +2,6 @@ import UIKit
 
 final class CustomTabItemView: UIControl {
     private let stack = UIStackView()
-    private let spacer = UIView()
     let imageView = UIImageView()
     let titleLabel = UILabel()
 
@@ -26,8 +25,6 @@ final class CustomTabItemView: UIControl {
         stack.spacing = 0 // ほぼ詰める
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        spacer.translatesAutoresizingMaskIntoConstraints = false
-
         imageView.image = image?.withRenderingMode(.alwaysTemplate)
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -37,16 +34,15 @@ final class CustomTabItemView: UIControl {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(stack)
-        // 上側の余白を可変にして、コンテンツを下寄せにする
-        stack.addArrangedSubview(spacer)
+        // 上寄せで配置（スペーサは使わず、上側に寄せる）
         stack.addArrangedSubview(imageView)
         stack.addArrangedSubview(titleLabel)
 
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -6),
             imageView.heightAnchor.constraint(equalToConstant: 28),
             imageView.widthAnchor.constraint(equalToConstant: 28)
         ])
