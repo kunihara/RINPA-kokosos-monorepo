@@ -43,8 +43,8 @@ final class TabRootController: UITabBarController {
         home.tabBarItem = UITabBarItem(title: "", image: clearImage(), selectedImage: clearImage())
 
         let emergency = UINavigationController(rootViewController: MainViewController())
-        emergency.tabBarItem = UITabBarItem(title: "緊急モード", image: UIImage(systemName: "phone.down.circle"), selectedImage: UIImage(systemName: "phone.down.circle.fill"))
-        emergency.tabBarItem.imageInsets = UIEdgeInsets(top: 30, left: 0, bottom: -30, right: 0)
+        // 標準表示は完全に透過（重複や内部レイアウト補正の影響を避ける）
+        emergency.tabBarItem = UITabBarItem(title: "", image: clearImage(), selectedImage: clearImage())
 
         let settings = UINavigationController(rootViewController: SettingsViewController())
         settings.tabBarItem = UITabBarItem(title: "", image: clearImage(), selectedImage: clearImage())
@@ -183,20 +183,22 @@ final class TabRootController: UITabBarController {
 
         // 中央SOSボタンのヒット領域を確保するため、左右は中心から十分離す
         NSLayoutConstraint.activate([
-            leftItem.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 8),
-            leftItem.trailingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: -64),
-            leftItem.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 0),
-            leftItem.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -24),
+            leftItem.leadingAnchor.constraint(equalTo: tabBar.leadingAnchor, constant: 8),
+            leftItem.trailingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: -64),
+            leftItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
+            leftItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
 
-            rightItem.leadingAnchor.constraint(equalTo: overlay.centerXAnchor, constant: 64),
-            rightItem.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -8),
-            rightItem.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 0),
-            rightItem.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -24),
+            rightItem.leadingAnchor.constraint(equalTo: tabBar.centerXAnchor, constant: 64),
+            rightItem.trailingAnchor.constraint(equalTo: tabBar.trailingAnchor, constant: -8),
+            rightItem.topAnchor.constraint(equalTo: tabBar.topAnchor, constant: 0),
+            rightItem.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: -24),
         ])
 
-        // 表示専用（タップは透明パッドで処理）
-        leftItem.isUserInteractionEnabled = false
-        rightItem.isUserInteractionEnabled = false
+        // 直接タップで切替（overlayパッド非依存）
+        leftItem.isUserInteractionEnabled = true
+        rightItem.isUserInteractionEnabled = true
+        leftItem.addTarget(self, action: #selector(tapLeft), for: .touchUpInside)
+        rightItem.addTarget(self, action: #selector(tapRight), for: .touchUpInside)
     }
 
     @objc private func tapLeft() {
