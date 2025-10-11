@@ -375,19 +375,19 @@ extension HomeModeViewController {
         let icon = UIImageView()
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.image = (UIImage(systemName: "bell.and.waveform") ?? UIImage(systemName: "bell.fill"))?.withRenderingMode(.alwaysTemplate)
-        icon.tintColor = .label
+        icon.tintColor = .white
 
         let title = UILabel()
         title.translatesAutoresizingMaskIntoConstraints = false
         title.text = "SOS"
-        title.textColor = .label
+        title.textColor = .white
         title.font = .systemFont(ofSize: 28, weight: .heavy)
         title.textAlignment = .center
 
         let desc = UILabel()
         desc.translatesAutoresizingMaskIntoConstraints = false
         desc.text = "SOS alert has been sent to\nyour companions."
-        desc.textColor = .label
+        desc.textColor = .white
         desc.numberOfLines = 0
         desc.textAlignment = .center
         desc.font = .systemFont(ofSize: 14, weight: .regular)
@@ -401,7 +401,8 @@ extension HomeModeViewController {
         safeBtn.translatesAutoresizingMaskIntoConstraints = false
         safeBtn.backgroundColor = .white
         safeBtn.setTitle("I'm Safe", for: .normal)
-        safeBtn.setTitleColor(.label, for: .normal)
+        // I'm Safe の文字は背景ベタと同じ色に
+        safeBtn.setTitleColor(.homeButtonFill, for: .normal)
         safeBtn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
         safeBtn.layer.cornerRadius = 44
         if #available(iOS 13.0, *) { safeBtn.layer.cornerCurve = .continuous }
